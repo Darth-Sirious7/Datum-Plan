@@ -31,4 +31,6 @@ mod cases;
 #[cfg(test)]
 mod exchange_cases;
 #[cfg(test)]
+mod sched_cases;
+#[cfg(test)]
 mod parity;

@@ -864,8 +864,10 @@ async fn save_all(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
 /// (looked for where it was, and next to this plan when the folder moved).
 fn linked_plan(a: &App, file: &str, here: Option<&Path>) -> Option<(String, Project)> {
     let name = links::file_name(file).to_lowercase();
-    let same = |d: &&Doc| d.path.as_ref().is_some_and(|p| p.display().to_string() == file || p.file_name().is_some_and(|f| f.to_string_lossy().to_lowercase() == name));
-    if let Some(d) = docs(a).into_iter().find(same) {
+    // The tab with that exact file first; a tab of the same name only when none matches (the folder moved).
+    let exact = |d: &&Doc| d.path.as_ref().is_some_and(|p| p.display().to_string().eq_ignore_ascii_case(file));
+    let named = |d: &&Doc| d.path.as_ref().is_some_and(|p| p.file_name().is_some_and(|f| f.to_string_lossy().to_lowercase() == name));
+    if let Some(d) = docs(a).into_iter().find(exact).or_else(|| docs(a).into_iter().find(named)) {
         return Some((name, d.p.clone()));
     }
     sub_path(here, file).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
@@ -1140,18 +1142,18 @@ fn link_states(st: State<St>) -> Vec<links::LinkState> {
 #[tauri::command]
 fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
     let mut a = st.lock();
-    let open: Vec<(String, Project, Option<PathBuf>)> = docs(&a).iter().map(|d| (d.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().to_lowercase()).unwrap_or_default(), d.p.clone(), d.path.clone())).collect();
+    // Plans are told apart by their full path (two folders may hold plans of the same name).
+    let open: Vec<(String, Project, Option<PathBuf>)> = docs(&a).iter().map(|d| (d.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(), d.p.clone(), d.path.clone())).collect();
     let mut set: Vec<(String, Project)> = open.iter().map(|(f, p, _)| (f.clone(), p.clone())).collect();
     // Closed plans that the open ones link to.
     for (_, p, here) in &open {
         for x in p.tasks.iter().flat_map(|t| &t.ext) {
-            let key = links::file_name(&x.file).to_lowercase();
-            if !set.iter().any(|(f, _)| *f == key) {
-                if let Some(found) = linked_plan(&a, &x.file, here.as_deref()) { set.push(found) }
+            if !set.iter().any(|(f, _)| f.eq_ignore_ascii_case(&x.file)) {
+                if let Some((_, p)) = linked_plan(&a, &x.file, here.as_deref()) { set.push((x.file.clone(), p)) }
             }
         }
     }
-    let passes = links::update_all(&mut set)?;
+    let (passes, missing) = links::update_all(&mut set)?;
     let mut changed = 0;
     for k in 0..open.len() {
         if !all && k != a.cur { continue }
@@ -1167,6 +1169,7 @@ fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
     let msg = if total == 0 { "This plan has no links to other plans yet.".to_string() }
         else if changed == 0 { format!("All {total} links are up to date.") }
         else { format!("Updated {changed} {} ({passes} {}).", if changed == 1 { "task's links" } else { "tasks' links" }, if passes == 1 { "pass" } else { "passes" }) };
+    let msg = if missing.is_empty() { msg } else { format!("{msg} Not found: {}.", missing.join("; ")) };
     Ok((out(&a), msg))
 }
 
@@ -1265,10 +1268,14 @@ fn autosave(app: AppHandle, st: State<St>) {
 /// Keeps the recovery copies true to the open plans: one per tab with unsaved changes (so saving
 /// one tab never drops the others' copies), none when everything is saved.
 fn write_recovery(app: &AppHandle, a: &App) {
-    clear_recovery(app);
-    // Every unsaved tab: recovery.dplan, recovery-1.dplan, …
+    // Every unsaved tab: recovery.dplan, recovery-1.dplan, … The new copies are written before the
+    // old extras are removed, so a crash in between never leaves no recovery at all.
     let dirty: Vec<&Doc> = docs(a).into_iter().filter(|d| d.dirty).collect();
-    if let (false, Some((plan, meta))) = (dirty.is_empty(), recovery_files(app)) {
+    if dirty.is_empty() { return clear_recovery(app) }
+    if let Some(d) = dir(app, true) {
+        for k in dirty.len().min(63)..64 { let _ = std::fs::remove_file(d.join(format!("recovery-{k}.dplan"))); }
+    }
+    if let Some((plan, meta)) = recovery_files(app) {
         let mut items = vec![];
         for (k, d) in dirty.iter().enumerate().take(63) {
             let f = if k == 0 { plan.clone() } else { plan.with_file_name(format!("recovery-{k}.dplan")) };

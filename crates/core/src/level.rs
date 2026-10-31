@@ -1,5 +1,5 @@
 //! Resource leveling: delay lower-ranked tasks until no work resource is over its daily capacity.
-use crate::cal::{at, date_of, DAY};
+use crate::cal::{date_of, DAY};
 use crate::model::{Constraint, LevelOrder, Project, ResKind};
 use crate::sched::{schedule, Sched};
 use std::collections::{BTreeMap, HashSet};
@@ -57,22 +57,27 @@ pub fn level(p: &mut Project, only: &[u32]) -> Result<usize, String> {
         let mut cands: Vec<usize> = tasks.iter().copied().filter(|&i| scope.contains(&i) && movable(p, &s, i)).collect();
         cands.sort_by_key(|&i| rank[i]);
         cands.dedup();
-        // The highest-ranked task keeps its place; delay the lowest-ranked one past this day.
-        let pick = (tasks.len() > 1).then(|| cands.iter().rev().copied().find(|&i| {
-            let need = s.cals[s.ci[i]].between(s.es[i], s.cals[s.ci[i]].next_start(at(date_of((day + 1) * DAY))));
-            !p.opts.level_within_slack || s.tf[i] >= need
-        })).flatten();
-        match pick.filter(|&i| Some(&i) != cands.first() || cands.len() > 1) {
-            Some(i) => {
-                let c = &s.cals[s.ci[i]];
-                let add = c.between(s.es[i], c.next_start((day + 1) * DAY)).max(60);
-                p.tasks[i].level_delay += add;
-                moves += 1;
-            }
-            None => {
-                stuck.insert((day, k));
+        // The highest-ranked task keeps its place, and so do the next ones while the day has room;
+        // the rest move past this day, all in one go.
+        let cap = p.resources[k].max_on(date_of(day * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(day * DAY)).max(1) as f64;
+        let on_day = |i: usize| s.cals[s.ci[i]].between(s.es[i].max(day * DAY), s.ef[i].min((day + 1) * DAY)) as f64
+            * p.tasks[i].res.iter().filter(|a| p.res_idx(a.res) == Some(k)).map(|a| a.units).sum::<f64>();
+        let mut used: f64 = tasks.iter().copied().collect::<HashSet<_>>().into_iter().filter(|i| !cands.contains(i)).map(on_day).sum();
+        let mut delay = vec![];
+        for (n, &i) in cands.iter().enumerate() {
+            let c = &s.cals[s.ci[i]];
+            let add = c.between(s.es[i], c.next_start((day + 1) * DAY)).max(60);
+            if n == 0 || used + on_day(i) <= cap + 0.5 || (p.opts.level_within_slack && s.tf[i] < add) {
+                used += on_day(i);
+            } else {
+                delay.push((i, add));
             }
         }
+        if delay.is_empty() {
+            stuck.insert((day, k));
+        }
+        moves += delay.len();
+        delay.into_iter().for_each(|(i, add)| p.tasks[i].level_delay += add);
     }
     Ok(moves)
 }

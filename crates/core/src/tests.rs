@@ -640,7 +640,7 @@ fn plans_linked_to_each_other_move_together() {
     let i = plans[2].1.tasks.iter().position(|t| t.name == "Manufacture and factory acceptance test").unwrap();
     plans[2].1.tasks[i].dur += 15 * 480;
     assert_eq!(date(&plans, 0, "Handover to operations"), before, "not until the links are updated");
-    let passes = crate::links::update_all(&mut plans).unwrap();
+    let passes = crate::links::update_all(&mut plans).unwrap().0;
     assert!(passes >= 3, "the change travels procurement → construction → main ({passes} passes)");
     let after = date(&plans, 0, "Handover to operations");
     assert!(after - before >= 18 * DAY && after - before <= 24 * DAY, "{}", (after - before) / DAY);

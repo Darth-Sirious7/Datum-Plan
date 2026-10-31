@@ -42,8 +42,10 @@ pub fn layout_with(c: &Calc, rows: &[usize], sums: &[usize], wbs: bool) -> Net {
         }
     }
     // A summary sits over its first shown child.
-    let parent = |i: usize| (0..i).rev().find(|&k| p.tasks[k].level < p.tasks[i].level);
-    let top = |i: usize| { let mut t = i; while let Some(k) = parent(t) { t = k; } t };
+    // Each task's top-level phase, in one pass (an open-summary stack, not a scan back per task).
+    let mut open: Vec<usize> = vec![];
+    let tops: Vec<usize> = (0..n).map(|i| { while open.last().is_some_and(|&j| p.tasks[j].level >= p.tasks[i].level) { open.pop(); } let t = open.first().copied().unwrap_or(i); open.push(i); t }).collect();
+    let top = |i: usize| tops[i];
     for &sm in sums.iter().rev() {
         let kids: Vec<usize> = (sm + 1..n).take_while(|&k| p.tasks[k].level > p.tasks[sm].level).filter(|&k| shown[k]).collect();
         col[sm] = kids.iter().map(|&k| col[k]).min().unwrap_or(0);

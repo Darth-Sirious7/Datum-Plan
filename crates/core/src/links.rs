@@ -71,27 +71,32 @@ pub fn file_name(file: &str) -> &str {
 /// A task as seen from another plan: uid, ID, name, start and finish.
 type Seen = (u32, String, String, i64, i64);
 
-/// Brings the links of several plans (file name, plan) up to date from each other, pass after
+/// Brings the links of several plans (file path, plan) up to date from each other, pass after
 /// pass until no date moves. Plans may link both ways (main → subplan → main); returns the passes
-/// needed, or an error when the dates never settle (links that loop through the plans).
-pub fn update_all(plans: &mut [(String, Project)]) -> Result<usize, String> {
+/// needed and the links that could not be followed, or an error when the dates never settle
+/// (links that loop through the plans). A link finds its plan by path, else by file name.
+pub fn update_all(plans: &mut [(String, Project)]) -> Result<(usize, Vec<String>), String> {
+    let key = |f: &str| f.replace('\\', "/").to_lowercase();
     // A pass moves a date across one link between plans; a chain without a loop crosses each link
     // at most once, so more passes than links means the dates loop.
     let links: usize = plans.iter().map(|(_, p)| p.tasks.iter().map(|t| t.ext.len()).sum::<usize>()).sum();
     for pass in 1..=links + 2 {
         let found: Vec<(String, String, Vec<Seen>)> = plans.iter().map(|(f, p)| {
             let s = crate::sched::schedule(p).ok();
-            (file_name(f).to_lowercase(), p.name.clone(), p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect())
+            (key(f), p.name.clone(), p.tasks.iter().enumerate().map(|(i, t)| (t.uid, t.code.clone(), t.name.clone(), s.as_ref().map_or(0, |s| s.es[i]), s.as_ref().map_or(0, |s| s.ef[i]))).collect())
         }).collect();
-        let mut moved = 0;
+        let (mut moved, mut missing) = (0, vec![]);
         for (_, p) in plans.iter_mut() {
-            moved += refresh(p, &mut |x| {
-                let (_, plan, tasks) = found.iter().find(|(f, _, _)| *f == file_name(&x.file).to_lowercase()).ok_or("the plan is not open")?;
+            let (m, miss) = refresh(p, &mut |x| {
+                let (_, plan, tasks) = found.iter().find(|(f, _, _)| *f == key(&x.file))
+                    .or_else(|| found.iter().find(|(f, _, _)| file_name(f) == file_name(&x.file).to_lowercase())).ok_or("the plan is not open")?;
                 let (_, code, name, s, f) = tasks.iter().find(|t| t.0 == x.uid).ok_or("the task is no longer in that plan")?;
                 Ok(Found { plan: plan.clone(), code: code.clone(), name: name.clone(), start: *s, finish: *f })
-            }).0;
+            });
+            moved += m;
+            missing.extend(miss);
         }
-        if moved == 0 { return Ok(pass) }
+        if moved == 0 { return Ok((pass, missing)) }
     }
     Err("The dates keep moving: some links between the plans form a loop. Check the links in the Linked Plans panel.".into())
 }

@@ -105,10 +105,18 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     let dur: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| if ms_type(i) { 0 } else if let Some((a, b)) = mirrored(t) { cals[ci[i].get()].between(a, b) } else { t.dur }).collect();
     // Splits add pauses inside the work.
     let span: Vec<i64> = p.tasks.iter().enumerate().map(|(i, t)| dur[i] + t.splits.iter().filter(|(a, _)| *a < dur[i]).map(|(_, g)| g.max(&0)).sum::<i64>()).collect();
+    // Work still to do at `pct` % complete, with the pauses that come after the work done.
+    let rest = |i: usize, pct: u8| { let done = dur[i] * pct.min(100) as i64 / 100; dur[i] - done + p.tasks[i].splits.iter().filter(|(a, _)| *a > done && *a < dur[i]).map(|(_, g)| g.max(&0)).sum::<i64>() };
     let loe: Vec<bool> = p.tasks.iter().map(|t| matches!(t.act_type, ActType::Loe | ActType::WbsSummary)).collect();
     let leaf = |i: usize| !summary[i] && !off[i];
     // Each task's summary (the row above it at a lower outline level).
-    let parent: Vec<Option<usize>> = (0..n).map(|i| (0..i).rev().find(|&j| p.tasks[j].level < p.tasks[i].level)).collect();
+    let mut open: Vec<usize> = vec![];
+    let parent: Vec<Option<usize>> = (0..n).map(|i| {
+        while open.last().is_some_and(|&j| p.tasks[j].level >= p.tasks[i].level) { open.pop(); }
+        let up = open.last().copied();
+        open.push(i);
+        up
+    }).collect();
     let leaves_of = |i: usize| -> Vec<usize> { if summary[i] { p.subtree(i).filter(|&j| leaf(j)).collect() } else { vec![i] } };
 
     let mut edges: Vec<Edge> = vec![];
@@ -163,6 +171,14 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     // The calendar a lag is counted on.
     let lag_cal = |e: &Edge| match o.lag_cal { LagCal::Successor => ci[e.s].get(), LagCal::Predecessor => ci[e.p].get(), LagCal::H24 => h24, LagCal::Project => def };
     let pc = &cals[def];
+    // Predecessors in other plans hold a task like links, from their last known dates (0 = never
+    // read); links on a summary hold every task under it. Lags count on the lag calendar (the other
+    // plan's calendars are not known here: the project calendar stands in for the predecessor's).
+    let ext_need = |i: usize, c: &WorkCal, sp: i64| std::iter::successors(Some(i), |&j| parent[j]).flat_map(|j| p.tasks[j].ext.iter()).filter(|x| x.finish != 0).map(|x| {
+        let lc = &cals[match o.lag_cal { LagCal::Successor => ci[i].get(), LagCal::H24 => h24, LagCal::Predecessor | LagCal::Project => def }];
+        let y = match x.kind { LinkType::FS | LinkType::FF => lc.add(x.finish, x.lag), LinkType::SS | LinkType::SF => lc.add(x.start, x.lag) };
+        match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) }
+    }).max();
     let start = pc.next_start(at(p.start));
     let data = p.status.map(|d| at(d) + DAY);
     let (mut es, mut ef) = (vec![start; n], vec![start; n]);
@@ -193,7 +209,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                     (if c.is_work_day(f) { c.end_of(f) } else { at(f) + usual(f).1 }).max(es[i])
                 }
                 (None, Some(dd)) if t.pct < 100 => {
-                    let rem = sp * (100 - t.pct as i64) / 100;
+                    let rem = rest(i, t.pct);
                     let mut from = dd.max(es[i]);
                     // Retained logic: unfinished predecessors still hold back the remaining work.
                     if o.retained {
@@ -201,6 +217,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                             let x = need(&edges[e], &es, &ef);
                             from = from.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, rem) });
                         }
+                        from = from.max(ext_need(i, c, rem).unwrap_or(from));
                     }
                     c.add(c.next_start(from), rem)
                 }
@@ -214,12 +231,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 let x = need(&edges[e], &es, &ef);
                 v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
             }
-            // Predecessors in other plans hold the task like links, from their last known dates; links
-            // on a summary hold every task under it.
-            for x in std::iter::successors(Some(i), |&j| parent[j]).flat_map(|j| p.tasks[j].ext.iter()).filter(|x| x.finish > 0) {
-                let y = match x.kind { LinkType::FS | LinkType::FF => c.add(x.finish, x.lag), LinkType::SS | LinkType::SF => c.add(x.start, x.lag) };
-                v = v.max(match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) });
-            }
+            v = v.max(ext_need(i, c, sp).unwrap_or(v));
         }
         if let Some(cd) = t.cdate {
             match t.constraint {
@@ -240,6 +252,10 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             es[i] = c.next_start(c.add(es[i], t.level_delay));
         }
         ef[i] = c.add(es[i], sp);
+        // With several people, the task starts when the first of them can (and ends with the last).
+        if cand[i].len() > 1 && t.level_delay == 0 {
+            es[i] = cand[i].iter().map(|&k| cals[k].next_start(v)).min().map_or(es[i], |x| x.min(es[i]));
+        }
     }
     // Level of effort: from its own start to the latest point its successors need.
     for &i in order.iter().filter(|&&i| loe[i] && !fixed[i]) {
@@ -311,7 +327,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             continue;
         }
         // A started task's late start is that of its remaining work, which is what its predecessors must meet.
-        let rest = if t.act_start.is_some() { sp * (100 - t.pct.min(100) as i64) / 100 } else { sp };
+        let rest = if t.act_start.is_some() { rest(i, t.pct) } else { sp };
         lf[i] = if sp > 0 { c.prev_end(v) } else { v };
         ls[i] = c.sub(lf[i], rest);
         ff[i] = free.max(0);
@@ -387,8 +403,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         ef[i] = kids.iter().map(|&j| ef[j]).max().unwrap();
         ls[i] = kids.iter().map(|&j| ls[j]).min().unwrap();
         lf[i] = kids.iter().map(|&j| lf[j]).max().unwrap();
-        tf[i] = kids.iter().filter(|&&j| !loe[j]).map(|&j| tf[j]).min().unwrap_or(0);
-        ff[i] = kids.iter().map(|&j| ff[j]).min().unwrap();
+        tf[i] = kids.iter().filter(|&&j| !loe[j] && !fixed[j]).map(|&j| tf[j]).min().unwrap_or(0);
+        ff[i] = kids.iter().filter(|&&j| !fixed[j]).map(|&j| ff[j]).min().unwrap_or(0);
         lp[i] = kids.iter().any(|&j| lp[j]);
         fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
     }
