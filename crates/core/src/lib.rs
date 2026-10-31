@@ -33,4 +33,6 @@ mod exchange_cases;
 #[cfg(test)]
 mod sched_cases;
 #[cfg(test)]
+mod formula_cases;
+#[cfg(test)]
 mod parity;

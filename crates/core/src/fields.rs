@@ -7,6 +7,7 @@ use crate::model::*;
 use crate::{parse, sched};
 use chrono::NaiveDate;
 use serde::Serialize;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -124,6 +125,9 @@ pub struct Calc<'a> {
     names: HashMap<String, String>,
     /// Results of Excel-style formula columns, per field key and task.
     xl: HashMap<String, Vec<F>>,
+    /// Formula field results per (field, task), so fields reading fields are worked out once;
+    /// `None` while one is being worked out, which catches circular formulas.
+    memo: RefCell<HashMap<(String, usize), Option<F>>>,
 }
 
 pub fn money(v: f64, c: &Currency) -> String {
@@ -141,7 +145,8 @@ pub fn money(v: f64, c: &Currency) -> String {
 }
 
 fn num(v: f64) -> String {
-    let s = format!("{v:.2}");
+    // Values that round to zero show 0, not -0.
+    let s = format!("{:.2}", if v.abs() < 0.005 { 0.0 } else { v });
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
@@ -198,11 +203,14 @@ impl<'a> Calc<'a> {
         for (k, t) in &p.titles {
             names.insert(t.to_lowercase(), k.clone());
         }
-        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names, xl: HashMap::new() };
+        let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names, xl: HashMap::new(), memo: RefCell::default() };
         c.ev = c.earned_value();
         let excel: Vec<(String, String)> = p.fields.iter().filter(|d| crate::sheet::is_excel(&d.formula) && !d.key.starts_with('r')).map(|d| (d.key.clone(), d.formula.clone())).collect();
-        if !excel.is_empty() {
+        // Again when VBA formulas exist, so a formula column can read one that reads another formula column.
+        let vba = p.fields.iter().any(|d| !d.formula.trim().is_empty() && !crate::sheet::is_excel(&d.formula));
+        for _ in 0..if excel.is_empty() { 0 } else if vba { 2 } else { 1 } {
             c.xl = crate::sheet::task_formulas(&c, &excel);
+            c.memo.borrow_mut().clear();
         }
         c
     }
@@ -440,7 +448,7 @@ impl<'a> Calc<'a> {
                 Rollup::Average => vals.iter().sum::<f64>() / vals.len() as f64,
                 _ => vals.len() as f64,
             };
-            return if matches!(kind, Kind::Date | Kind::Fin) { F::Date(x as i64 * 1440) } else { F::Num(x) };
+            return if matches!(kind, Kind::Date | Kind::Fin) && d.rollup != Rollup::Count { F::Date((x * DAY as f64).round() as i64) } else { F::Num(x) };
         }
         // A finish field holds the end of its day; a formula giving a date only means that day.
         let fin = |v: F| match v { F::Date(d) if kind == Kind::Fin && d.rem_euclid(crate::cal::DAY) == 0 => F::Date(d + 17 * 60), v => v };
@@ -449,7 +457,15 @@ impl<'a> Calc<'a> {
         }
         if let Some((_, Some(ex))) = def {
             // Summary rows use the formula too unless a rollup is chosen (handled above).
-            return fin(formula::eval(ex, &Row { c: self, i }).unwrap_or_else(|e| F::Str(format!("#ERROR: {e}"))));
+            let (at, circ) = ((key.to_string(), i), || F::Str("#ERROR: the formula refers to itself".into()));
+            if let Some(v) = self.memo.borrow_mut().get_mut(&at) {
+                return v.get_or_insert_with(circ).clone();
+            }
+            self.memo.borrow_mut().insert(at.clone(), None);
+            let v = fin(formula::eval(ex, &Row { c: self, i }).unwrap_or_else(|e| F::Str(format!("#ERROR: {e}"))));
+            let v = if self.memo.borrow()[&at].is_some() { circ() } else { v };
+            self.memo.borrow_mut().insert(at, Some(v.clone()));
+            return v;
         }
         match t.custom.get(key) {
             None | Some(serde_json::Value::Null) => def.filter(|(d, _)| !d.default.is_empty()).map_or(F::Null, |(d, _)| F::Str(d.default.clone())),
@@ -485,7 +501,7 @@ impl<'a> Calc<'a> {
             }
             (Kind::Cost, x) => money(x.num(), &p.currency),
             (Kind::Work, x) => format!("{} hrs", num(x.num())),
-            (Kind::Pct, x) => format!("{}%", x.num().round()),
+            (Kind::Pct, x) => format!("{}%", x.num().round() + 0.0),
             (Kind::Int, x) => format!("{}", x.num().round() as i64),
             (Kind::Num, x) => num(x.num()),
             (_, x) => x.to_string(),

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.5.12 — 2026-10-31
+
+A dashboard that leads with the S-curve, and a full check of every engine: formulas, scheduling, links between plans, progress, file exchange and security.
+
+- **The project dashboard:** the S-curve across the whole page, then the other charts side by side, filling each row with no empty space. A card shows only when the plan has data for it (no costs: no cost cards; no resources: no manpower). **Cards ▾** lets you choose the cards yourself; a card you turn on without data stays blank, also in print. The choice is saved with the plan.
+- **Formulas:**
+  - A field that reads itself, or two fields that read each other, shows an error instead of closing the app.
+  - Fields that read other fields are worked out once, not again and again: a chain of 16 fields over 200 rows went from over a minute to a fraction of a second.
+  - Very long or deeply nested formulas are refused instead of crashing.
+  - `""` (empty text) works in formulas, as in `IIf([Text1] = "", …)`.
+  - VBA-style functions match VBA:
+    - `DateDiff` in weeks and hours, and the quarter ("q") interval;
+    - `Sgn(0)` is 0, and `Round` uses banker's rounding;
+    - `Mod` and `\` round their operands first;
+    - `InStr` counts characters, with a start position;
+    - numbers in text keep their digits.
+  - A finish field rolled up to a summary shows the right day.
+  - An Excel-style column that reads a VBA-style field gets the current value.
+  - Sheets show numbers, not dates, for columns G to K of sheets other than Plan.
+- **Scheduling:**
+  - A phase with a finished task no longer shows zero float and turns critical.
+  - Links to other plans use the lag calendar you chose (Schedule Options).
+  - Remaining work after a split counts only the pauses still ahead.
+  - A started task waits for its unfinished predecessor in another plan (retained logic), as it does for one in the same plan.
+  - With several people on a task, it starts when the first of them can.
+  - Links to dates before 1970 work.
+- **Speed:** scheduling, the network diagram and the checks take linear time (10,000 tasks: a tenth of a second instead of one second, and 20,000 in under 0.2 s). Levelling puts 120 one-day tasks for one person on 120 days in a quarter of a second; before, it gave up after 5 s with the person still over-allocated.
+- **Update Links:**
+  - It names the links it cannot follow (a deleted task, a file not found) instead of saying all is up to date.
+  - It tells apart plans of the same name in different folders.
+- **Progress and reports:**
+  - Baseline work is kept when the baseline is set, so work variance shows.
+  - The planned S-curve reaches 100 % when the baseline ends after the current plan.
+  - Without a status date, earned value, the cost curve and planned % are measured on the same day as the progress shown beside them.
+  - A summary's % complete is rounded like the project's (67 %, not 66 %).
+  - Schedule risk counts risks on milestones and on phases.
+- **File exchange:**
+  - XER keeps links to and from summaries, percent lags, resource rates and cost resources, and reads calendar hours in either order.
+  - Project XML keeps fixed costs, elapsed durations and physical % complete.
+  - A damaged XER calendar no longer stops the import.
+- **Security and safety:**
+  - A plan from someone else can no longer make Windows connect to a network server it names (subplans and links are looked for on your own server or next to the plan).
+  - A tiny crafted Excel file or a deeply nested XML file can no longer crash the app on import.
+  - Report names are escaped in Save as HTML, and updates are downloaded only from this app's own releases.
+  - Recovery copies are written before the old ones are removed.
+
 ## 0.5.11 — 2026-10-31
 
 Pictures and a full legend in print, subplans that print as you see them, and a checked engine.

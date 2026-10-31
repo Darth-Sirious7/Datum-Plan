@@ -24,7 +24,10 @@ impl F {
     pub fn truth(&self) -> bool {
         match self { F::Bool(b) => *b, F::Str(s) => matches!(s.to_lowercase().as_str(), "yes" | "true"), F::Null => false, x => x.num() != 0.0 }
     }
-    fn text(&self) -> String { self.to_string() }
+    /// As text in `&` and string functions: numbers in full, like VBA's CStr (the grid shows 2 decimals).
+    fn text(&self) -> String {
+        match self { F::Num(n) if n.is_finite() => format!("{}", (n * 1e12).round() / 1e12), x => x.to_string() }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -38,7 +41,7 @@ pub trait Ctx {
     fn work_add(&self, a: i64, m: i64) -> i64;
 }
 
-struct P<'a> { s: &'a [u8], i: usize }
+struct P<'a> { s: &'a [u8], i: usize, d: usize }
 
 impl P<'_> {
     fn ws(&mut self) { while self.i < self.s.len() && self.s[self.i].is_ascii_whitespace() { self.i += 1 } }
@@ -67,14 +70,21 @@ impl P<'_> {
     }
     fn or(&mut self) -> Result<Ex, String> { self.bin(Self::and, &["Or"]) }
     fn and(&mut self) -> Result<Ex, String> { self.bin(Self::not, &["And"]) }
-    fn not(&mut self) -> Result<Ex, String> { if self.word("Not") { Ok(Ex::Not(Box::new(self.not()?))) } else { self.cmp() } }
+    fn not(&mut self) -> Result<Ex, String> { if self.word("Not") { self.deeper()?; let e = Ex::Not(Box::new(self.not()?)); self.d -= 1; Ok(e) } else { self.cmp() } }
+    /// Brackets, calls, signs and powers nest the parser; deep nesting is refused, not a crash.
+    fn deeper(&mut self) -> Result<(), String> { self.d += 1; if self.d > 64 { Err("the formula is nested too deeply".into()) } else { Ok(()) } }
     fn cmp(&mut self) -> Result<Ex, String> { self.bin(Self::cat, &["<=", ">=", "<>", "=", "<", ">"]) }
     fn cat(&mut self) -> Result<Ex, String> { self.bin(Self::add, &["&"]) }
     fn add(&mut self) -> Result<Ex, String> { self.bin(Self::modu, &["+", "-"]) }
     fn modu(&mut self) -> Result<Ex, String> { self.bin(Self::idiv, &["Mod"]) }
     fn idiv(&mut self) -> Result<Ex, String> { self.bin(Self::mul, &["\\"]) }
     fn mul(&mut self) -> Result<Ex, String> { self.bin(Self::neg, &["*", "/"]) }
-    fn neg(&mut self) -> Result<Ex, String> { if self.eat("-") { Ok(Ex::Neg(Box::new(self.neg()?))) } else { self.eat("+"); self.pow() } }
+    fn neg(&mut self) -> Result<Ex, String> {
+        self.deeper()?;
+        let e = if self.eat("-") { Ex::Neg(Box::new(self.neg()?)) } else { self.eat("+"); self.pow()? };
+        self.d -= 1;
+        Ok(e)
+    }
     fn pow(&mut self) -> Result<Ex, String> {
         let b = self.atom()?;
         if self.eat("^") { Ok(Ex::Bin("^".into(), Box::new(b), Box::new(self.neg()?))) } else { Ok(b) }
@@ -92,15 +102,18 @@ impl P<'_> {
                 Ok(Ex::Field(name))
             }
             b'"' => {
-                let mut out = String::new();
+                // "" inside a string is one quote, as in VBA.
+                let mut out = vec![];
                 self.i += 1;
                 loop {
-                    let e = rest(self, b'"').map(|k| k - 1).ok_or("a closing quote is missing")?;
-                    out.push_str(&String::from_utf8_lossy(&self.s[self.i..e + 1]));
-                    self.i = e + 2;
-                    if self.s.get(self.i) == Some(&b'"') { out.push('"'); self.i += 1 } else { break }
+                    match self.s.get(self.i) {
+                        None => return Err("a closing quote is missing".into()),
+                        Some(b'"') if self.s.get(self.i + 1) == Some(&b'"') => { out.push(b'"'); self.i += 2 }
+                        Some(b'"') => { self.i += 1; break }
+                        Some(&ch) => { out.push(ch); self.i += 1 }
+                    }
                 }
-                Ok(Ex::Lit(F::Str(out)))
+                Ok(Ex::Lit(F::Str(String::from_utf8_lossy(&out).into())))
             }
             b'#' => {
                 let e = rest(self, b'#').ok_or("a closing # is missing")?;
@@ -149,7 +162,10 @@ pub const FUNCS: [&str; 34] = [
 ];
 
 pub fn parse(src: &str) -> Result<Ex, String> {
-    let mut p = P { s: src.as_bytes(), i: 0 };
+    if src.len() > 8000 {
+        return Err("the formula is too long".into());
+    }
+    let mut p = P { s: src.as_bytes(), i: 0, d: 0 };
     let e = p.or()?;
     p.ws();
     if p.i < p.s.len() {
@@ -169,7 +185,17 @@ pub fn fields(e: &Ex, out: &mut Vec<String>) {
     }
 }
 
+thread_local!(static DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) });
+
+/// Long operator chains and fields reading fields nest evaluation; past a limit it stops with an error.
 pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
+    let d = DEPTH.with(|x| { x.set(x.get() + 1); x.get() });
+    let r = if d > 150 { Err("the formula is nested too deeply".into()) } else { eval_in(e, c) };
+    DEPTH.with(|x| x.set(d - 1));
+    r
+}
+
+fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
     Ok(match e {
         Ex::Lit(v) => v.clone(),
         Ex::Field(n) => c.field(n).ok_or_else(|| format!("[{n}] is not a field"))?,
@@ -183,15 +209,19 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 "and" => F::Bool(x.truth() && y.truth()),
                 "&" => F::Str(x.text() + &y.text()),
                 "+" if matches!((&x, &y), (F::Str(_), F::Str(_))) => F::Str(x.text() + &y.text()),
-                "+" if date_math => match (&x, &y) { (F::Date(d), o) | (o, F::Date(d)) => F::Date(d + (o.num() * 1440.0) as i64), _ => unreachable!() },
+                "+" if date_math => match (&x, &y) { (F::Date(d), o) | (o, F::Date(d)) => F::Date(d.saturating_add((o.num() * 1440.0) as i64)), _ => unreachable!() },
                 "-" if matches!((&x, &y), (F::Date(_), F::Date(_))) => F::Num((x.num() - y.num()).round()),
-                "-" if matches!(x, F::Date(_)) => match x { F::Date(d) => F::Date(d - (y.num() * 1440.0) as i64), _ => unreachable!() },
+                "-" if matches!(x, F::Date(_)) => match x { F::Date(d) => F::Date(d.saturating_sub((y.num() * 1440.0) as i64)), _ => unreachable!() },
                 "+" => F::Num(x.num() + y.num()),
                 "-" => F::Num(x.num() - y.num()),
                 "*" => F::Num(x.num() * y.num()),
                 "/" => { if y.num() == 0.0 { return Err("division by zero".into()) } F::Num(x.num() / y.num()) }
-                "\\" => { if y.num().trunc() == 0.0 { return Err("division by zero".into()) } F::Num((x.num().trunc() / y.num().trunc()).trunc()) }
-                "mod" => { if y.num().trunc() == 0.0 { return Err("division by zero".into()) } F::Num(x.num().trunc() % y.num().trunc()) }
+                "\\" | "mod" => {
+                    // Like VBA, both sides are first rounded to whole numbers (halves to even).
+                    let (x, y) = (x.num().round_ties_even(), y.num().round_ties_even());
+                    if y == 0.0 { return Err("division by zero".into()) }
+                    F::Num(if op == "mod" { x % y } else { (x / y).trunc() })
+                }
                 "^" => F::Num(x.num().powf(y.num())),
                 cmp => {
                     let o = match (&x, &y) {
@@ -225,10 +255,10 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 }
                 "choose" => { need(2)?; let k = n(0)? as usize; if k >= 1 && k < a.len() { arg(k)? } else { F::Null } }
                 "abs" => F::Num(n(0)?.abs()),
-                "round" => { let p = 10f64.powi(n(1)? as i32); F::Num((n(0)? * p).round() / p) }
+                "round" => { let p = 10f64.powi(n(1)? as i32); F::Num((n(0)? * p).round_ties_even() / p) }
                 "int" => F::Num(n(0)?.floor()),
                 "fix" => F::Num(n(0)?.trunc()),
-                "sgn" => F::Num(n(0)?.signum()),
+                "sgn" => F::Num(match n(0)? { v if v > 0.0 => 1.0, v if v < 0.0 => -1.0, _ => 0.0 }),
                 "sqr" => F::Num(n(0)?.max(0.0).sqrt()),
                 "len" => F::Num(s(0)?.chars().count() as f64),
                 "left" => F::Str(chars(&s(0)?).into_iter().take(n(1)? as usize).collect()),
@@ -239,7 +269,13 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                     let len = if a.len() > 2 { n(2)? as usize } else { v.len() };
                     F::Str(v[st..].iter().take(len).collect())
                 }
-                "instr" => F::Num(s(0)?.to_lowercase().find(&s(1)?.to_lowercase()).map_or(0.0, |k| k as f64 + 1.0)),
+                "instr" => {
+                    // InStr([start,] text, find): a 1-based character position, 0 when not found.
+                    let k = if a.len() > 2 { 1 } else { 0 };
+                    let (from, h) = ((if k == 1 { n(0)? as usize } else { 1 }).max(1) - 1, chars(&s(k)?.to_lowercase()));
+                    let f = chars(&s(k + 1)?.to_lowercase());
+                    F::Num((from..=h.len().saturating_sub(f.len())).find(|&p| h[p..].starts_with(&f)).map_or(0.0, |p| p as f64 + 1.0))
+                }
                 "ucase" => F::Str(s(0)?.to_uppercase()),
                 "lcase" => F::Str(s(0)?.to_lowercase()),
                 "trim" => F::Str(s(0)?.trim().into()),
@@ -258,8 +294,11 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                         "yyyy" => (dy.year() - dx.year()) as f64,
                         "m" => ((dy.year() - dx.year()) * 12 + dy.month() as i32 - dx.month() as i32) as f64,
                         "n" => ((y - x) as f64).trunc(),
-                        "h" => ((y - x) as f64 / 60.0).trunc(),
-                        "ww" | "w" => ((dy - dx).num_days() as f64 / 7.0).trunc(),
+                        "q" => ((dy.year() - dx.year()) * 4 + dy.month0() as i32 / 3 - dx.month0() as i32 / 3) as f64,
+                        "h" => (y.div_euclid(60) - x.div_euclid(60)) as f64,
+                        // "ww" counts the Sundays crossed (calendar weeks); "w" whole weeks.
+                        "ww" => ((dy.week(chrono::Weekday::Sun).first_day() - dx.week(chrono::Weekday::Sun).first_day()).num_days() / 7) as f64,
+                        "w" => ((dy - dx).num_days() as f64 / 7.0).trunc(),
                         _ => (dy - dx).num_days() as f64,
                     })
                 }
@@ -273,8 +312,9 @@ pub fn eval(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                     };
                     match u.as_str() {
                         "m" => F::Date(months(k.trunc() as i64)?),
+                        "q" => F::Date(months(k.trunc() as i64 * 3)?),
                         "yyyy" => F::Date(months(k.trunc() as i64 * 12)?),
-                        _ => F::Date(d + (k * match u.as_str() { "n" => 1.0, "h" => 60.0, "ww" | "w" => 10080.0, _ => 1440.0 }) as i64),
+                        _ => F::Date(d.saturating_add((k * match u.as_str() { "n" => 1.0, "h" => 60.0, "ww" | "w" => 10080.0, _ => 1440.0 }) as i64)),
                     }
                 }
                 "year" | "month" | "day" | "weekday" => {

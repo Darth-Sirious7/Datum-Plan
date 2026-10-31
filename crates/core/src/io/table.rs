@@ -82,7 +82,7 @@ fn cell(d: &Data) -> String {
         Data::Bool(b) => b.to_string(),
         Data::DateTime(x) => {
             let v = x.as_f64();
-            (NaiveDate::from_ymd_opt(1899, 12, 30).unwrap() + chrono::Days::new(v.max(0.0) as u64)).to_string()
+            NaiveDate::from_ymd_opt(1899, 12, 30).and_then(|d| d.checked_add_days(chrono::Days::new(v.max(0.0) as u64))).map(|d| d.to_string()).unwrap_or_default()
         }
         Data::Error(_) => String::new(),
     }

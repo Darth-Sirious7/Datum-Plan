@@ -229,7 +229,7 @@ fn code_of(fmt: &str, c: &Calc) -> String {
 fn gives_date(input: &str) -> bool {
     let Ok(e) = gridcraft_formula::parse(input.trim_start_matches('=')) else { return false };
     let up = input.to_uppercase();
-    let dates = ["START]", "FINISH]", "!G", "!H", "!J", "!K"].iter().any(|d| up.contains(d)) || DATE_NAMES.iter().any(|n| up.contains(n));
+    let dates = ["START]", "FINISH]", "PLAN!G", "PLAN!H", "PLAN!J", "PLAN!K", "PLAN!$G", "PLAN!$H", "PLAN!$J", "PLAN!$K"].iter().any(|d| up.contains(d)) || DATE_NAMES.iter().any(|n| up.contains(n));
     use gridcraft_formula::Expr;
     match &e {
         Expr::Call(n, _) if ["TODAY", "NOW", "DATE", "EDATE", "EOMONTH", "WORKDAY", "WORKDAY.INTL", "DATEVALUE"].contains(&n.as_str()) => true,
