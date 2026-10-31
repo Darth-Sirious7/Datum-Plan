@@ -65,7 +65,7 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let base = schedule(p)?;
     let n = p.tasks.len();
     let cost0 = load::compute(p, &base).cost;
-    let leaves: Vec<usize> = (0..n).filter(|&i| !base.summary[i] && !base.off[i] && p.tasks[i].act_finish.is_none() && p.tasks[i].dur > 0).collect();
+    let leaves: Vec<usize> = (0..n).filter(|&i| !base.summary[i] && !base.off[i] && p.tasks[i].act_finish.is_none()).collect();
     let range = |i: usize| {
         let t = &p.tasks[i];
         let d = t.dur as f64;
@@ -87,7 +87,8 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             if rng.f() < chance(r.prob) {
                 hits[k] += 1;
                 let m = (r.days.abs() * p.day_min as f64).round() as i64 * if r.kind == "Opportunity" { -1 } else { 1 };
-                r.tasks.iter().filter_map(|u| p.idx(*u)).for_each(|i| add[i] += m);
+                // A risk on a phase delays its last task.
+                r.tasks.iter().filter_map(|u| p.idx(*u)).map(|i| if base.summary[i] { p.subtree(i).filter(|&j| !base.summary[j]).max_by_key(|&j| base.ef[j]).unwrap_or(i) } else { i }).for_each(|i| add[i] += m);
             }
         }
         let mut cost = 0.0;
@@ -111,7 +112,7 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     }
     let mut res = SimResult { runs: fin.len(), planned: base.finish, notes: vec![], ..Default::default() };
     if failed > 0 { res.notes.push(format!("{failed} runs could not be scheduled and were left out.")) }
-    if leaves.is_empty() { res.notes.push("No unfinished tasks with a duration: nothing to vary.".into()) }
+    if leaves.iter().all(|&i| p.tasks[i].dur == 0) { res.notes.push("No unfinished tasks with a duration: nothing to vary.".into()) }
     let ranged = leaves.iter().filter(|&&i| p.tasks[i].dmin > 0 || p.tasks[i].dmax > 0).count();
     res.notes.push(format!("{ranged} of {} tasks have their own optimistic and pessimistic durations; the rest use −{}% to +{}%.", leaves.len(), o.low, o.high));
     // Drivers: correlation of each task's duration with the finish.

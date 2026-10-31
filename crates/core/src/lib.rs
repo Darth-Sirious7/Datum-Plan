@@ -29,4 +29,6 @@ mod hardening;
 #[cfg(test)]
 mod cases;
 #[cfg(test)]
+mod exchange_cases;
+#[cfg(test)]
 mod parity;

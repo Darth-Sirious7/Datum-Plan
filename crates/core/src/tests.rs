@@ -482,7 +482,7 @@ fn excel_formula_columns_sheets_and_periods() {
     assert_eq!(c.name("dur"), "Days");
     op(&mut doc, def("number3", "Progress variance", "=[% Complete]-[Baseline % Complete]")).unwrap();
     let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));
-    assert_eq!(c.text(0, "c:number3"), "100"); // done, but the baseline says not started on 1 Nov
+    assert_eq!(c.text(0, "c:number3"), "0"); // no status date: measured when the progress was made, as the dashboard does
     // A spreadsheet tab reading the Plan sheet.
     let sheet = SheetData { name: "Calc".into(), ..Default::default() };
     op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) }).unwrap();

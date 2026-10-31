@@ -113,7 +113,7 @@ pub struct Assign {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Baseline { pub start: i64, pub finish: i64, pub dur: i64, #[serde(default)] pub cost: f64 }
+pub struct Baseline { pub start: i64, pub finish: i64, pub dur: i64, #[serde(default)] pub cost: f64, /** Work minutes when saved (None in older files). */ #[serde(default, skip_serializing_if = "Option::is_none")] pub work: Option<f64> }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

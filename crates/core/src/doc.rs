@@ -810,11 +810,11 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         }
         Op::Baseline { uids, clear, n } => {
             let s = sched::schedule(p)?;
-            let cost = load::compute(p, &s).cost;
+            let l = load::compute(p, &s);
             let all = uids.is_empty();
             let pick: HashSet<u32> = uids.into_iter().collect();
             for (i, t) in p.tasks.iter_mut().enumerate().filter(|(_, t)| all || pick.contains(&t.uid)) {
-                if clear { t.bls.remove(&n); } else { t.bls.insert(n.min(10), Baseline { start: s.es[i], finish: s.ef[i], dur: if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur }, cost: cost[i] }); }
+                if clear { t.bls.remove(&n); } else { t.bls.insert(n.min(10), Baseline { start: s.es[i], finish: s.ef[i], dur: if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur }, cost: l.cost[i], work: Some(l.work[i]) }); }
             }
         }
         Op::Project { name, start, status, calendar, day_hours, manual_default } => {

@@ -144,7 +144,7 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
     let b = buckets(lo.div_euclid(DAY), (hi - 1).max(lo).div_euclid(DAY), unit);
     let z = vec![0.0; b.len()];
     let (mut planned, mut forecast, mut actual, mut earned) = (z.clone(), z.clone(), z.clone(), z);
-    let dd = c.status_at().div_euclid(DAY);
+    let dd = c.progress_at().div_euclid(DAY);
     for &i in &leaves {
         let t = &p.tasks[i];
         let cal = &s.cals[s.ci[i]];
@@ -238,7 +238,8 @@ pub fn period_ends(c: &Calc, kind: &str) -> Vec<i64> {
     use chrono::Datelike;
     let (p, s) = (c.p, &c.s);
     let first = s.start.div_euclid(DAY);
-    let last = s.finish.div_euclid(DAY).max(c.progress_at().div_euclid(DAY)) + if kind == "month" { 31 } else { 7 };
+    let fin = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.finish)).chain([s.finish]).max().unwrap_or(s.finish);
+    let last = fin.div_euclid(DAY).max(c.progress_at().div_euclid(DAY)) + if kind == "month" { 31 } else { 7 };
     let mut out = vec![];
     if kind == "month" {
         let d0 = date_of(first * DAY);
@@ -363,8 +364,9 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     };
     let total: f64 = tasks.iter().map(|&i| w[i]).sum::<f64>().max(1e-9);
     // Daily points only for plans up to about ten years; longer ones use weeks.
-    let long = c.s.finish.div_euclid(DAY) - c.s.start.div_euclid(DAY) > 3660;
-    let mut days = if unit == "day" && !long { (c.s.start.div_euclid(DAY)..=c.s.finish.div_euclid(DAY)).collect() } else { period_ends(c, if unit == "day" { "week" } else { unit }) };
+    let fin = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.ef[i], |b| b.finish.max(c.s.ef[i]))).max().unwrap_or(c.s.finish).max(c.s.finish).div_euclid(DAY);
+    let long = fin - c.s.start.div_euclid(DAY) > 3660;
+    let mut days = if unit == "day" && !long { (c.s.start.div_euclid(DAY)..=fin).collect() } else { period_ends(c, if unit == "day" { "week" } else { unit }) };
     let lo = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.es[i], |b| b.start.min(c.s.es[i]))).min().unwrap_or(c.s.start).div_euclid(DAY);
     days.retain(|&d| d >= lo - 7);
     days.insert(0, lo - 1);

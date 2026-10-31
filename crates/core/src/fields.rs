@@ -180,7 +180,7 @@ impl<'a> Calc<'a> {
             }
             let kids: Vec<&Task> = p.subtree(i).skip(1).filter(|&j| !s.summary[j] && !s.off[j]).map(|j| &p.tasks[j]).collect();
             let w: i64 = kids.iter().map(|k| k.dur).sum();
-            if w > 0 { (kids.iter().map(|k| k.pct as i64 * k.dur).sum::<i64>() / w) as u8 } else { (kids.iter().map(|k| k.pct as i64).sum::<i64>() / kids.len().max(1) as i64) as u8 }
+            if w > 0 { (kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64).round() as u8 } else { (kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64).round() as u8 }
         }).collect();
         let defs = p.fields.iter().map(|d| (d.key.clone(), (d.clone(), formula::parse(&d.formula).ok().filter(|_| !d.formula.trim().is_empty())))).collect();
         let mut names: HashMap<String, String> = task_fields().iter().map(|f| (f.name.to_lowercase(), f.key.clone())).collect();
@@ -235,7 +235,7 @@ impl<'a> Calc<'a> {
         let (p, s) = (self.p, &self.s);
         let n = p.tasks.len();
         let mut e = Ev { pv: vec![0.0; n], ev: vec![0.0; n], ac: vec![0.0; n], bac: vec![0.0; n] };
-        let dd = self.status_at();
+        let dd = self.progress_at();
         for i in (0..n).filter(|&i| !s.summary[i] && !s.off[i]) {
             let t = &p.tasks[i];
             let Some(b) = t.bls.get(&0) else { continue };
@@ -312,7 +312,7 @@ impl<'a> Calc<'a> {
             let cut = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
             let n: u8 = rest[..cut].parse().unwrap_or(0);
             let Some(b) = t.bls.get(&n) else { return F::Null };
-            return match &rest[cut..] { "start" => d(b.start), "finish" => d(b.finish), "dur" => F::Num(b.dur as f64), "cost" => F::Num(b.cost), "work" => F::Num(l.work[i] * b.dur as f64 / dur.max(1) as f64 / 60.0), _ => F::Null };
+            return match &rest[cut..] { "start" => d(b.start), "finish" => d(b.finish), "dur" => F::Num(b.dur as f64), "cost" => F::Num(b.cost), "work" => F::Num(b.work.unwrap_or(l.work[i] * b.dur as f64 / dur.max(1) as f64) / 60.0), _ => F::Null };
         }
         match key {
             "id" => F::Num(i as f64 + 1.0),
@@ -374,7 +374,7 @@ impl<'a> Calc<'a> {
             "plannedpct" | "pctvar" => {
                 // Where the baseline (or, without one, the current plan) says the task should be at the status date.
                 let (a, b) = t.bls.get(&0).map_or((s.es[i], s.ef[i]), |b| (b.start, b.finish));
-                let (dd, c) = (self.status_at(), &s.cals[s.ci[i]]);
+                let (dd, c) = (self.progress_at(), &s.cals[s.ci[i]]);
                 let planned = if dd <= a { 0.0 } else if dd >= b { 100.0 } else { (c.between(a, dd) as f64 / c.between(a, b).max(1) as f64 * 100.0).round() };
                 F::Num(if key == "pctvar" { self.pct[i] as f64 - planned } else { planned })
             }
@@ -397,7 +397,7 @@ impl<'a> Calc<'a> {
                     "vfinish" => self.dur_between(i, b.finish, s.ef[i]) as f64,
                     "vdur" => (dur - b.dur) as f64,
                     "vcost" => l.cost[i] - b.cost,
-                    _ => (l.work[i] - l.work[i] * b.dur as f64 / dur.max(1) as f64) / 60.0,
+                    _ => (l.work[i] - b.work.unwrap_or(l.work[i] * b.dur as f64 / dur.max(1) as f64)) / 60.0,
                 })
             }
             "bcws" => F::Num(self.ev.pv[i]),

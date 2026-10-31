@@ -106,9 +106,10 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         let (sum, d) = (s.summary[i], if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur });
         let _ = write!(o, "<Task><UID>{}</UID><ID>{}</ID><Name>{}</Name><Active>{}</Active><Manual>{}</Manual><Type>0</Type><IsNull>0</IsNull><WBS>{num}</WBS><OutlineNumber>{num}</OutlineNumber>\
 <OutlineLevel>{}</OutlineLevel><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><DurationFormat>{}</DurationFormat><Milestone>{}</Milestone><Summary>{}</Summary>\
-<Critical>{}</Critical><PercentComplete>{}</PercentComplete><ConstraintType>{}</ConstraintType><CalendarUID>{}</CalendarUID><Cost>{:.2}</Cost>",
-            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit), (!sum && t.dur == 0) as u8, sum as u8,
-            (s.tf[i] <= 0) as u8, t.pct, CONS.iter().position(|c| *c == t.constraint).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
+<Critical>{}</Critical><PercentComplete>{}</PercentComplete><PhysicalPercentComplete>{}</PhysicalPercentComplete><EarnedValueMethod>{}</EarnedValueMethod>\
+<FixedCost>{}</FixedCost><FixedCostAccrual>{}</FixedCostAccrual><ConstraintType>{}</ConstraintType><CalendarUID>{}</CalendarUID><Cost>{:.2}</Cost>",
+            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && t.dur == 0) as u8, sum as u8,
+            (s.tf[i] <= 0) as u8, t.pct, t.phys, (t.pct_type == PctType::Physical) as u8, t.fixed_cost, match t.accrual { Accrual::Start => 1, Accrual::Prorated => 2, Accrual::End => 3 }, CONS.iter().position(|c| *c == t.constraint).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
         if let Some(c) = t.cdate {
             let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
         }
@@ -135,7 +136,7 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
                 l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10, if l.pct { 19 } else { 7 });
         }
         for (n, b) in &t.bls {
-            let _ = write!(o, "<Baseline><Number>{n}</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost></Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost);
+            let _ = write!(o, "<Baseline><Number>{n}</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost>{}</Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost, b.work.map_or(String::new(), |w| format!("<Work>{}</Work>", dur(w.round() as i64))));
         }
         o.push_str("</Task>\n");
     }
@@ -255,7 +256,9 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let mut k = Task {
             uid, name: t.val("Name").to_string(), ignore_rc: t.val("IgnoreResourceCalendar") == "1",
             level: t.val("OutlineLevel").parse::<u8>().unwrap_or(1).saturating_sub(1),
-            dur: read_dur(t.val("Duration")), unit: unit(t.val("DurationFormat")),
+            dur: read_dur(t.val("Duration")), unit: unit(t.val("DurationFormat")), elapsed: matches!(t.val("DurationFormat"), "4" | "6" | "8" | "10" | "12"),
+            phys: t.val("PhysicalPercentComplete").parse().unwrap_or(0), pct_type: if t.val("EarnedValueMethod") == "1" { PctType::Physical } else { PctType::Duration },
+            fixed_cost: t.val("FixedCost").parse().unwrap_or(0.0), accrual: match t.val("FixedCostAccrual") { "1" => Accrual::Start, "3" => Accrual::End, _ => Accrual::Prorated },
             pct: t.val("PercentComplete").parse().unwrap_or(0),
             constraint: t.val("ConstraintType").parse::<usize>().ok().and_then(|i| CONS.get(i).copied()).unwrap_or_default(),
             cdate: date(t.val("ConstraintDate")), deadline: date(t.val("Deadline")),
@@ -284,7 +287,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             if n > 10 { late_bl += 1 }
             if let (Some(bs), Some(bf), true) = (date(b.val("Start")), date(b.val("Finish")), n <= 10) {
                 let tm = |s: &str| s.get(11..16).and_then(|x| Some(x.get(..2)?.parse::<i64>().ok()? * 60 + x.get(3..)?.parse::<i64>().ok()?)).unwrap_or(0);
-                k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0) });
+                k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0), work: (!b.val("Work").is_empty()).then(|| read_dur(b.val("Work")) as f64) });
             }
         }
         tasks.push((t.val("ID").parse().unwrap_or(i64::MAX), k));

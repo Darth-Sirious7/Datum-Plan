@@ -84,7 +84,8 @@ fn read_cal(name: &str, data: &str, day_hours: f64) -> Calendar {
         n.kids.iter().filter_map(|h| {
             let p: Vec<&str> = h.args.split('|').collect();
             let m = |x: &str| -> Option<u16> { Some(x.get(..2)?.parse::<u16>().ok()? * 60 + x.get(3..5)?.parse::<u16>().ok()?) };
-            let (a, b) = (m(p.get(1)?)?, m(p.get(3)?)?);
+            let v = |k: &str| p.iter().position(|x| *x == k).and_then(|i| p.get(i + 1)).and_then(|x| m(x));
+            let (a, b) = (v("s")?, v("f")?);
             Some((a, if b == 0 { 1440 } else { b }))
         }).collect()
     };
@@ -99,8 +100,7 @@ fn read_cal(name: &str, data: &str, day_hours: f64) -> Calendar {
             }
         } else if sec.name == "Exceptions" {
             for e in &sec.kids {
-                if let Some(n) = e.args.split('|').nth(1).and_then(|x| x.parse::<i64>().ok()) {
-                    let d = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap() + chrono::Days::new(n.max(0) as u64);
+                if let Some(d) = e.args.split('|').nth(1).and_then(|x| x.parse::<u64>().ok()).and_then(|n| NaiveDate::from_ymd_opt(1899, 12, 30)?.checked_add_days(chrono::Days::new(n))) {
                     c.exceptions.push(Exception { name: "Exception".into(), from: d, to: d, hours: hours(e) });
                 }
             }
@@ -176,24 +176,32 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
                 t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
                 dt(s.es[i]), dt(s.ef[i]), dt(s.es[i]), dt(s.ef[i]))
         }).collect());
-    let leaf: std::collections::HashSet<u32> = acts.iter().map(|&i| p.tasks[i].uid).collect();
-    let mut n = 0;
-    table("TASKPRED", "task_pred_id task_id pred_task_id proj_id pred_proj_id pred_type lag_hr_cnt",
-        acts.iter().flat_map(|&i| p.tasks[i].preds.iter().filter(|l| leaf.contains(&l.pred)).map(move |l| (i, l))).map(|(i, l)| {
-            n += 1;
-            format!("{n}\t{}\t{}\t1\t1\tPR_{:?}\t{}", p.tasks[i].uid, l.pred, l.kind, l.lag as f64 / 60.0)
-        }).collect());
+    // A link to or from a summary applies to every activity under it; a percent lag becomes hours.
+    let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
+    let mut links = vec![];
+    for (i, t) in p.tasks.iter().enumerate() {
+        for l in &t.preds {
+            let Some(k) = p.idx(l.pred) else { continue };
+            let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
+            for b in under(i) { for a in under(k) { links.push(format!("{}\t{}\t{}\t1\t1\tPR_{:?}\t{}", links.len() + 1, p.tasks[b].uid, p.tasks[a].uid, l.kind, lag as f64 / 60.0)) } }
+        }
+    }
+    table("TASKPRED", "task_pred_id task_id pred_task_id proj_id pred_proj_id pred_type lag_hr_cnt", links);
     table("RSRC", "rsrc_id rsrc_name rsrc_short_name rsrc_type clndr_id", p.resources.iter().enumerate().map(|(k, r)| {
         let ty = match r.kind { ResKind::Work => "RT_Labor", ResKind::Material => "RT_Mat", ResKind::Cost => "RT_Equip" };
         let short: String = r.name.chars().filter(|c| c.is_alphanumeric()).take(20).collect();
         format!("{}\t{}\t{}\t{ty}\t{}", r.uid, clean(&r.name), short.to_uppercase(), rcal[k])
     }).collect());
+    table("RSRCRATE", "rsrc_rate_id rsrc_id cost_per_qty", p.resources.iter().enumerate().map(|(k, r)| format!("{}\t{}\t{}", k + 1, r.uid, r.rate)).collect());
     let mut n = 0;
-    table("TASKRSRC", "taskrsrc_id task_id proj_id rsrc_id target_qty remain_qty target_qty_per_hr", acts.iter().flat_map(|&i| p.tasks[i].res.iter().map(move |a| (i, a))).map(|(i, a)| {
+    table("TASKRSRC", "taskrsrc_id task_id proj_id rsrc_id target_qty remain_qty target_qty_per_hr target_cost", acts.iter().flat_map(|&i| p.tasks[i].res.iter().map(move |a| (i, a))).map(|(i, a)| {
         n += 1;
         let t = &p.tasks[i];
-        let q = if p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work) { t.dur as f64 / 60.0 * a.units } else { a.units };
-        format!("{n}\t{}\t1\t{}\t{q}\t{}\t{}", t.uid, a.res, q * (100 - t.pct as i64) as f64 / 100.0, a.units)
+        // A cost resource has no quantity, only an amount.
+        let kind = p.res_idx(a.res).map(|k| p.resources[k].kind);
+        if kind == Some(ResKind::Cost) { return format!("{n}\t{}\t1\t{}\t0\t0\t0\t{}", t.uid, a.res, a.units) }
+        let q = if kind == Some(ResKind::Work) { t.dur as f64 / 60.0 * a.units } else { a.units };
+        format!("{n}\t{}\t1\t{}\t{q}\t{}\t{}\t", t.uid, a.res, q * (100 - t.pct as i64) as f64 / 100.0, a.units)
     }).collect());
     o.push_str("%E\n");
     o
@@ -323,15 +331,21 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     for r in rows("RSRC") {
         let kind = if g(r, "rsrc_type") == "RT_Mat" { ResKind::Material } else { ResKind::Work };
         let cal = cal_names.get(&g(r, "clndr_id")).cloned().filter(|c| *c != p.calendar);
-        p.resources.push(Resource { uid: g(r, "rsrc_id").parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, cal, ..Default::default() });
+        let uid = g(r, "rsrc_id");
+        let rate = rows("RSRCRATE").iter().find(|x| g(x, "rsrc_id") == uid).and_then(|x| g(x, "cost_per_qty").parse().ok()).unwrap_or(0.0);
+        p.resources.push(Resource { uid: uid.parse().unwrap_or(0), name: g(r, "rsrc_name"), kind, cal, rate, ..Default::default() });
     }
     for a in rows("TASKRSRC").iter().filter(mine) {
         let (tu, ru): (u32, u32) = (g(a, "task_id").parse().unwrap_or(0), g(a, "rsrc_id").parse().unwrap_or(0));
         let qty = g(a, "target_qty").parse::<f64>().unwrap_or(0.0);
         let per_hr = g(a, "target_qty_per_hr").parse::<f64>().ok();
+        let cost = g(a, "target_cost").parse::<f64>().unwrap_or(0.0);
+        // An assignment with an amount and no quantity is a cost resource.
+        let money = qty == 0.0 && cost > 0.0;
+        if let Some(r) = p.resources.iter_mut().find(|r| r.uid == ru && money) { r.kind = ResKind::Cost }
         let work = p.resources.iter().any(|r| r.uid == ru && r.kind == ResKind::Work);
         if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
-            let units = if work { per_hr.unwrap_or(if t.dur > 0 { qty * 60.0 / t.dur as f64 } else { 1.0 }) } else { qty };
+            let units = if money { cost } else if work { per_hr.unwrap_or(if t.dur > 0 { qty * 60.0 / t.dur as f64 } else { 1.0 }) } else { qty };
             t.res.push(Assign { res: ru, units, table: 0 });
         }
     }
