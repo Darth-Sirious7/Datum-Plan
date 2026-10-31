@@ -454,6 +454,10 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .chartbox.tall .cv { min-height: 360px; }
 .chartbox.short .cv { min-height: 220px; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 12px; }
+.charts.wide { grid-template-columns: minmax(0, 1fr); margin-bottom: 12px; }
+.charts.flow { display: flex; flex-wrap: wrap; }
+.charts.flow > * { flex: 1 1 380px; min-width: 0; }
+.charts.flow:empty, .cols:empty { display: none; }
 .notesec { display: grid; gap: 4px; margin-bottom: 10px; }
 .notesec label { font: 500 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .notesec textarea { min-height: 70px; resize: vertical; padding: 6px 8px; font: 12.5px/1.45 var(--sans); }
@@ -470,7 +474,7 @@ input, select, textarea { background: var(--bg2); color: var(--text); }
 .sheettabs { display: flex; gap: 0; border-top: 1px solid var(--line); background: var(--panel); flex: none; }
 .sheettabs button { padding: 4px 14px; font: 500 10.5px var(--mono); letter-spacing: .06em; border-right: 1px solid var(--line); color: var(--muted); }
 .sheettabs button.on { background: var(--bg2); color: var(--blue); box-shadow: inset 0 2px var(--blue); }
-@media print { .chartbox header button, .fbar { display: none !important; } .chartbox { break-inside: avoid; } .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media print { .chartbox header button, .fbar { display: none !important; } .chartbox { break-inside: avoid; } .charts:not(.wide):not(.flow) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .charts.flow > * { flex-basis: 300px; } }
 .printonly { display: none; }
 @media print { .printonly { display: block !important; } }
 

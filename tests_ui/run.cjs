@@ -375,6 +375,17 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("a tile can be removed", (await tiles()) === 8);
   await p.click(".dashtabs button:text-is('Project')"); await p.waitForTimeout(300);
   check("the Project tab still shows the built-in dashboard", !!(await p.$(".kpis")) && !(await p.$(".dboard")));
+  // 0.5.12: the S-curve takes the whole width; the other charts fill their rows; Cards ▾ chooses the cards.
+  const wide = await p.evaluate(() => { const c = document.querySelector(".charts.wide .chartbox"), pg = document.querySelector(".page.report"); return c && pg ? c.getBoundingClientRect().width / pg.clientWidth : 0; });
+  check("the project S-curve spans the dashboard's width", wide > 0.9, String(wide));
+  const gaps = await p.$$eval(".charts.flow > *", els => { const rows = new Map(); for (const e of els) { const r = e.getBoundingClientRect(); rows.set(Math.round(r.top), (rows.get(Math.round(r.top)) ?? 0) + r.width); } const w = document.querySelector(".charts.flow").clientWidth; return [...rows.values()].every(x => x > w * 0.95); });
+  check("the other charts fill their rows without empty space", gaps);
+  await p.click(".ptools button:has-text('Cards')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Project S-curve')"); await p.waitForTimeout(400);
+  check("Cards ▾ hides a card and keeps the choice with the plan", !(await p.$(".charts.wide")) && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes("dashcards"));
+  await p.click(".ptools button:has-text('Cards')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Show the cards that have data')"); await p.waitForTimeout(400);
+  check("the cards that have data come back", !!(await p.$(".charts.wide")));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.

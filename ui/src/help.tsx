@@ -134,7 +134,7 @@ export const HELP: Record<string, Topic> = {
   rescals: { t: "Resource calendars", what: "Each person can have their own working time: a base calendar plus leave, holidays or part days. With resource calendars on (Schedule Options), a task runs on the calendars of the people assigned to it and finishes when the last of them does.",
     how: ["Resource Information › Working Time: choose the base calendar and add leave (from, to, not working or half days).", "Project › Schedule Options: turn on Resource calendars.", "A task that should keep its own calendar: Ignore Resource Calendar = Yes in its details."],
     tip: "Workload and levelling count each person's own available hours, so leave shows as less capacity." },
-  dashboard: { t: "Dashboard", what: "The plan on one page. Project is the built-in dashboard; + New dashboard makes your own (blank or from a template), as many as you like, saved with the plan.",
+  dashboard: { t: "Dashboard", what: "The plan on one page. Project is the built-in dashboard: the S-curve across the page, and only the cards the plan has data for (Cards ▾ chooses them); + New dashboard makes your own (blank or from a template), as many as you like, saved with the plan.",
     how: ["Edit layout, then + Add tile: a Number or Progress ring from a formula (=SPI, =COUNTIF(Tasks[Late],TRUE)), a Chart (a plan chart or a sheet range), a Table (a plan list, a sheet range or a formula), Countries (flags with counts) or Text.",
       "Drag tiles to reorder them; ✎ changes a tile, ⤢ sets its width and height, × removes it.",
       "Everything follows the plan as it changes. Print / PDF prints the dashboard shown."],

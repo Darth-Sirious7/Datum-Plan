@@ -4,7 +4,7 @@ import { CustomDashboard, DashTabs, dashK, dashboards } from "./dashboards";
 import { For, Show, createSignal, createResource, createMemo, createEffect, on, JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Curve, Grid, Rule, fmtDay, money, dateDay, iso, SCurve, PeriodReport, PeriodNote, PRow, Usage, EarnedSchedule, fmtAt } from "./api";
-import { call, out, P, tick, toast, act } from "./store";
+import { call, out, P, tick, toast, act, openMenu } from "./store";
 import { C, selectUid } from "./cmds";
 import { Seg } from "./ui";
 import { ChartBox, COL, line, bar } from "./charts";
@@ -84,11 +84,14 @@ export const PeriodBars = (p: { c: SCurve; unit: string; last?: number; size?: "
 /** The Dashboard page: the built-in project dashboard, or one of the plan's own (tabs on top). */
 export const Dashboard = () => (
   <section class="page report">
-    <Tools title="Dashboard" help="dashboard" />
+    <Tools title="Dashboard" help="dashboard"><Show when={!(dashK() >= 0 && dashboards()[dashK()])}><button class="btn" title="Choose the cards on this dashboard" onClick={e => cardsMenu()?.(e)}>Cards ▾</button></Show></Tools>
     <DashTabs />
     <Show when={dashK() >= 0 && dashboards()[dashK()]} fallback={<ProjectDashboard />}><CustomDashboard k={dashK()} /></Show>
   </section>
 );
+const [cardsMenu, setCardsMenu] = createSignal<((e: MouseEvent) => void) | null>(null);
+/** The project dashboard. A card shows when the plan has data for it (no costs: no cost cards), unless the
+ *  user chose otherwise in Cards ▾ (kept with the plan); a card chosen without data stays blank, also in print. */
 const ProjectDashboard = () => {
   const s = () => out()!.summary;
   const unit = () => (s().f - s().s > 240 ? "month" : "week");
@@ -98,34 +101,51 @@ const ProjectDashboard = () => {
   const [use] = createResource(() => tick(), () => call<Usage>("usage", { by: "resource", what: "work", unit: unit() }));
   const [late] = useRows(() => 2, () => q(["code", "name", "finish", "pct", "res"], [r("late", "equals", "Yes"), r("summary", "equals", "No")]));
   const [ms] = useRows(() => 3, () => q(["code", "name", "finish", "b0finish", "vfinish", "pct"], [r("milestone", "equals", "Yes")]));
+  const some = (v?: number[]) => !!v?.some(x => x);
+  const cost = () => !!curve() && (some(curve()!.planned) || some(curve()!.actual) || some(curve()!.forecast));
+  const CARDS: [string, string, () => boolean][] = [
+    ["actual", "Actual progress", () => true], ["planned", "Planned progress", () => !!rep()], ["variance", "Variance", () => !!rep()],
+    ["finish", "Forecast finish", () => true], ["spi", "SPI", () => s().spi !== null], ["es", "Earned schedule", () => s().spi !== null],
+    ["cpi", "CPI", () => s().cpi !== null], ["cost", "Forecast cost", cost], ["late", "Late tasks", () => true], ["done", "Tasks complete", () => true], ["critical", "Critical tasks", () => true],
+    ["scurve", "Project S-curve", () => true], ["period", "Progress per period", () => true], ["phase", "Progress by phase", () => !!rep()?.wbs.length],
+    ["evm", "Cost and earned value", cost], ["manpower", "Manpower histogram", () => !!use()?.rows.some(x => some(x.vals))],
+    ["milestones", "Milestones", () => s().milestones > 0], ["latelist", "Late tasks list", () => true]];
+  const pick = () => (P().ui?.dashcards ?? {}) as Record<string, boolean>;
+  const on = (k: string) => pick()[k] ?? CARDS.find(c => c[0] === k)![2]();
+  setCardsMenu(() => (e: MouseEvent) => openMenu(e, [...CARDS.map(([k, l]) => ({ label: l, on: on(k), run: () => act({ Ui: { key: "dashcards", value: { ...pick(), [k]: !on(k) } } }) })), "-",
+    { label: "Show the cards that have data", run: () => act({ Ui: { key: "dashcards", value: {} } }) }]));
+  const scurve = () => on("scurve") && sc();
   return (
     <>
       <Brand title="Project Dashboard" />
       <Show when={s().error}><div class="panel late">{s().error}</div></Show>
       <div class="kpis">
-        <Kpi v={pct(rep()?.actual ?? s().pct)} l={s().measured_at ? `Actual progress (no status date: at ${s().measured_at})` : "Actual progress"} d={rep() ? rep()!.actual - rep()!.actual_prev : undefined} unit="%" />
-        <Kpi v={pct(rep()?.planned ?? 0)} l="Planned progress" d={rep() ? rep()!.planned - rep()!.planned_prev : undefined} unit="%" />
-        <Kpi v={rep() ? `${(rep()!.actual - rep()!.planned).toFixed(1)}%` : "—"} l="Variance (actual − planned)" bad={!!rep() && rep()!.actual < rep()!.planned - 0.5} good={!!rep() && rep()!.actual >= rep()!.planned} />
-        <Kpi v={s().finish} l={`Forecast finish${s().var_finish ? ` (${s().var_finish} vs baseline)` : ""}`} />
-        <Kpi v={s().spi?.toFixed(2) ?? "—"} l="SPI" bad={s().spi !== null && s().spi! < 0.95} good={s().spi !== null && s().spi! >= 1} />
-        <EsKpis />
-        <Kpi v={s().cpi?.toFixed(2) ?? "—"} l="CPI" bad={s().cpi !== null && s().cpi! < 0.95} good={s().cpi !== null && s().cpi! >= 1} />
-        <Kpi v={s().cost} l="Forecast cost" /><Kpi v={s().late} l="Late tasks" bad={s().late > 0} /><Kpi v={`${s().done} / ${s().tasks}`} l="Tasks complete" /><Kpi v={s().critical} l="Critical tasks" />
+        <Show when={on("actual")}><Kpi v={pct(rep()?.actual ?? s().pct)} l={s().measured_at ? `Actual progress (no status date: at ${s().measured_at})` : "Actual progress"} d={rep() ? rep()!.actual - rep()!.actual_prev : undefined} unit="%" /></Show>
+        <Show when={on("planned")}><Kpi v={pct(rep()?.planned ?? 0)} l="Planned progress" d={rep() ? rep()!.planned - rep()!.planned_prev : undefined} unit="%" /></Show>
+        <Show when={on("variance")}><Kpi v={rep() ? `${(rep()!.actual - rep()!.planned).toFixed(1)}%` : ""} l="Variance (actual − planned)" bad={!!rep() && rep()!.actual < rep()!.planned - 0.5} good={!!rep() && rep()!.actual >= rep()!.planned} /></Show>
+        <Show when={on("finish")}><Kpi v={s().finish} l={`Forecast finish${s().var_finish ? ` (${s().var_finish} vs baseline)` : ""}`} /></Show>
+        <Show when={on("spi")}><Kpi v={s().spi?.toFixed(2) ?? ""} l="SPI" bad={s().spi !== null && s().spi! < 0.95} good={s().spi !== null && s().spi! >= 1} /></Show>
+        <Show when={on("es")}><EsKpis /></Show>
+        <Show when={on("cpi")}><Kpi v={s().cpi?.toFixed(2) ?? ""} l="CPI" bad={s().cpi !== null && s().cpi! < 0.95} good={s().cpi !== null && s().cpi! >= 1} /></Show>
+        <Show when={on("cost")}><Kpi v={cost() ? s().cost : ""} l="Forecast cost" /></Show>
+        <Show when={on("late")}><Kpi v={s().late} l="Late tasks" bad={s().late > 0} /></Show>
+        <Show when={on("done")}><Kpi v={`${s().done} / ${s().tasks}`} l="Tasks complete" /></Show>
+        <Show when={on("critical")}><Kpi v={s().critical} l="Critical tasks" /></Show>
       </div>
-      <div class="charts">
-        <Show when={sc()}>{c => <SCurveChart c={c()} unit={unit()} title="Project S-curve" size="tall" />}</Show>
-        <Show when={sc()}>{c => <PeriodBars c={c()} unit={unit()} />}</Show>
-        <Show when={rep()}>{x => <ChartBox title="Progress by phase" type="bar" horizontal fmt="pct" max={100} y="Complete" labels={x().wbs.map(w => w.name)}
+      <Show when={scurve()}>{c => <div class="charts wide"><SCurveChart c={c()} unit={unit()} title="Project S-curve" size="tall" /></div>}</Show>
+      <div class="charts flow">
+        <Show when={on("period") && sc()}>{c => <PeriodBars c={c()} unit={unit()} />}</Show>
+        <Show when={on("phase") && rep()}>{x => <ChartBox title="Progress by phase" type="bar" horizontal fmt="pct" max={100} y="Complete" labels={x().wbs.map(w => w.name)}
           datasets={[bar("Planned", x().wbs.map(w => w.planned), COL.grey), bar("Actual", x().wbs.map(w => w.actual), COL.blue)]} />}</Show>
-        <Show when={curve()}>{c => <ChartBox title="Cost and earned value" type="line" fmt="money" y={`Cumulative (${P().currency.code})`} labels={c().buckets.map(d => label(d, unit()))}
+        <Show when={on("evm") && curve()}>{c => <ChartBox title="Cost and earned value" type="line" fmt="money" y={`Cumulative (${P().currency.code})`} labels={c().buckets.map(d => label(d, unit()))}
           marker={c().buckets.findIndex(d => d >= (s().status_day ?? 0))}
           datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show>
-        <Show when={use()}>{u => <ChartBox title="Manpower histogram" type="bar" fmt="hours" y="Hours" stacked labels={u().buckets.map(d => label(d, unit()))}
+        <Show when={on("manpower") && use()}>{u => <ChartBox title="Manpower histogram" type="bar" fmt="hours" y="Hours" stacked labels={u().buckets.map(d => label(d, unit()))}
           datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>
       </div>
       <div class="cols">
-        <div class="panel"><h2>Milestones</h2><Table g={ms()} empty="No milestones." /></div>
-        <div class="panel"><h2>Late tasks</h2><Table g={late()} empty="Nothing is late." /></div>
+        <Show when={on("milestones")}><div class="panel"><h2>Milestones</h2><Table g={ms()} empty="No milestones." /></div></Show>
+        <Show when={on("latelist")}><div class="panel"><h2>Late tasks</h2><Table g={late()} empty="Nothing is late." /></div></Show>
       </div>
     </>
   );

@@ -207,7 +207,9 @@ You can also type a **Quantity** and an **Installed Quantity** (insert those col
 
 1. **The key figures:** actual and planned progress and their difference, the forecast finish, SPI and CPI, **SPI(t)** and the finish at the current pace (earned schedule), cost, late tasks, tasks complete and critical tasks. Green is good, red needs attention.
 
-Below them: the project S-curve, progress per week, cost, manpower, milestones and late tasks. **Print / PDF** and **Save as HTML** are at the top right.
+Below them, the **project S-curve** across the whole width, then progress per period, progress by phase, cost and earned value, and manpower, side by side and filling each row, then milestones and late tasks.
+
+A card shows only when the plan has data for it: a plan without costs shows no cost cards, and one without resources no manpower. **Cards ▾** chooses the cards yourself; a card you turn on without data stays blank, also when printed. The choice is saved with the plan; **Show the cards that have data** goes back to the automatic choice. **Print / PDF** and **Save as HTML** are at the top right.
 
 ### Your own dashboards
 
