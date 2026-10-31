@@ -72,6 +72,8 @@ pub fn parse(s: &str) -> Result<Node, String> {
                 let tag = &r[..end];
                 let name = tag.split(|c: char| c.is_whitespace() || c == '/').next().unwrap_or("");
                 let name = name.rsplit(':').next().unwrap_or(name).to_string();
+                // Exchange files nest a few levels; a deep tree would overflow the stack when dropped.
+                if stack.len() > 64 { return Err(bad()) }
                 let node = Node { name, ..Default::default() };
                 if tag.ends_with('/') { stack.last_mut().unwrap().kids.push(node) } else { stack.push(node) }
                 rest = &r[end + 1..];

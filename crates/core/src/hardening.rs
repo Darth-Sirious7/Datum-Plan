@@ -434,3 +434,26 @@ fn extreme_edits_never_panic() {
         assert!(t.elapsed().as_secs() < 60, "{name}: took {} s", t.elapsed().as_secs());
     }
 }
+
+#[test]
+fn hostile_import_files_are_refused_not_crashing() {
+    let dir = std::env::temp_dir().join(format!("dp_hostile_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // 200,000 nested tags: refused, not a stack overflow on a small stack.
+    let n = 200_000;
+    let xml = format!("<Project><Name>x</Name>{}{}</Project>", "<a>".repeat(n), "</a>".repeat(n));
+    let p = dir.join("deep.xml");
+    std::fs::write(&p, xml).unwrap();
+    let ok = std::thread::Builder::new().stack_size(2 << 20).spawn(move || crate::io::import(&p).is_err()).unwrap().join().unwrap();
+    assert!(ok);
+    // Two cells far apart in a tiny workbook: read cell by cell, not as a 17-billion-cell box.
+    let mut wb = rust_xlsxwriter::Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write_string(0, 0, "Name").unwrap();
+    ws.write_string(1_048_575, 16_383, "far").unwrap();
+    let x = dir.join("sparse.xlsx");
+    wb.save(&x).unwrap();
+    let t = crate::io::table::read(&x).unwrap();
+    assert_eq!(t.headers, vec!["Name".to_string()]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

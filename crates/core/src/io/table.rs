@@ -93,6 +93,26 @@ pub fn read(path: &Path) -> Result<Table, String> {
     let mut rows = if ext == "csv" || ext == "txt" {
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         csv_rows(&String::from_utf8_lossy(&bytes))
+    } else if ext == "xlsx" || ext == "xlsm" {
+        // Cell by cell: a range is the box around every cell, so two far-apart cells in a tiny
+        // file would ask for hundreds of gigabytes (an abort, not an error).
+        let mut wb: calamine::Xlsx<_> = calamine::open_workbook(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
+        let name = wb.sheet_names().first().cloned().ok_or("The workbook has no sheets.")?;
+        let mut rd = wb.worksheet_cells_reader(&name).map_err(|e| e.to_string())?;
+        let mut got = vec![];
+        while let Some(c) = rd.next_cell().map_err(|e| e.to_string())? {
+            let ((y, x), v) = (c.get_position(), cell(&Data::from(c.get_value().clone())));
+            if y < 1_048_576 && x < 1024 && !v.is_empty() { got.push((y, x, v)) }
+        }
+        let (y0, x0) = got.iter().fold((u32::MAX, u32::MAX), |(a, b), c| (a.min(c.0), b.min(c.1)));
+        let mut rows: Vec<Vec<String>> = vec![];
+        for (y, x, v) in got {
+            let (y, x) = ((y - y0) as usize, (x - x0) as usize);
+            if rows.len() <= y { rows.resize(y + 1, vec![]) }
+            if rows[y].len() <= x { rows[y].resize(x + 1, String::new()) }
+            rows[y][x] = v;
+        }
+        rows
     } else {
         let mut wb = open_workbook_auto(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
         let range = wb.worksheet_range_at(0).ok_or("The workbook has no sheets.")?.map_err(|e| e.to_string())?;

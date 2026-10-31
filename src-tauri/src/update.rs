@@ -86,7 +86,9 @@ pub fn check(beta: bool) -> Result<Info, String> {
 
 pub fn install(app: &AppHandle, url: &str, sums: Option<&str>) -> Result<(), String> {
     let base = format!("https://github.com/{REPO}/releases/download/");
-    if !url.starts_with(&base) || sums.is_some_and(|s| !s.starts_with(&base)) {
+    // "<tag>/<file>" under the releases, plain characters only, so "../" cannot leave the repository.
+    let ours = |u: &str| u.strip_prefix(&base).is_some_and(|r| r.split('/').count() == 2 && r.split('/').all(|s| !s.is_empty() && !s.starts_with('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || "._-+".contains(c))));
+    if !ours(url) || sums.is_some_and(|s| !ours(s)) {
         return Err("Updates are only installed from the Datum Plan releases page.".into());
     }
     // Every release publishes SHA256SUMS.txt; without it nothing is installed.

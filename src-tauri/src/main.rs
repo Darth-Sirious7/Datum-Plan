@@ -868,8 +868,7 @@ fn linked_plan(a: &App, file: &str, here: Option<&Path>) -> Option<(String, Proj
     if let Some(d) = docs(a).into_iter().find(same) {
         return Some((name, d.p.clone()));
     }
-    let near = here.and_then(Path::parent).map(|d| d.join(links::file_name(file)));
-    [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file()).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
+    sub_path(here, file).and_then(|p| Doc::open(&p).ok()).map(|d| (name, d.p))
 }
 
 // ---------- a project: a master plan and its subplans ----------
@@ -894,10 +893,16 @@ fn tab_of(a: &App, file: &str) -> Option<usize> {
     docs(a).iter().position(|d| file_key(d).as_deref() == Some(name.as_str()))
 }
 
-/// A subplan's file: where it was saved, or next to the master when the folder moved.
+/// A plan file another plan names: where it was saved, or next to the master when the folder moved.
+/// A network path (\\server\share) is only tried on the master's own server: a plan from someone
+/// else must not make Windows connect, and sign in, to a server it names.
 fn sub_path(master: Option<&Path>, file: &str) -> Option<PathBuf> {
+    use std::path::{Component, Prefix};
+    let server = |p: &Path| match p.components().next() { Some(Component::Prefix(x)) => match x.kind() { Prefix::UNC(s, _) | Prefix::VerbatimUNC(s, _) => Some(s.to_ascii_lowercase()), Prefix::Disk(_) | Prefix::VerbatimDisk(_) => None, _ => Some(Default::default()) }, _ => None };
+    let saved = PathBuf::from(file);
+    let saved = (server(&saved).is_none() || server(&saved) == master.and_then(server)).then_some(saved);
     let near = master.and_then(Path::parent).map(|d| d.join(links::file_name(file)));
-    [Some(PathBuf::from(file)), near].into_iter().flatten().find(|p| p.is_file())
+    [saved, near].into_iter().flatten().find(|p| p.is_file())
 }
 
 /// Project › Subplans › New Subplan: a new plan saved next to the master (same calendars and
@@ -1083,8 +1088,7 @@ fn goto_link(app: AppHandle, st: State<St>, file: String) -> R<Out> {
         show_tab(&mut a, k);
         return Ok(out(&a));
     }
-    let near = a.doc.path.as_deref().and_then(Path::parent).map(|d| d.join(links::file_name(&file)));
-    let path = [Some(PathBuf::from(&file)), near].into_iter().flatten().find(|p| p.is_file()).ok_or_else(|| format!("“{}” was not found, where it was or next to this plan.", links::file_name(&file)))?;
+    let path = sub_path(a.doc.path.as_deref(), &file).ok_or_else(|| format!("“{}” was not found, where it was or next to this plan.", links::file_name(&file)))?;
     let d = Doc::open(&path)?;
     remember(&app, &path);
     add_tab(&mut a, d);

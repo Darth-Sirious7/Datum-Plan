@@ -353,7 +353,7 @@ export const saveHtml = async (title: string) => {
   live.forEach((cv, i) => { const img = document.createElement("img"); img.src = cv.toDataURL("image/png"); img.style.width = "100%"; dead[i].replaceWith(img); });
   copy.querySelectorAll("textarea").forEach(t => t.remove());
   const css = [...document.styleSheets].flatMap(s => { try { return [...s.cssRules].map(r => r.cssText).filter(t => !t.startsWith("@font-face")); } catch { return []; } }).join("\n");
-  const html = `<!doctype html><html data-theme="light"><head><meta charset="utf-8"><title>${title}</title><style>${css}\n.noprint{display:none!important}.printonly{display:block!important}html,body{overflow:auto;height:auto}</style></head><body>${copy.outerHTML}</body></html>`;
+  const html = `<!doctype html><html data-theme="light"><head><meta charset="utf-8"><title>${title.replace(/[&<]/g, c => (c === "&" ? "&amp;" : "&lt;"))}</title><style>${css}\n.noprint{display:none!important}.printonly{display:block!important}html,body{overflow:auto;height:auto}</style></head><body>${copy.outerHTML}</body></html>`;
   const path = await call<string | null>("save_file", { name: `${P().name} - ${title}.html`, data: html });
   if (path) toast(`Saved ${path}`, true);
 };
