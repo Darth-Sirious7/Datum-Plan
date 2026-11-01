@@ -74,7 +74,7 @@ Datum Plan 每次启动时都会检查是否有新版本。有新版本时，标
 2. **功能区。** 当前选项卡的按钮，按组排列，每组都有 **?** 说明。
 3. **侧边栏。** 一键切换各个视图：Setup（设置）、Gantt（甘特图）、Tracking（跟踪甘特图）、Network（网络图）、Calendar（日历）、Task Usage（任务分配状况）、Resources（资源表）、Res. Usage（资源使用状况）、Manpower（人力）、Team（团队规划器）、Sheets（工作表）、Update（更新进度）、Look-ahead（前瞻计划）、Dashboard（仪表板）、Progress（进度报告）、S-Curves（S 曲线）、Reports（报告）、Builder（报告生成器）、Checks（进度检查）、Risks（风险登记册）、Sched. Risk（进度风险分析）和 Portfolio（项目组合）。
 4. **时间线。** 整个项目显示在一条线上。拖动蓝色方框可以滚动甘特图；在任务上点右键选择 **Add to Timeline**（添加到时间线），即可把任务显示在这里。
-5. **任务表。** 用法和电子表格一样：在单元格里输入、选择区域、与 Excel 互相复制粘贴、向下填充。
+5. **任务表。** 用法和电子表格一样：在单元格里输入、选择区域、与其他电子表格互相复制粘贴、向下填充。
 6. **甘特图。** 时间刻度上的横道。蓝色是普通任务，红色是关键任务，黑色是摘要任务，菱形是里程碑。拖动横道可以移动任务，拖动横道末端可以改变工期。
 7. **详细信息窗格。** 所选任务的全部信息，分为多个选项卡：General（常规）、Status（状态）、Resources（资源）、Predecessors（紧前任务）、Successors（紧后任务）、Codes（代码）、Steps（步骤）、Notebook（记事本）、Expenses（费用）、WPs & Docs（工作包与文件）、Custom Fields（自定义字段）、Risks（风险）和 Notes（备注）。
 8. **Tell Me**（告诉我您想要做什么，[[Ctrl+K]]）。输入想做的事，例如 “baseline” 或 “level”，然后按 [[Enter]]。
@@ -336,14 +336,14 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 
 ![用作周报的工作表：工具栏、按名称读取的计划数据、实时里程碑清单，以及带国旗的供应商。](img/sheets.png)
 
-在侧边栏打开 **Sheets**（工作表）。工作表是保存在计划文件中的电子表格，用法和 Excel 一样，并且直接读取计划数据，所以以前要从进度计划复制到另一个 Excel 文件的数字，现在始终是最新的。用 **+** 新建工作表标签；右键单击标签可重命名或删除。
+在侧边栏打开 **Sheets**（工作表）。工作表是保存在计划文件中的电子表格，用法和普通电子表格一样，并且直接读取计划数据，所以以前要从进度计划复制到另一个工作簿的数字，现在始终是最新的。用 **+** 新建工作表标签；右键单击标签可重命名或删除。
 
 1. **工具栏。** **Σ AutoSum**（自动求和）对所选单元格上方的数字求和（[[Alt+=]]；旁边的箭头还提供 Average 平均值、Count 计数、Max 最大值、Min 最小值）。**fx Function**（插入函数）可按名称或用途查找全部 490 个函数。**Plan Data…**（计划数据）插入一份实时清单。其后是数字格式、增加或减少小数位，以及插入（**Insert**）和删除（**Delete**）行和列。
 2. **按名称读取计划数据。** 例如 `=ProjectFinish`（项目完成日期）、`=BaselineFinish`（基准完成日期）、`=PercentComplete`（完成百分比）、`=SPI` 或 `=COUNTIF(Tasks[Late],TRUE)`（延误任务数）。日期和百分比会自动设置格式。
 3. **Plan Data… 生成的实时清单。** 选择 Tasks（任务）或 Resources（资源）、要显示的列、哪些行（里程碑、关键任务、延误任务、未完成、进行中、未来四周开始）、排序方式和行数。一个公式填满所有行，并随计划变化。
 4. **国旗。** 给单元格设置 **Country with flag**（国家及国旗）数字格式，然后输入国家代码（DE、cn）或英文名称（Germany、UK），即显示国旗和国家名称。
 
-### 像在 Excel 中一样编写公式
+### 编写公式
 
 ![输入公式：单元格编辑框和推荐的 Tasks 表列。](img/sheet-formula.png)
 
@@ -358,12 +358,12 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 | `Resources[Country]` | 每个资源一个值：Name、Type（类型）、Group（组）、Initials（缩写）、Max Units（最大单位）、Rate（费率）、Work（工时，小时）、Cost、Country（国家）、Email。 |
 | `ProjectFinish` | 另有 ProjectName、ProjectStart、StatusDate（状态日期）、BaselineFinish、FinishVariance（完成偏差，工作日）、PercentComplete（0–100）、PlannedPercent（计划百分比，0–100）、TotalCost、PlannedValue、EarnedValue、ActualCost、SPI、CPI、TaskCount、TasksDone、TasksLate、CriticalCount、MilestoneCount。 |
 
-- 与 Excel 相同，填充柄和复制粘贴会移动引用：`=A1*2` 向下填充变为 `=A2*2`。Ctrl+D 和 Ctrl+R 向下和向右填充。
+- 填充柄和复制粘贴会移动引用：`=A1*2` 向下填充变为 `=A2*2`。Ctrl+D 和 Ctrl+R 向下和向右填充。
 - 右键单击单元格可插入或删除行和列；指向被移动单元格的公式会自动跟随。拖动列边界可调整列宽；双击边界自动适应文字。
 - 鼠标指向错误值（#N/A、#NAME?、#SPILL! 等）可查看含义。
 - 旧公式（如 `=SUM(Plan!M2:M200)`）仍然有效。
 
-> **提示：** 用 **File › Export** 导出为 Excel 时会保留公式，并附带 Tasks 和 Resources 表以及上述名称，因此工作簿在 Excel 中同样可用。
+> **提示：** 用 **File › Export** 导出为 Excel 时会保留公式，并附带 Tasks 和 Resources 表以及上述名称，因此工作簿在其他电子表格软件中同样可用。
 
 ### 公式列
 
@@ -458,7 +458,7 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 ## 文件：保存、导入与导出
 
 - **Save**（保存，[[Ctrl+S]]）把计划保存为电脑上的 `.dplan` 文件。保存是安全的：只有新文件完整写好后才会替换旧文件。
-- **Import**（导入）可以打开其他进度计划软件的计划（Project XML 和 XER 文件），以及 Excel 或 CSV 表格（由您指定每一列的含义）。导入后会显示一份简短的**导入报告**，列出 Datum Plan 修改或略去的内容，以及每个任务的日期是否与原文件一致。
+- **Import**（导入）可以打开其他进度计划软件的计划（Project XML 和 XER 文件），以及 Excel（.xlsx）或 CSV 表格文件（由您指定每一列的含义）。导入后会显示一份简短的**导入报告**，列出 Datum Plan 修改或略去的内容，以及每个任务的日期是否与原文件一致。
 - **Export**（导出）可导出为 Excel（保留公式和格式）、CSV、Project XML、XER、PMXML、MPX、HTML、iCalendar 和 JSON。
 - **恢复。** Datum Plan 在您工作时会自动保存恢复副本（在 **File › Options** 中设置频率）。如果软件在保存前意外关闭，下次启动时会提示恢复您的工作。
 
@@ -510,7 +510,7 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 | [[Alt+Shift+→]] / [[Alt+Shift+←]] | 降级 / 升级 |
 | [[Ctrl+F2]] | 链接所选任务 |
 | [[Shift+F2]] | 任务信息 |
-| [[Ctrl+C]] [[Ctrl+X]] [[Ctrl+V]] | 复制、剪切、粘贴（也可与 Excel 互通） |
+| [[Ctrl+C]] [[Ctrl+X]] [[Ctrl+V]] | 复制、剪切、粘贴（也可与其他电子表格互通） |
 | [[Ctrl+Z]] / [[Ctrl+Y]] | 撤销 / 恢复 |
 | [[Ctrl+S]] / [[Ctrl+O]] / [[Ctrl+P]] | 保存 / 打开 / 打印 |
 | [[Ctrl+K]] | 告诉我您想要做什么 |

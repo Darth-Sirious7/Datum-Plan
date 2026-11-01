@@ -74,7 +74,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 2. **The ribbon.** The buttons of the chosen tab, in named groups. Each group has a **?**.
 3. **The sidebar.** One click to each view: Setup, Gantt, Tracking, Network, Calendar, Task Usage, Resources, Res. Usage, Manpower, Team, Sheets, Update, Look-ahead, Dashboard, Progress, S-Curves, Reports, Builder, Checks, Risks, Sched. Risk and Portfolio.
 4. **The timeline.** The whole project on one line. Drag the blue box to scroll the Gantt chart; right-click a task and choose **Add to Timeline** to show it here.
-5. **The task sheet.** Works like a spreadsheet: type in the cells, select ranges, copy and paste with Excel, fill down.
+5. **The task sheet.** Works like a spreadsheet: type in the cells, select ranges, copy and paste with other spreadsheets, fill down.
 6. **The Gantt chart.** Bars on a timescale. Blue bars are normal tasks, red bars are critical, black bars are summaries, diamonds are milestones. Drag a bar to move it, drag its end to change its duration.
 7. **The details pane.** Everything about the selected task in tabs: General, Status, Resources, Predecessors, Successors, Codes, Steps, Notebook, Expenses, WPs & Docs, Custom Fields, Risks and Notes.
 8. **Tell Me** ([[Ctrl+K]]). Type what you want to do, for example "baseline" or "level", and press [[Enter]].
@@ -336,14 +336,14 @@ Go through the look-ahead with your team every week: clear what is open, chase w
 
 ![A sheet used as a weekly report: the toolbar, plan numbers by name, a live milestone list and vendors with their flags.](img/sheets.png)
 
-Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like Excel and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**; right-click a tab to rename or delete it.
+Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like any spreadsheet and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**; right-click a tab to rename or delete it.
 
 1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. Then number formats, more or fewer decimals, and **Insert** and **Delete** for rows and columns.
 2. **Plan numbers by name.** `=ProjectFinish`, `=BaselineFinish`, `=PercentComplete`, `=SPI` or `=COUNTIF(Tasks[Late],TRUE)`. Dates and percentages are formatted for you.
 3. **A live list from Plan Data….** Choose Tasks or Resources, the columns, which rows (milestones, critical, late, not finished, in progress, starting in the next four weeks), the order and how many. One formula fills the rows and changes with the plan.
 4. **Country flags.** Give cells the **Country with flag** number format and type a code (DE, cn) or a name (Germany, UK). The flag and the country's name are shown.
 
-### Write formulas as in Excel
+### Write formulas
 
 ![Typing a formula: the cell editor and the suggested columns of the Tasks table.](img/sheet-formula.png)
 
@@ -358,12 +358,12 @@ What a formula can read from the plan:
 | `Resources[Country]` | One value per resource: Name, Type, Group, Initials, Max Units, Rate, Work (hours), Cost, Country, Email. |
 | `ProjectFinish` | Also ProjectName, ProjectStart, StatusDate, BaselineFinish, FinishVariance (working days), PercentComplete (0–100), PlannedPercent (0–100), TotalCost, PlannedValue, EarnedValue, ActualCost, SPI, CPI, TaskCount, TasksDone, TasksLate, CriticalCount, MilestoneCount. |
 
-- The fill handle and copy and paste move references, as in Excel: `=A1*2` filled down becomes `=A2*2`. Ctrl+D and Ctrl+R fill down and right.
+- The fill handle and copy and paste move references: `=A1*2` filled down becomes `=A2*2`. Ctrl+D and Ctrl+R fill down and right.
 - Right-click a cell to insert or delete rows and columns; every formula that points at the moved cells follows. Drag a column's edge to resize it; double-click the edge to fit the text.
 - Point at an error (#N/A, #NAME?, #SPILL!…) to see what it means.
 - Older formulas such as `=SUM(Plan!M2:M200)` keep working.
 
-> **Tip:** **File › Export** to Excel keeps the formulas and adds the Tasks and Resources tables and the names, so the workbook also works in Excel.
+> **Tip:** **File › Export** to Excel keeps the formulas and adds the Tasks and Resources tables and the names, so the workbook also works in other spreadsheet programs.
 
 ### Formula columns
 
@@ -458,7 +458,7 @@ Below, **Other open plans wait for** lists the tasks of this plan that tasks in 
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
-- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from Excel or CSV (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
+- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from Excel (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
 - **Export** writes Excel (with formulas and formatting), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
@@ -510,7 +510,7 @@ Below, **Other open plans wait for** lists the tasks of this plan that tasks in 
 | [[Alt+Shift+→]] / [[Alt+Shift+←]] | Indent / outdent |
 | [[Ctrl+F2]] | Link the selected tasks |
 | [[Shift+F2]] | Task information |
-| [[Ctrl+C]] [[Ctrl+X]] [[Ctrl+V]] | Copy, cut, paste (also with Excel) |
+| [[Ctrl+C]] [[Ctrl+X]] [[Ctrl+V]] | Copy, cut, paste (also with other spreadsheets) |
 | [[Ctrl+Z]] / [[Ctrl+Y]] | Undo / redo |
 | [[Ctrl+S]] / [[Ctrl+O]] / [[Ctrl+P]] | Save / open / print |
 | [[Ctrl+K]] | Tell me what you want to do |

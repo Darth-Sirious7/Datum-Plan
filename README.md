@@ -29,7 +29,7 @@
 Datum Plan is a complete project scheduling and control tool, written from scratch with its own scheduling engine in Rust. It brings planning, scheduling, resources, costs, progress tracking, reporting and spreadsheets together in one window. You don't need several tools and exports.
 
 - **Small and fast.** About 3.6 MB to install. It opens in a moment and stays smooth with large plans.
-- **Everything included.** Network logic, resource levelling, earned value, S-curves, dashboards, printing and Excel-style formulas are all built in.
+- **Everything included.** Network logic, resource levelling, earned value, S-curves, dashboards, printing and spreadsheet formulas are all built in.
 - **Easy to learn.** A ribbon, a sheet that works like a spreadsheet, plain-language help, a glossary of planning terms, and templates with real teams and man-hours.
 - **Private.** Plans are `.dplan` files on your own computer. The only network call is the update check.
 - **Dates you can trust.** Every release is checked against hand-worked scheduling cases, plan files that carry their own dates, and thousands of random plans and damaged files.
@@ -40,15 +40,15 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Plan
 - A task sheet that works like a spreadsheet:
   - drag-select ranges and select whole rows and columns;
-  - copy and paste with Excel, with Paste Special (values, formats, transpose);
+  - copy and paste with other spreadsheets, with Paste Special (values, formats, transpose);
   - a fill handle that continues series;
   - Sum, Average and Count of the selection;
   - fonts, colours, fill and alignment.
 - Outline (WBS) with summaries, milestones, recurring tasks, manual or automatic scheduling, inactive tasks and splits.
 - Links of every type (Finish-to-Start, Start-to-Start, Finish-to-Finish, Start-to-Finish) with lags and leads in days, hours or percent.
 - About 450 fields; rename any column, and hide, unhide, delete or reorder columns with the Columns dialog.
-- **Formula columns** in Excel syntax that refer to other columns, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`, with about 400 Excel functions.
-- **Sheets that work like Excel:** spreadsheet tabs inside the plan for your own reports, quantities, estimates and vendor lists. Click cells into a formula, 490 functions suggested as you type, AutoSum, fill and paste that move references, insert and delete rows and columns. They read the plan live by name (`Tasks[Finish]`, `Resources[Country]`, `ProjectFinish`, `SPI`), Plan Data puts a live list of milestones or late tasks in one click, and countries show their flags.
+- **Formula columns** in spreadsheet syntax that refer to other columns, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`, with about 400 spreadsheet functions.
+- **Sheets:** spreadsheet tabs inside the plan for your own reports, quantities, estimates and vendor lists. Click cells into a formula, 490 functions suggested as you type, AutoSum, fill and paste that move references, insert and delete rows and columns. They read the plan live by name (`Tasks[Finish]`, `Resources[Country]`, `ProjectFinish`, `SPI`), Plan Data puts a live list of milestones or late tasks in one click, and countries show their flags.
 - **Your own dashboards:** several per plan, made of tiles you lay out: numbers and progress rings from formulas (green or red by a rule), the plan's charts and lists, charts and tables from sheets, and country flags. Templates for a client dashboard, weekly progress and vendors.
 - **Project Setup** walks you through a new plan: details, Activity IDs, calendar, currency, WBS, team and branding. Templates for engineering, EPC, construction, software and research come with people, rates, assignments and costs.
 
@@ -78,7 +78,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Report, print and share
 - **Dashboard** with key figures and charts, **Progress reports** for any week or month with notes and photos, **S-curves**, and a **Report Builder** with templates (weekly management, monthly client, schedule health, cost).
 - **Print to paper or PDF from every view:** paper size, orientation, scaling or fit to pages, margins, date ranges, page ranges, headers and footers with your logo and your client's, page numbers and a legend.
-- Excel export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
+- Excel (.xlsx) export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
 
 ### Views
 Gantt Chart · Tracking Gantt · Schedule Risk · Look-ahead · Manpower · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.

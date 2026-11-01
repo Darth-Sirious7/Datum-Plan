@@ -460,9 +460,9 @@ async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<Strin
     let (label, ext) = match kind.as_str() {
         "xlsx" => ("Excel workbook", "xlsx"),
         "csv" => ("CSV", "csv"),
-        "xml" => ("MS Project XML", "xml"),
-        "xer" => ("Primavera P6 XER", "xer"),
-        "pmxml" => ("Primavera P6 XML", "pmxml"),
+        "xml" => ("Project XML", "xml"),
+        "xer" => ("XER", "xer"),
+        "pmxml" => ("PMXML", "pmxml"),
         "mpx" => ("MPX", "mpx"),
         "json" => ("JSON", "json"),
         "html" => ("Web page", "html"),

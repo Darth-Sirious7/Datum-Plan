@@ -34,7 +34,7 @@ export const TABLES: Record<string, Cols> = {
   "Earned Value": [N, ["bcws", 100], ["bcwp", 100], ["acwp", 100], ["sv", 90], ["cv", 90], ["spi", 54], ["cpi", 54], ["bac", 100], ["eac", 100], ["vac", 90]],
   Summary: [N, ["dur", 74], ["start", 92], ["finish", 92], ["pct", 64], ["cost", 100], ["work", 80]],
   Baseline: [N, ["b0dur", 74], ["b0start", 92], ["b0finish", 92], ["b0work", 80], ["b0cost", 100]],
-  "P6 Activities": [["code", 80], N, ["acttype", 110], ["dur", 70], ["rem", 70], ["start", 92], ["finish", 92], ["tf", 66], ["pct", 60], ["res", 120]],
+  "Activities": [["code", 80], N, ["acttype", 110], ["dur", 70], ["rem", 70], ["start", 92], ["finish", 92], ["tf", 66], ["pct", 60], ["res", 120]],
 };
 export const tables = (): Record<string, Cols> => ({ ...TABLES, ...(out()?.project.ui?.tables ?? {}) });
 

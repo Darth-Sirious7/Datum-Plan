@@ -44,7 +44,7 @@ A guided tutorial, and the last open items from the full check.
   - XER keeps physical % complete both ways.
   - Very large .xls and .ods sheets are refused with a message instead of exhausting memory.
 - **Formulas:**
-  - Resource custom fields with a VBA-style formula now work out their value for each resource.
+  - Resource custom fields with a classic formula (`IIf`, `[Field]`) now work out their value for each resource.
   - In a formula column, `Tasks[Cost]` and `Resources[...]` read the whole column.
   - Dates in text show in the plan's date format.
   - `Max()` and `Min()` with nothing in them show an error.
@@ -65,14 +65,14 @@ A dashboard that leads with the S-curve, and a full check of every engine: formu
   - Fields that read other fields are worked out once, not again and again: a chain of 16 fields over 200 rows went from over a minute to a fraction of a second.
   - Very long or deeply nested formulas are refused instead of crashing.
   - `""` (empty text) works in formulas, as in `IIf([Text1] = "", …)`.
-  - VBA-style functions match VBA:
+  - Classic formula functions give the standard results:
     - `DateDiff` in weeks and hours, and the quarter ("q") interval;
     - `Sgn(0)` is 0, and `Round` uses banker's rounding;
     - `Mod` and `\` round their operands first;
     - `InStr` counts characters, with a start position;
     - numbers in text keep their digits.
   - A finish field rolled up to a summary shows the right day.
-  - An Excel-style column that reads a VBA-style field gets the current value.
+  - A formula column that reads a classic-formula field gets the current value.
   - Sheets show numbers, not dates, for columns G to K of sheets other than Plan.
 - **Scheduling:**
   - A phase with a finished task no longer shows zero float and turns critical.
@@ -97,7 +97,7 @@ A dashboard that leads with the S-curve, and a full check of every engine: formu
   - A damaged XER calendar no longer stops the import.
 - **Security and safety:**
   - A plan from someone else can no longer make Windows connect to a network server it names (subplans and links are looked for on your own server or next to the plan).
-  - A tiny crafted Excel file or a deeply nested XML file can no longer crash the app on import.
+  - A tiny crafted .xlsx file or a deeply nested XML file can no longer crash the app on import.
   - Report names are escaped in Save as HTML, and updates are downloaded only from this app's own releases.
   - Recovery copies are written before the old ones are removed.
 
@@ -110,7 +110,7 @@ Pictures and a full legend in print, subplans that print as you see them, and a 
 - **A complete legend.** It lists only what the pages show (task, critical task, progress, milestone, critical milestone, summary, subplan, baseline, deadline, link, status date) beside the project's name, start, finish and status date. Print bars show the baseline and the deadline, as on screen.
 - **Fixed: expanded subplans printed collapsed.** The **Subplans** choice now sits under What to print; "As shown on screen" prints the subplans you expanded with their tasks.
 - **Engine fixes from a full check of formulas, links and progress:**
-  - `DateDiff` and `DateAdd` count months and years by the calendar, as in VBA: 30 Nov to 1 Dec is one month, and adding a month keeps the time.
+  - `DateDiff` and `DateAdd` count months and years by the calendar: 30 Nov to 1 Dec is one month, and adding a month keeps the time.
   - A finish date from a formula shows its own day, not the day before.
   - A plan of milestones only reports its % complete.
   - The cost curve's earned line adds up to the earned value, and follows physical % complete when the task uses it.
@@ -238,15 +238,15 @@ Two fixes.
 
 ## 0.5.0 — 2026-10-30
 
-Sheets that work like Excel and read the plan live: your own reports and vendor lists inside the plan file, with nothing copied by hand.
+Sheets that work like a spreadsheet and read the plan live: your own reports and vendor lists inside the plan file, with nothing copied by hand.
 
-**Formulas as in Excel**
+**Spreadsheet formulas**
 - **Click cells into a formula.** Type `=`, then click a cell or drag over several to add them (A1, A1:A5), or click another sheet's tab; each reference gets a coloured box. F4 cycles the `$` anchors, and Enter closes any bracket left open.
 - **Suggestions as you type:** all 490 functions, the plan's names and table columns, with Tab to insert. Inside a function, a hint shows its arguments with the current one underlined.
 - **Σ AutoSum** (Alt+=; also Average, Count, Max, Min) and **fx Insert Function**, which finds a function by name or by what it does.
-- **Fill and paste carry formulas:** the fill handle, Ctrl+D, Ctrl+R and copy and paste move references as Excel does (`=A1*2` becomes `=A2*2`); Cut moves cells.
+- **Fill and paste carry formulas:** the fill handle, Ctrl+D, Ctrl+R and copy and paste move references (`=A1*2` becomes `=A2*2`); Cut moves cells.
 - **Insert and delete rows and columns** (right-click, the toolbar, Ctrl+Shift++ and Ctrl+−); formulas on every sheet follow, and references to deleted cells show `#REF!`. Renaming a sheet updates the formulas that name it.
-- **Number formats:** Excel format codes (`#,##0.00`, `0.0%`, `dd-mmm-yy`, custom codes), more or fewer decimals, currency and the plan's date format. Results of TODAY, DATE or a lookup of plan dates show as dates by themselves, and plan percentages get a % sign.
+- **Number formats:** spreadsheet format codes (`#,##0.00`, `0.0%`, `dd-mmm-yy`, custom codes), more or fewer decimals, currency and the plan's date format. Results of TODAY, DATE or a lookup of plan dates show as dates by themselves, and plan percentages get a % sign.
 - Results that spill into several cells (FILTER, SORT, UNIQUE, SEQUENCE…) are shown. Column widths can be dragged or fitted with a double-click. Pointing at an error explains it.
 - Fixed: typing quickly into a cell no longer loses the second key.
 
@@ -254,7 +254,7 @@ Sheets that work like Excel and read the plan live: your own reports and vendor 
 - `Tasks[column]` has one row per task (Name, Start, Finish, % Complete, baseline dates and cost, float, Critical, Late, Milestone, Resources, earned value, custom fields…); `Resources[column]` has Name, Group, Country, Rate, Work, Cost….
 - Names for the plan's numbers: `ProjectFinish`, `BaselineFinish`, `FinishVariance`, `PercentComplete`, `SPI`, `CPI`, `TotalCost`, `TasksLate`, `CriticalCount` and more.
 - **Plan Data…** puts a live list at the selected cell: milestones, critical, late, unfinished or in-progress tasks, or those starting in the next four weeks, with the columns, order and number of rows you choose. One formula fills the rows and follows the plan.
-- Older formulas such as `=SUM(Plan!M2:M200)` keep working. Excel export adds the Tasks and Resources tables and the names, so the workbook works in Excel too.
+- Older formulas such as `=SUM(Plan!M2:M200)` keep working. Excel export adds the Tasks and Resources tables and the names, so the workbook works in other spreadsheet programs too.
 
 **Country flags**
 - A **Country with flag** number format shows a country's flag and name: type a code (DE, cn) or a name (Germany, UK).
@@ -374,7 +374,7 @@ Sturdier: new automatic checks found and fixed two ways a damaged file could sto
 **Fixes**
 - Dashboard: without a status date, actual progress is measured at today or at the latest progress you recorded, whichever is later, so a plan updated ahead of time no longer shows 0 %. The Dashboard says which date it used.
 - Date picker: it closes as soon as you pick a date.
-- Opening a damaged P6 file (XER) no longer stops the app: a WBS that loops back on itself, or a cut-off calendar, is read as far as it makes sense.
+- Opening a damaged XER file no longer stops the app: a WBS that loops back on itself, or a cut-off calendar, is read as far as it makes sense.
 - If anything inside the app ever fails, the rest of the app keeps working (before, one failure could lock every later command).
 
 **Under the hood**
@@ -444,7 +444,7 @@ A real Tracking Gantt, templates with a team and man-hours, a whiteboard-style N
 
  2026-10-24
 
-Every view prints properly, a complete Network Diagram, MS Project's timeline zoom box, and the finishing touches from your 0.3.5 review.
+Every view prints properly, a complete Network Diagram, a zoom box on the timeline, and the finishing touches from your 0.3.5 review.
 
 **Task tab, fonts and formatting**
 - Font list (Aptos, Calibri, Arial, Segoe UI, Tahoma, Verdana, Times New Roman, Cambria, Georgia, Garamond, Consolas, IBM Plex Sans), each shown in its own font. Used in the sheet, Sheets tabs and printouts.
@@ -452,12 +452,12 @@ Every view prints properly, a complete Network Diagram, MS Project's timeline zo
 - The Task tab now also holds the everyday commands: % complete, Mark on Track, Link, Unlink, Indent, Outdent, Find, Scroll to Task, Fill Down.
 - Paste is a split button: Paste, Paste Special… (Ctrl+Alt+V), Paste Values, Paste Formatting, Transpose.
 
-**Fill and paste, like Excel (task sheet and Sheets)**
+**Fill and paste (task sheet and Sheets)**
 - The fill handle continues series:
   - numbers 1, 2, 3 (or any step);
   - "Phase 1" → "Phase 2";
   - dates continue their step.
-- Hold Ctrl to copy instead. Durations, links and resources are copied, as MS Project does.
+- Hold Ctrl to copy instead. Durations, links and resources are copied.
 - Paste Special: all, values only or formats only, and transpose.
 - Sheets tabs: a fill handle (down or right), Ctrl+D, Ctrl+R and Freeze Panes.
 
@@ -486,7 +486,7 @@ Every view prints properly, a complete Network Diagram, MS Project's timeline zo
 
 **Help and links**
 - File › Home: "Check again" shows a spinner, then the time it checked. GitHub, Releases and Report an Issue buttons open the project's pages.
-- Help tab: Getting Started (for people who know MS Project, P6 or Excel), a Glossary (FS, SS, FF, SF, lag, float, critical and longest path, baseline, status date, SPI/CPI…), GitHub links.
+- Help tab: Getting Started (for people coming from other scheduling programs or spreadsheets), a Glossary (FS, SS, FF, SF, lag, float, critical and longest path, baseline, status date, SPI/CPI…), GitHub links.
 - The link type in the details pane reads "FS · Finish-to-Start", with a ? button that opens the Glossary.
 
  2026-10-24
@@ -523,10 +523,10 @@ A cleaner ribbon, Setup in the sidebar, full control of columns, and printing th
 
  2026-10-24
 
-Printing and PDF done properly, Excel-style text formatting, and a clearer Options page.
+Printing and PDF done properly, text formatting (bold, colours, fonts), and a clearer Options page.
 
 **Print and PDF (File › Print, Ctrl+P, or Report › Page Setup)**
-- A new Print page like MS Project's: settings on the left, a live preview of every page on the right.
+- A new Print page: settings on the left, a live preview of every page on the right.
 - Print the entire project or specific dates (from and to), and all pages or only some (e.g. 1-3, 5).
 - Paper A4, A3, A2, A1, Letter, Legal or Tabloid, landscape or portrait.
 - Scaling: adjust to a percentage, or fit the timescale to a number of pages wide.
@@ -556,7 +556,7 @@ Printing and PDF done properly, Excel-style text formatting, and a clearer Optio
 Progress updating, a report builder and power tools, plus the fixes from your 0.3.1 screenshots.
 
 **Fixes**
-- The big Gantt Chart and Task buttons are now MS Project split buttons: click the top half to run, the arrow below for the menu.
+- The big Gantt Chart and Task buttons are now split buttons: click the top half to run, the arrow below for the menu.
 - Icons on every right-click menu item (column headings and tasks).
 - The Format tab sits under its own "Gantt Chart Tools" label, no longer squeezed together.
 - The Gantt Chart Style gallery is back on the Format tab (10 styles), with Bar Styles and Gridlines.
@@ -571,30 +571,30 @@ Progress updating, a report builder and power tools, plus the fixes from your 0.
 - Global Change (Task tab or a heading's menu): set one field to a value for every selected task or every task in the view, as one undo step.
 - Conditional formatting per column: colour cells by rules (font colour, fill and bold), e.g. negative float in red.
 - Portfolio shows plans in subfolders as an EPS tree.
-- Excel export keeps formulas: formula columns stay live Excel formulas, dates and durations are typed, sheet tabs and a Plan sheet are included.
+- Excel export keeps formulas: formula columns stay live formulas in the workbook, dates and durations are typed, sheet tabs and a Plan sheet are included.
 - Automated UI tests run on every build.
 
 ## 0.3.1 — 2026-10-24
 
-A rebuilt foundation: a real spreadsheet grid, Excel formulas, period reporting and a cleaner look.
+A rebuilt foundation: a real spreadsheet grid, spreadsheet formulas, period reporting and a cleaner look.
 
-**A spreadsheet that works like Excel**
+**A task sheet that works like a spreadsheet**
 - The task sheet is rebuilt. Header and rows share one scroll area, so columns always line up (fixes the misaligned headings).
-- Select cells like in Excel: click and drag, Shift+click, Ctrl+click for several ranges, click a column heading for the whole column or the ID column for whole rows, Ctrl+A for everything.
+- Select cells as in a spreadsheet: click and drag, Shift+click, Ctrl+click for several ranges, click a column heading for the whole column or the ID column for whole rows, Ctrl+A for everything.
 - Delete clears the selected cells (Delete on whole rows, or Ctrl+−, deletes tasks). Type and press Ctrl+Enter to fill every selected cell. Ctrl+D fills down, and the fill handle at the corner of a selection drags values down.
-- Copy and paste blocks of cells to and from Excel. Pasting below the last task adds new tasks.
+- Copy and paste blocks of cells to and from other spreadsheets. Pasting below the last task adds new tasks.
 - Formula bar above the sheet shows the active cell, and Sum, Average and Count of the selected numbers.
 - Double-click any column heading to rename it. Right-click a task and choose Rename Task, or press F2.
-- Excel-style filter buttons on every heading: sort, tick the values to show, custom filter.
+- Filter buttons on every heading: sort, tick the values to show, custom filter.
 - The task name and ID columns stay in view when you scroll sideways.
 
-**Formula columns (Excel formulas, by column, as in MS Project)**
-- New Formula Column (right-click a heading, the fx button or Format › Formula Column): name it, choose Number, Text, Date, Duration, Cost or Yes/No, and write an Excel formula that refers to other columns by name, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`. It is calculated for every task.
-- Powered by the GridCraft engine: about 400 Excel functions (IF, IFS, SUMIFS, XLOOKUP, WORKDAY, NETWORKDAYS, TEXT, ROUND, LET…). Formula columns can use each other.
+**Formula columns (spreadsheet formulas, one per column)**
+- New Formula Column (right-click a heading, the fx button or Format › Formula Column): name it, choose Number, Text, Date, Duration, Cost or Yes/No, and write a formula that refers to other columns by name, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","On time")`. It is calculated for every task.
+- Powered by the GridCraft engine: about 400 spreadsheet functions (IF, IFS, SUMIFS, XLOOKUP, WORKDAY, NETWORKDAYS, TEXT, ROUND, LET…). Formula columns can use each other.
 - New fields: Baseline % Complete (where the baseline says a task should be at the status date) and % Complete Variance.
 
 **Sheets: spreadsheets inside your plan**
-- Add sheet tabs for quantities, estimates or progress measurement, with Excel formulas, number formats, copy and paste.
+- Add sheet tabs for quantities, estimates or progress measurement, with spreadsheet formulas, number formats, copy and paste.
 - Sheets read your tasks through the Plan sheet, e.g. `=SUMIF(Plan!I:I,100,Plan!M:M)`.
 
 **Progress reporting by period**
@@ -603,13 +603,13 @@ A rebuilt foundation: a real spreadsheet grid, Excel formulas, period reporting 
 - Notes for each period: executive summary, progress, issues, actions, look-ahead and photos, saved inside the plan and printed with the report.
 
 **S-curves and charts**
-- Interactive charts in a clean, GraphPad Prism-like style: hover anywhere to read every value, a status-date line, colour-blind-safe colours, and a PNG button on every chart.
+- Interactive charts in a clean, scientific style: hover anywhere to read every value, a status-date line, colour-blind-safe colours, and a PNG button on every chart.
 - S-curves page: project progress, progress per period, cost and hours S-curves, one S-curve per phase, and the data table; weekly or monthly, weighted as you choose.
 - The Dashboard now shows KPIs with the change since last period, the project S-curve, progress per period, progress by phase, cost and earned value, and a manpower histogram.
 - Reports saved as HTML keep their charts as pictures.
 
 **Look and feel**
-- The CentriForge design language on the MS Project layout: IBM Plex fonts, a calmer palette and square, clean controls.
+- A calmer design on the familiar ribbon layout: IBM Plex fonts, a calmer palette and square, clean controls.
 - Light, Dark and Auto themes (Auto follows Windows). Switch from the title bar or File › Options.
 
 **Fixes**
@@ -618,31 +618,31 @@ A rebuilt foundation: a real spreadsheet grid, Excel formulas, period reporting 
 
 ## 0.3.0 — 2026-10-24
 
-The biggest release so far: the MS Project look and feel with Primavera P6 power, rebuilt from the engine up. Everything planned for 0.2.1 to 0.5.2 is in this one release, including the network diagram.
+The biggest release so far: a familiar ribbon layout with advanced scheduling, rebuilt from the engine up. Everything planned for 0.2.1 to 0.5.2 is in this one release, including the network diagram.
 
 **A new window (SolidJS)**
-- MS Project ribbon: Task, Resource, Report, Project, View and the Gantt Chart Tools Format tab, with dropdown and split buttons (Gantt Chart, Filter, Group by, Sort, Tables, Outline, Timescale, Baseline, Export).
+- The ribbon: Task, Resource, Report, Project, View and the Gantt Chart Tools Format tab, with dropdown and split buttons (Gantt Chart, Filter, Group by, Sort, Tables, Outline, Timescale, Baseline, Export).
 - Tell Me (Ctrl+K or Alt+Q) searches every command. Quick access toolbar with Save, Undo, Redo and Print.
-- Task sheet at MS Project density (20 px rows): drag columns to reorder, resize, double-click a heading for Field Settings, right-click a heading to insert, hide, sort, group or filter, and an "Add New Column" picker over about 450 fields.
+- A compact task sheet (20 px rows): drag columns to reorder, resize, double-click a heading for Field Settings, right-click a heading to insert, hide, sort, group or filter, and an "Add New Column" picker over about 450 fields.
 - Inline editing with choice lists, Tab/Enter navigation, type-to-edit, a blank row for new tasks, indicators for late and manual tasks, and a task mode column.
 - Status bar with filter state, task count, project figures, view shortcuts and a zoom slider.
 
 **Fields, custom fields and formulas**
 - About 450 task fields: general, schedule, progress, work and cost, 11 baselines (start, finish, duration, cost, work), variances, earned value, and custom Text1–30, Number1–20, Flag1–20, Date, Cost, Duration, Start, Finish and Outline Code fields.
-- Custom Fields dialog: rename (alias), lookup tables with restricted values and defaults, MS Project formulas (`IIf`, `Switch`, `ProjDateDiff`, `DateAdd`, 34 functions, `[Field]` references), summary rollups and graphical indicators.
-- Activity codes (P6) with values and colours: show as columns, group and filter by them.
+- Custom Fields dialog: rename (alias), lookup tables with restricted values and defaults, classic formulas (`IIf`, `Switch`, `ProjDateDiff`, `DateAdd`, 34 functions, `[Field]` references), summary rollups and graphical indicators.
+- Activity codes with values and colours: show as columns, group and filter by them.
 - Inspect shows every field of a task.
 
 **Views**
 - Gantt Chart and Tracking Gantt with critical path, slack, late bars, baseline 0–10, splits, deadlines, today and status lines, bar labels, and drag to move, resize, link or set progress.
-- MS Project timeline across the top.
-- Network Diagram (MS Project style boxes, critical links, progress crosses, milestones).
+- A timeline across the top.
+- Network Diagram (boxes, critical links, progress crosses, milestones).
 - Calendar, Task Usage, Resource Usage (days, weeks, months, quarters; work or cost; overallocation in red), Resource Sheet, Resource Graph and Team Planner.
-- Tables: Entry, Schedule, Tracking, Cost, Work, Variance, Earned Value, Summary, Baseline and P6 Activities, plus your own.
+- Tables: Entry, Schedule, Tracking, Cost, Work, Variance, Earned Value, Summary, Baseline and Activities, plus your own.
 - Filters (20 built-in plus your own, with and/or conditions, related summaries and highlight mode), groups (several levels, with rolled-up dates and costs) and sorts that keep the outline. Outline levels, expand and collapse, project summary task.
 
-**Primavera P6 power**
-- Details pane with P6 tabs: General, Status, Resources, Predecessors, Successors (with driving links and float), Codes, Steps (weighted physical %), Notebook, Expenses, WPs & Docs, Custom Fields, Risks and Notes.
+**Advanced scheduling**
+- Details pane with tabs: General, Status, Resources, Predecessors, Successors (with driving links and float), Codes, Steps (weighted physical %), Notebook, Expenses, WPs & Docs, Custom Fields, Risks and Notes.
 - Activity types (task dependent, resource dependent, level of effort, start/finish milestone, WBS summary) and % complete types (duration, units, physical).
 - Schedule options: retained logic or progress override, critical by float or longest path, lag calendar, float paths, schedule from finish, open ends.
 - Elapsed durations (`3ed`), percentage lags (`2SS+50%`), task splits, priorities and leveling delay.
@@ -660,7 +660,7 @@ The biggest release so far: the MS Project look and feel with Primavera P6 power
 - Dashboard: complete, finish, cost, SPI, CPI, late and critical counts, cost S-curve (planned, forecast, earned, actual), progress and cost by phase, milestones and late tasks.
 - Report gallery: Project Overview, Weekly/Monthly Progress, Earned Value, Cost Overview with cash flow, Work Overview, Critical Tasks, Late & Slipping, Milestones, Upcoming Tasks and Trend.
 - Your logo and company name on every report. Print or save as PDF, save as HTML, save the Gantt chart as a PNG picture.
-- Check Schedule: the DCMA 14-point assessment plus P6 checks (long lags, SF links, soft constraints, manual tasks, summary links, out of sequence, missed deadlines), with your thresholds; click a check to filter its tasks.
+- Check Schedule: the DCMA 14-point assessment plus further checks (long lags, SF links, soft constraints, manual tasks, summary links, out of sequence, missed deadlines), with your thresholds; click a check to filter its tasks.
 - Risk register with probability × impact scoring, a heat map and links to tasks.
 - Compare Projects: added, removed and changed tasks against another .dplan, XML or XER file.
 - Portfolio: every plan in a folder with its dates, progress, cost, SPI, CPI and late tasks.
@@ -670,7 +670,7 @@ The biggest release so far: the MS Project look and feel with Primavera P6 power
 - Change Working Time, Project Information (with statistics), Resource Information (costs, availability, notes) and Task Information dialogs.
 
 **Files**
-- New export formats: Primavera P6 XML (.pmxml), MPX, iCalendar (.ics), HTML and JSON. Excel and CSV export the current table's columns.
+- New export formats: PMXML (.xml), MPX, iCalendar (.ics), HTML and JSON. Excel and CSV export the current table's columns.
 - JSON import. Plans from 0.2 open as before; a copy is kept as `name.backup.dplan` before they are upgraded.
 
 **Updates**
@@ -680,20 +680,20 @@ The biggest release so far: the MS Project look and feel with Primavera P6 power
 - The engine computes every field, filter, group and sort, so the window stays fast with large plans (20,000 tasks schedule and display in about 0.15 seconds).
 - 18 engine tests, including earned value, formulas, leveling, splits, schedule from finish and the schedule checks.
 
-**Coming in 0.3.1:** report designer, Page Setup, bar and text style editors, recurring tasks, Relationship diagram, global change, an EPS tree, and custom fields and codes in XER and MS Project XML.
+**Coming in 0.3.1:** report designer, Page Setup, bar and text style editors, recurring tasks, Relationship diagram, global change, an EPS tree, and custom fields and codes in XER and project XML files.
 
 ## 0.2.0 — 2026-10-24
 
-A big step towards MS Project and Primavera P6: real calendars, constraints, resources, progress tracking, baselines, file exchange, and a lot more control in the grid and the Gantt chart.
+A big step for the scheduling engine: real calendars, constraints, resources, progress tracking, baselines, file exchange, and a lot more control in the grid and the Gantt chart.
 
-**Scheduling engine (P6-style, to the minute)**
+**Scheduling engine (to the minute)**
 - Durations in minutes, hours, days, weeks or months (`4h`, `2.5d`, `2w`, `1mo`). Lags take units too (`3SS+4h`).
 - Calendars with working hours per day (for example 08:00–12:00 and 13:00–17:00), holidays and special working days. A plan can have several calendars, and each task can use its own.
 - All constraints: As Soon/Late As Possible, Start/Finish No Earlier/Later Than, Must Start/Finish On. Deadlines, with negative float when they are missed.
 - Manually scheduled tasks, inactive tasks, and links to and from summary tasks.
 - A status (data) date: completed work keeps its actual dates and remaining work moves after the status date.
 - Actual start and finish, remaining duration, and Mark on Track. Setting % complete fills in the actual dates.
-- Milestones sit at their predecessor's finish, as in MS Project.
+- Milestones sit at their predecessor's finish.
 
 **Resources and costs**
 - Resource Sheet: work, material and cost resources, groups, max units, standard rate, cost per use and material labels.
@@ -706,15 +706,15 @@ A big step towards MS Project and Primavera P6: real calendars, constraints, res
 
 **Grid**
 - Show any of about 30 fields: right-click a header or use "Add New Column". You can also hide, move, resize and reset columns, and the layout is saved with the plan.
-- Cut, copy and paste tasks (Ctrl+X/C/V). Paste rows straight from Excel.
+- Cut, copy and paste tasks (Ctrl+X/C/V). Paste rows straight from a spreadsheet.
 - Fill down (Ctrl+D), move rows up and down (Alt+Shift+↑/↓), and Find, Find Next and Replace (Ctrl+F, F3, Ctrl+H).
 - Right-click menu for tasks. Indicators for manual scheduling, notes and constraints. Inactive tasks are struck through.
 
 **Gantt chart**
-- A timeline strip above the Gantt (MS Project style): add tasks with right-click › Add to Timeline, and click it to jump to a date.
+- A timeline strip above the Gantt: add tasks with right-click › Add to Timeline, and click it to jump to a date.
 - Drag the progress line inside a bar to set % complete. Dragging one bar onto another creates a link.
 - Deadline markers, a status date line, manual task bars, and resource names next to the bars.
-- A details pane below the Gantt (Primavera style), with tabs for General, Relationships (edit link type and lag, add or remove predecessors and successors), Resources and Notes.
+- A details pane below the Gantt, with tabs for General, Relationships (edit link type and lag, add or remove predecessors and successors), Resources and Notes.
 
 **Everyday use**
 - Ctrl+K searches every command, view and task.
@@ -724,16 +724,16 @@ A big step towards MS Project and Primavera P6: real calendars, constraints, res
 - Ribbon tabs: Task, Resource, Project, View and Help.
 
 **Import and export**
-- Import Microsoft Project XML and Primavera P6 XER, including calendars, WBS, relationships, resources, actual dates and baselines.
+- Import project XML and XER files, including calendars, WBS, relationships, resources, actual dates and baselines.
 - Import Excel (.xlsx/.xls) or CSV task lists, with a step to match columns. Predecessors can refer to your own IDs, such as A10.
-- Export to Excel, CSV, MS Project XML and Primavera XER.
+- Export to Excel (.xlsx), CSV, project XML and XER.
 
 **Fixed**
 - Project Information now shows the start date, and dialogs keep what you typed when you press OK.
 
 **Known limits in 0.2**
 - No resource leveling yet (0.4.2). Overallocation is shown so you can fix it by hand.
-- XER export follows the P6 format but has not been tested in P6 itself. Please try it and report any problem.
+- XER export follows the published file format but has not yet been tested in other scheduling programs. Please try it and report any problem.
 - Printing prints the current view. Page setup for the Gantt chart comes later.
 
 ## 0.1.1 — 2026-10-24
@@ -773,7 +773,7 @@ The first version: the application shell, the scheduling engine and automatic up
 - An **Update available** badge appears in the title bar when a new version is out.
 
 **Plan**
-- A task sheet in the style of MS Project: ID, Task Name, Duration, Start, Finish, Predecessors, % Complete and Total Float.
+- A task sheet: ID, Task Name, Duration, Start, Finish, Predecessors, % Complete and Total Float.
 - Type straight into the grid. Typing a name in an empty row adds a task.
 - Durations: `5`, `5d`, `2w`, `1mo`. Predecessors: `3`, `3SS+2d`, `5FF-1d`.
 - Summary tasks: indent and outdent (Alt+Shift+→/←), with collapse and expand.

@@ -389,7 +389,7 @@ export const activityCodes = () => openDialog(() => {
         <div><table class="tbl"><tbody><For each={P().codes}>{c => <tr class="link" classList={{ sel: c.name === name() }} onClick={() => setName(c.name)}><td>{c.name}</td><td class="muted">{c.values.length} values</td></tr>}</For></tbody></table>
           <button class="btn sm" onClick={async () => { const n = prompt("Code name (e.g. Phase, Area, Discipline)"); if (n && await act({ CodeDef: { old: null, def: { name: n, scope: "Project", values: [] } } })) setName(n); }}>+ New code</button>
           <Show when={code()}><button class="btn sm" onClick={() => act({ CodeDef: { old: name(), def: null } }).then(() => setName(P().codes[0]?.name ?? ""))}>Delete</button></Show></div>
-        <Show when={code()} fallback={<p class="empty">Codes classify tasks (P6 activity codes): group, filter and colour by them.</p>}>{c => <div>
+        <Show when={code()} fallback={<p class="empty">Codes classify tasks (activity codes): group, filter and colour by them.</p>}>{c => <div>
           <div class="form"><Row label="Name"><Text value={c().name} set={x => put({ ...c(), name: x }).then(() => setName(x))} /></Row></div>
           <table class="tbl"><thead><tr><th>Value</th><th>Description</th><th>Colour</th><th /></tr></thead><tbody>
             <For each={c().values}>{(v, k) => <tr>
@@ -506,7 +506,7 @@ export const pasteSpecial = () => {
           <Row label="Paste"><div class="stackr">{([["all", "All (values and formats)"], ["values", "Values only"], ["formats", "Formats only"]] as const).map(([k, l]) => <label class="chk"><input type="radio" name="ps" checked={what() === k} onChange={() => setWhat(k)} />{l}</label>)}</div></Row>
           <Row label=""><Check label="Transpose (rows become columns)" value={tr()} set={setTr} /></Row>
         </div>
-        <p class="muted">Pastes what you last copied in Datum Plan. Text copied from Excel or elsewhere pastes as values.</p>
+        <p class="muted">Pastes what you last copied in Datum Plan. Text copied from another spreadsheet or elsewhere pastes as values.</p>
       </Dialog>
     );
   });
@@ -544,15 +544,15 @@ export const guide = () => openDialog(() => {
 export const gettingStarted = () => openDialog(() => (
   <Dialog title="Getting started" wide>
     <div class="gloss">
-      <h4>If you know MS Project</h4>
-      <dl><dt>Same layout</dt><dd>Ribbon on top, task sheet on the left, Gantt chart on the right, timeline above. Type a task name, a duration ("5d", "2w", "0" for a milestone) and predecessors ("3", "4SS+2d").</dd>
+      <h4>If you have used a scheduling program</h4>
+      <dl><dt>The layout</dt><dd>Ribbon on top, task sheet on the left, Gantt chart on the right, timeline above. Type a task name, a duration ("5d", "2w", "0" for a milestone) and predecessors ("3", "4SS+2d").</dd>
         <dt>Where things are</dt><dd><b>Task</b>: clipboard, font, insert, % complete, link and indent. <b>Schedule</b>: links, outline, leveling, critical path. <b>Progress</b>: status date, Update Progress, baselines. <b>Report</b>: dashboards, S-curves, print.</dd>
         <dt>Views</dt><dd>The left sidebar switches views: Setup, Gantt, Tracking, Network, Calendar, usage, resources, Sheets, reports.</dd></dl>
-      <h4>If you know Primavera P6</h4>
+      <h4>If you plan with activity IDs and codes</h4>
       <dl><dt>Activity IDs, codes, steps</dt><dd>Activity ID is a column; activity codes, steps, notebook and expenses are tabs in the details pane under the chart.</dd>
         <dt>Longest path and float</dt><dd>Schedule › Longest Path; Total Float and Free Float are columns (right-click a heading › Insert Column › Schedule).</dd></dl>
-      <h4>If you know Excel</h4>
-      <dl><dt>The sheet works like Excel</dt><dd>Drag to select, Ctrl+C / Ctrl+V with Excel, the fill handle (drag the small square; Ctrl copies), Ctrl+D, Ctrl+Alt+V for Paste Special, Ctrl+B/I/U.</dd>
+      <h4>If you know spreadsheets</h4>
+      <dl><dt>The sheet works like a spreadsheet</dt><dd>Drag to select, Ctrl+C / Ctrl+V with other spreadsheets, the fill handle (drag the small square; Ctrl copies), Ctrl+D, Ctrl+Alt+V for Paste Special, Ctrl+B/I/U.</dd>
         <dt>Formulas</dt><dd>Right-click a heading › New Formula Column, e.g. =[% Complete]-[Baseline % Complete]. The Sheets view holds free spreadsheets that can read the plan.</dd></dl>
       <h4>Finding things</h4>
       <dl><dt>Tell me (Ctrl+K)</dt><dd>Type what you want to do, e.g. "baseline", "print", "critical".</dd><dt>Glossary</dt><dd>Help › Glossary explains FS, SS, float, baseline and other terms.</dd></dl>
@@ -560,16 +560,16 @@ export const gettingStarted = () => openDialog(() => (
   </Dialog>
 ));
 
-/** Plain-language explanations of planning terms, for people coming from Excel. */
+/** Plain-language explanations of planning terms, for people coming from spreadsheets. */
 export const GLOSSARY: [string, [string, string][]][] = [
   ["Links (dependencies)", [["FS: Finish-to-Start", "The task starts after its predecessor finishes. The usual link (e.g. pour, then cure)."], ["SS: Start-to-Start", "The task starts when (or after) its predecessor starts. Both can run together."],
     ["FF: Finish-to-Finish", "The task finishes when (or after) its predecessor finishes."], ["SF: Start-to-Finish", "The task finishes when its predecessor starts. Rare: used for hand-overs."],
     ["Lag (+2d) and lead (−2d)", "A wait after the link (+2 days), or an overlap (−2 days or −20%). Written after the type: 4FS+2d."], ["Driving link", "The link that actually sets the task's date. Shown bold."]]],
   ["Float and the critical path", [["Total float (slack)", "How long a task can slip before it delays the project finish."], ["Free float", "How long a task can slip before it delays its next task."],
-    ["Critical task", "A task with no float: if it slips, the finish slips. Shown in red."], ["Critical path", "The chain of critical tasks from start to finish."], ["Longest path", "The chain that drives the finish date, counting calendars and constraints (as in P6)."]]],
+    ["Critical task", "A task with no float: if it slips, the finish slips. Shown in red."], ["Critical path", "The chain of critical tasks from start to finish."], ["Longest path", "The chain that drives the finish date, counting calendars and constraints."]]],
   ["Tasks", [["Summary task", "A parent row that rolls up its subtasks' dates, work and cost (the WBS)."], ["Milestone", "A moment with no duration, such as an approval. Shown as a diamond."],
     ["Manual / Auto scheduled", "Auto tasks move with their links and calendars; manual ones stay where you put them."], ["Constraint", "A fixed date rule, e.g. Start No Earlier Than (SNET) or Must Finish On (MFO). As Soon As Possible means none."],
-    ["Deadline", "A target date that flags the task when missed without moving it."], ["Activity ID", "A short code for each task (A1010…), as in P6."], ["Task type", "Which of duration, work and units stays fixed when you change one of them."]]],
+    ["Deadline", "A target date that flags the task when missed without moving it."], ["Activity ID", "A short code for each task (A1010…)."], ["Task type", "Which of duration, work and units stays fixed when you change one of them."]]],
   ["Progress", [["Status date", "The date the progress is reported to. Work before it should be done; after it, still to do."], ["% complete", "How much of the duration is done."], ["Baseline", "A saved copy of the plan, used to compare later (variance)."],
     ["Snapshot", "A record of the plan at a reporting period, used for trends."], ["SPI / CPI", "Earned value indices: below 1 means behind schedule (SPI) or over budget (CPI)."]]],
 ];
@@ -639,7 +639,7 @@ export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() 
             <textarea class="formula" ref={box} value={f()} onInput={e => { setF(e.currentTarget.value); setErr(""); }} placeholder="=[% Complete]-[Baseline % Complete]" />
             <div class="ptools"><For each={["+", "-", "*", "/", "&", "=", "<>", ">", "<", "(", ")"]}>{o => <button class="btn sm" onClick={() => insert(o)}>{o}</button>}</For></div>
             <Show when={err()}><div class="late">{err()}</div></Show>
-            <p class="muted">Excel formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are Excel dates; durations are in days.</p>
+            <p class="muted">Spreadsheet formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are Excel dates; durations are in days.</p>
           </div></Row>
           <Row label="Functions"><select onChange={e => { insert(e.currentTarget.value); e.currentTarget.value = ""; }}><option value="">Insert function…</option><For each={FUNCS}>{x => <option value={x[1]}>{x[0]}</option>}</For></select></Row>
         </div>

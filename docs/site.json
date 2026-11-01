@@ -8,7 +8,7 @@
   "for": "Project managers, planners, engineers and contractors.",
   "about": [
     "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
-    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like Excel and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like a spreadsheet and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
   ],
   "steps": [
     {
@@ -31,11 +31,11 @@
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view.",
-    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel export with formulas.",
+    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel (.xlsx) export with formulas.",
     "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",
     "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide).",
     "A guided tutorial: an example plan that uses every view, with a note on each saying how it was filled in (Help › Tutorial).",
-    "Sheets that work like Excel and read the plan live: click cells into formulas, 490 functions suggested as you type, plan data by name (Tasks[Finish], ProjectFinish, SPI), live task lists, country flags.",
+    "Sheets that work like a spreadsheet and read the plan live: click cells into formulas, 490 functions suggested as you type, plan data by name (Tasks[Finish], ProjectFinish, SPI), live task lists, country flags.",
     "Your own dashboards: numbers, progress rings, charts, tables and country flags from the plan and your sheets, laid out as you like, several per plan.",
     "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
     "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example."

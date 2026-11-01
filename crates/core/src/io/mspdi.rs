@@ -175,7 +175,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     let (mut notes, mut elapsed, mut late_bl) = (vec![], 0, 0);
     let root = parse(text)?;
     if root.name != "Project" {
-        return Err("This XML file is not a Microsoft Project XML file.".into());
+        return Err("This XML file is not a project XML file.".into());
     }
     let start = date(root.val("StartDate")).unwrap_or_else(|| chrono::Local::now().date_naive());
     let name = [root.val("Title"), root.val("Name").trim_end_matches(".xml")].into_iter().find(|s| !s.is_empty()).unwrap_or("Imported project");

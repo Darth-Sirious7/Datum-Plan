@@ -37,7 +37,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             if len > crate::doc::MAX_FILE { return Err(format!("{} is too large to import.", path.display())) }
             table::read(path).map(Imported::Table)
         }
-        "mpp" => Err("MS Project .mpp files are a closed format. In MS Project, use File › Save As › XML, then import the XML file.".into()),
+        "mpp" => Err(".mpp files are a closed format. Save the plan as XML in the program that made it, then import the XML file.".into()),
         e => Err(format!("Datum Plan cannot import .{e} files. Use XML, XER, XLSX, CSV or JSON.")),
     }
 }

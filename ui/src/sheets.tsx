@@ -268,7 +268,7 @@ export const Sheets = () => {
     act({ SheetInsert: { k: k(), cols: c, at: c ? g.c0 : g.r0, count: del ? -n : n } });
   };
   const setFmt = (f: string) => { const out: [string, string][] = []; S.each((r, c) => out.push([a1(r, c), ""]), 20000); act({ SheetCells: { k: k(), cells: out, fmt: f } }); };
-  const customFmt = () => { const f = prompt("Excel number format code, for example #,##0.0 or dd/mm/yyyy or 0.0\"%\"", fmtOf(...cur())); if (f !== null) setFmt(f.trim()); };
+  const customFmt = () => { const f = prompt("Number format code, for example #,##0.0 or dd/mm/yyyy or 0.0\"%\"", fmtOf(...cur())); if (f !== null) setFmt(f.trim()); };
   const moreDecimals = (d: number) => {
     const by = new Map<string, [string, string][]>();
     S.each((r, c) => { const f = decimals(fmtOf(r, c), d); by.set(f, [...(by.get(f) ?? []), [a1(r, c), ""]]); }, 20000);
