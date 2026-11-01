@@ -150,7 +150,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const hd = await p.$(".ghead .hc:nth-child(4)"); await hd.click({ button: "right" }); await p.waitForTimeout(150);
   await p.hover(".menu button:has-text('Insert Column')"); await p.waitForTimeout(120);
   await p.hover(".menu button:has-text('Schedule')"); await p.waitForTimeout(150);
-  check("Insert Column categories open their fields", (await p.$$(".menu")).length === 3 && (await p.$$eval(".menu:nth-of-type(3) button", b => b.length)) > 10);
+  check("Insert Column categories open their fields", (await p.$$(".menu")).length === 3 && (await p.$$eval(".menu", ms => ms[2].querySelectorAll("button").length)) > 10);
   await p.mouse.click(5, 5);
   const hd2 = await p.$(".ghead .hc:nth-child(4)"); const hname = (await hd2.textContent()).trim(); await hd2.click({ button: "right" }); await p.click(".menu button:has-text('Hide Column')"); await p.waitForTimeout(150);
   const hc = JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()));
@@ -460,6 +460,12 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Help › Tutorial Notes shows them again", !!(await p.$(".tour")));
   await p.click(".tour .x"); await p.waitForTimeout(100);
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
+  // 0.5.14: the plan tabs sit between the ribbon and the timeline, and show even for one plan.
+  const tabsAt = await p.evaluate(() => { const r = s => document.querySelector(s)?.getBoundingClientRect(); const t = r(".plantabs"), rb = r(".ribbon"), c = r(".content"); return t && rb && c && t.height > 20 && t.top >= rb.bottom - 1 && t.bottom <= c.top + 1; });
+  check("the plan tabs sit between the ribbon and the timeline", tabsAt);
+  const capsOk = await p.$$eval(".ribbon .grp .cap", cs => cs.every(c => { const r = c.getBoundingClientRect(), rb = c.closest(".ribbon").getBoundingClientRect(); return r.bottom <= rb.bottom + 0.5; }));
+  check("ribbon group names are not cut off", capsOk);
 
   // 0.5.1: Tell Me dims the window instead of hiding it.
   await p.keyboard.press("Control+k"); await p.waitForTimeout(250);

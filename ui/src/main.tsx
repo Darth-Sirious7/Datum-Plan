@@ -27,6 +27,7 @@ import * as D from "./dialogs";
 import { ScheduleRisk } from "./risk";
 import { Lookahead, Manpower } from "./progress";
 import { TourCard } from "./tour";
+import { PlanTabs } from "./plans";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
@@ -126,6 +127,7 @@ const App = () => {
     <div class="app" ref={() => document.addEventListener("keydown", keys)}>
       <TitleBar update={update()?.available ? update()!.latest : null} />
       <Ribbon />
+      <Show when={out()}><PlanTabs /></Show>
       <main class="work">
         <nav class="side"><For each={SIDE}>{x => x === "-" ? <hr /> : <button classList={{ on: view() === x[0] }} onClick={() => C.view(x[0])} title={x[2]}><Icon n={x[1]} /><span>{x[2]}</span></button>}</For></nav>
         <div class="content">

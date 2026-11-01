@@ -53,7 +53,7 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .tabs .ctx small { color: var(--blue); font-size: 10px; margin-right: 4px; }
 
 /* Ribbon */
-.ribbon { display: flex; height: 92px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 3px 4px 0; flex: none; overflow: hidden; }
+.ribbon { display: flex; min-height: 92px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 3px 4px 0; flex: none; overflow: hidden; }
 .grp { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 0 5px; flex: none; }
 .grp .items { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
 .grp .cap { text-align: center; font-size: 10.5px; color: var(--muted); padding: 1px 0 3px; white-space: nowrap; }
@@ -801,7 +801,6 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 
 /* Plan tabs and links between plans (0.5.5) */
 .plantabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; min-height: 0; border-bottom: 1px solid var(--line); background: var(--panel); overflow-x: auto; scrollbar-width: thin; }
-.plantabs.solo { display: none; }
 .plantabs .pmaster { margin: 4px 0 2px 8px; padding: 2px 10px; font-size: 11.5px; border-radius: 10px; color: var(--muted); border: 1px dashed var(--line); }
 .plantabs .pmaster:hover { color: var(--blue); border-color: var(--blue); }
 .plantab { display: flex; align-items: center; gap: 6px; max-width: 240px; padding: 5px 6px 5px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; cursor: pointer; white-space: nowrap; }

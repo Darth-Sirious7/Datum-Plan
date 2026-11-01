@@ -373,7 +373,7 @@ A large job is often several plans: a main schedule and the plans of engineering
 
 ### Tabs
 
-Every plan you open or create gets a tab above the ribbon. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** makes a new plan, opens one, or opens the example. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. **File › Close** closes the plan shown and **File › Close All** closes every plan (also on a tab's right-click menu); New and Open add a tab and leave the others open. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
+Every plan you open or create gets a tab, in the row between the ribbon and the timeline, even when it is the only plan open. Click a tab to show that plan; a dot means it has unsaved changes, and × closes it (it asks to save first). **＋** opens another plan in a new tab: **Blank plan** (start scheduling at once, then link it to the other tabs), a template, a saved plan, an example or the tutorial. [[Ctrl+Tab]] goes to the next tab and [[Ctrl+W]] closes the one shown. **File › Close** closes the plan shown and **File › Close All** closes every plan (also on a tab's right-click menu); New and Open add a tab and leave the others open. When you close the window, Datum Plan lists every plan with unsaved changes and can save them all.
 
 ### A project: the master and its subplans
 

@@ -83,7 +83,7 @@ export const HELP: Record<string, Topic> = {
       "Link the subplans to the master with Project › Link to Plan, from the task that waits."],
     tip: "A subplan belongs to one master. Keep the project's files in one folder: the master finds its subplans there when the folder is moved or copied." },
   linkedplans: { t: "Linked plans", what: "Several plans open at once, one per tab, and links from a task in one plan to tasks in others: a main schedule with its subplans, each in its own file.",
-    how: ["Open or create plans: each gets a tab above the ribbon (Ctrl+Tab switches, Ctrl+W closes). ＋ offers the linked-plans example.",
+    how: ["Open or create plans: each gets a tab between the ribbon and the timeline, even a single plan (Ctrl+Tab switches, Ctrl+W closes). ＋ › Blank plan opens a new plan in a tab at once; ＋ also offers templates, saved plans and the examples.",
       "Select a task and choose Project › Link to Plan (or right-click › Link to Plan…): pick the plan and the task, the type (FS, SS, FF, SF) and the lag.",
       "The task waits for the other plan's task like for a normal link, using its last known dates. When the other plan changes, Update Links brings the dates up to date; plans that are not open are read from their files.",
       "Linked tasks are marked: ⇠ by the ID (purple) waits for another plan, ⇢ (green) another plan waits for it; the Gantt names the other task before or after the bar. Click a mark to go to the other task.",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.14 — 2026-11-01
+
+Plan tabs where you work.
+
+- **The plan tabs moved below the ribbon,** just above the timeline and the plan, so they sit with the plans they switch between.
+- **A tab even for a single plan.** **＋** beside it opens another plan in a new tab: **Blank plan** starts one at once, ready to schedule and link to the other tabs; templates, saved plans, the examples and the tutorial are there too.
+- **Fixed: the ribbon's group names (View, Clipboard, Font…) were cut off** on some screens; the ribbon now grows to fit them.
+- The guide describes the tabs' new place, in English and Chinese.
+
 ## 0.5.13 — 2026-11-01
 
 A guided tutorial, and the last open items from the full check.

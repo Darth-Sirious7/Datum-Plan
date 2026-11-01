@@ -1,5 +1,5 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
-import { PlanTabs, linkSelected, linkedPlans, updateLinks, subplans } from "./plans";
+import { linkSelected, linkedPlans, updateLinks, subplans } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, onMount } from "solid-js";
 import { call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
@@ -114,7 +114,6 @@ export const TitleBar = (p: { update: string | null }) => (
       <Show when={p.update}><button class="upd" onClick={() => setBackstage("about")}>Update {p.update} available</button></Show>
       <button class="theme" title="Theme: Auto follows Windows" onClick={() => setTheme(theme() === "auto" ? "light" : theme() === "light" ? "dark" : "auto")}>Theme · {theme()}</button>
     </div>
-    <PlanTabs />
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
       <For each={[["task", "Task"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["help", "Help"]]}>{([k, l]) =>

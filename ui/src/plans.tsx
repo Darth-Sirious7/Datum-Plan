@@ -192,7 +192,8 @@ const tabTitle = (t: TabInfo) => `${t.role === "master" ? `Master plan of the pr
 /** Ctrl+Tab / Ctrl+Shift+Tab. */
 export const nextTab = (d: number) => { const n = out()?.tabs.length ?? 1; if (n > 1) showTab((out()!.tab + d + n) % n); };
 const plusMenu = (e: MouseEvent) => openMenu(e, [
-  { label: "New plan…", run: () => import("./store").then(s => s.setBackstage("new")) },
+  { label: "Blank plan", run: () => import("./store").then(s => s.loadOut("new_plan", { template: null })) },
+  { label: "New plan from a template…", run: () => import("./store").then(s => s.setBackstage("new")) },
   { label: "Open…", run: C.open },
   "-",
   ...(out()?.path && out()!.tabs[out()!.tab].role !== "sub" ? [{ label: `New Subplan of “${P().name}”…`, run: newSubplan }] : []),
@@ -207,7 +208,7 @@ export const example = async () => {
 
 /** The tab strip: one tab per open plan, with unsaved changes marked; + adds one. */
 export const PlanTabs = () => (
-  <div class="plantabs" classList={{ solo: (out()?.tabs.length ?? 1) === 1 && !out()?.tabs[0]?.role }}>
+  <div class="plantabs">
     <For each={out()?.tabs ?? []}>{(t, k) => (
       <div class="plantab" classList={{ on: k() === out()!.tab, proj: !!t.role, master: t.role === "master", gstart: k() > 0 && (!!t.role || !!out()!.tabs[k() - 1].role) && gcol(t) + t.project !== gcol(out()!.tabs[k() - 1]) + out()!.tabs[k() - 1].project }} style={t.role ? { "--g": gcol(t) } : undefined} title={tabTitle(t)} onClick={() => k() !== out()!.tab && showTab(k())} onAuxClick={e => { if (e.button === 1) closeTab(k()); }} onContextMenu={e => { e.preventDefault(); tabMenu(e, k()); }}>
         <Show when={t.role === "master"}><i class="pm">◆</i></Show><Show when={t.role === "sub"}><i class="ps">{"›".repeat(t.level + 1)}</i></Show>
@@ -216,7 +217,7 @@ export const PlanTabs = () => (
         <button class="x" title="Close (Ctrl+W)" onClick={e => { e.stopPropagation(); closeTab(k()); }}>×</button>
       </div>
     )}</For>
-    <button class="padd" title="New plan, open a plan, or the linked-plans example" onClick={plusMenu}>＋</button>
+    <button class="padd" title="Open another plan in a new tab: a blank plan, a template, a saved plan or an example" onClick={plusMenu}>＋</button>
     <Show when={(() => { const t = out()?.tabs[out()!.tab]; return t?.role === "sub" && t.group < 0 && t.project ? t : null; })()}>{t => (
       <button class="pmaster" title="This plan is a subplan; its master keeps the project's list of plans" onClick={() => goToLink(`${t().project}.dplan`, 0)}>Part of “{t().project}” · Open master</button>)}</Show>
   </div>
