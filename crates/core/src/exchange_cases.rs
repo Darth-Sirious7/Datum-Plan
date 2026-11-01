@@ -188,6 +188,95 @@ fn xer_keeps_inactive_and_baseline() {
     let _ = q.tasks[k].inactive;
 }
 
+#[test]
+fn xer_keeps_physical_percent() {
+    let mut p = plan(&[(4, ""), (4, "")]);
+    for t in &mut p.tasks { t.act_start = Some(d(2026, 11, 2)) }
+    (p.tasks[0].pct_type, p.tasks[0].phys, p.tasks[0].pct) = (PctType::Physical, 40, 25);
+    p.tasks[1].pct = 50;
+    let q = round_trip(&p, "xer");
+    assert_eq!((q.tasks[0].pct_type, q.tasks[0].phys, q.tasks[0].pct), (PctType::Physical, 40, 25), "physical % written as the duration %");
+    assert_eq!((q.tasks[1].pct_type, q.tasks[1].pct), (PctType::Duration, 50));
+}
+
+// PMXML, like XER: a link to a summary holds every activity under it; a percent lag is hours.
+#[test]
+fn pmxml_keeps_links_to_summaries_and_percent_lags() {
+    let mut p = plan(&[(10, ""), (0, ""), (2, ""), (2, "")]);
+    p.tasks[2].level = 1;
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false }];
+    p.tasks[3].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true }];
+    let x = crate::io::formats::pmxml(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)));
+    let rel = |a: usize, b: usize| format!("<PredecessorActivityObjectId>{}</PredecessorActivityObjectId><SuccessorActivityObjectId>{}</SuccessorActivityObjectId>", p.tasks[a].uid, p.tasks[b].uid);
+    assert!(x.contains(&rel(0, 2)), "link to the summary dropped");
+    assert!(x.contains(&format!("{}<Type>Start to Start</Type><Lag>40</Lag>", rel(0, 3))), "50 % of 10 days is 40 h");
+}
+
+#[test]
+fn mpx_writes_lags_and_assignments_by_resource_id() {
+    let mut p = plan(&[(10, ""), (2, ""), (2, "")]);
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2 * D, pct: false }];
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true }];
+    p.resources.push(Resource { uid: 7, name: "Fitter".into(), rate: 50.0, ..Default::default() });
+    p.tasks[1].res = vec![Assign { res: 7, units: 1.0, table: 0 }];
+    let x = crate::io::formats::mpx(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)));
+    assert!(x.contains(",1FS+2d,") && x.contains(",1SS+5d,"), "lags lost:\n{x}");
+    // Resources carry ID and Unique ID; an assignment names both (ID 1, units 1 = 100 %, Unique ID 7).
+    assert!(x.contains("41,40,49,1,42,44\r\n50,1,7,Fitter,50/h,0\r\n"), "{x}");
+    assert!(x.contains("\r\n75,1,1,,,,,,,,,,,7\r\n"), "{x}");
+}
+
+// A tiny .xls or .ods with cells far apart must be an error, not a sheet hundreds of GB big.
+fn xls(path: &std::path::Path, cells: &[(u16, u16)]) {
+    use std::io::Write;
+    let rec = |o: &mut Vec<u8>, ty: u16, d: &[u8]| { o.extend(ty.to_le_bytes()); o.extend((d.len() as u16).to_le_bytes()); o.extend(d) };
+    let bof = |dt: u16| [&0x0600u16.to_le_bytes()[..], &dt.to_le_bytes(), &[0; 12]].concat();
+    let mut s = vec![];
+    rec(&mut s, 0x0809, &bof(5));
+    let at = s.len() + 4 + 13 + 4;
+    rec(&mut s, 0x0085, &[&(at as u32).to_le_bytes()[..], &[0, 0, 5, 0], b"Sheet"].concat());
+    rec(&mut s, 0x000A, &[]);
+    rec(&mut s, 0x0809, &bof(0x10));
+    for &(r, c) in cells { rec(&mut s, 0x0203, &[&r.to_le_bytes()[..], &c.to_le_bytes(), &[0, 0], &1.0f64.to_le_bytes()].concat()) }
+    rec(&mut s, 0x000A, &[]);
+    let mut f = cfb::create(path).unwrap();
+    f.create_stream("Workbook").unwrap().write_all(&s).unwrap();
+    f.flush().unwrap();
+}
+fn ods(path: &std::path::Path, rows: &str) {
+    use std::io::Write;
+    let mut z = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+    let o = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    z.start_file("mimetype", o).unwrap();
+    z.write_all(b"application/vnd.oasis.opendocument.spreadsheet").unwrap();
+    z.start_file("META-INF/manifest.xml", o).unwrap();
+    z.write_all(br#"<?xml version="1.0"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"/>"#).unwrap();
+    z.start_file("content.xml", o).unwrap();
+    write!(z, r#"<?xml version="1.0"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><office:body><office:spreadsheet><table:table table:name="S">{rows}</table:table></office:spreadsheet></office:body></office:document-content>"#).unwrap();
+    z.finish().unwrap();
+}
+
+#[test]
+fn xls_and_ods_with_far_apart_cells_are_refused() {
+    let dir = std::env::temp_dir().join(format!("datum-far-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("a.xls");
+    // A small sheet reads; one cell at row 65,536 of column IV (16.7 million cells) does not.
+    xls(&f, &[(0, 0), (1, 1)]);
+    assert_eq!(crate::io::table::read(&f).map(|t| t.rows.len()), Ok(1));
+    xls(&f, &[(0, 0), (65_535, 255)]);
+    assert!(crate::io::table::read(&f).is_err_and(|e| e.contains("10 million cells")));
+    let f = dir.join("a.ods");
+    let cell = r#"<table:table-cell office:value-type="float" office:value="1"/>"#;
+    ods(&f, &format!("<table:table-row>{cell}</table:table-row><table:table-row><table:table-cell/>{cell}</table:table-row>"));
+    assert_eq!(crate::io::table::read(&f).map(|t| t.rows.len()), Ok(1));
+    // Many rows that each reach column XFD: calamine would keep 16,384 cells for every one.
+    let far = format!(r#"<table:table-row><table:table-cell table:number-columns-repeated="16383"/>{cell}</table:table-row>"#);
+    ods(&f, &format!("<table:table-row>{cell}</table:table-row>{}", far.repeat(700)));
+    assert!(crate::io::table::read(&f).is_err_and(|e| e.contains("10 million cells")));
+    std::fs::remove_dir_all(dir).ok();
+}
+
 // P6 writes working periods as (s|08:00|f|12:00) or (f|12:00|s|08:00).
 #[test]
 fn xer_calendar_hours_in_either_order() {

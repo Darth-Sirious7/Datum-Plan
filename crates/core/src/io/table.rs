@@ -88,6 +88,92 @@ fn cell(d: &Data) -> String {
     }
 }
 
+/// The most cells a sheet may span: calamine builds the whole box around the used cells (and an
+/// .xls reserves its stated size), so two far-apart cells in a tiny file would ask for hundreds
+/// of gigabytes, an abort rather than an error.
+const MAX_CELLS: u64 = 10_000_000;
+
+/// Measures every sheet of an .xls or .ods file without building it, and refuses absurd sizes.
+fn sheet_size(path: &Path, ext: &str) -> Result<(), String> {
+    use std::io::Read;
+    let bad = |e: &dyn std::fmt::Display| format!("Could not read the workbook: {e}");
+    let too_big = || Err::<(), String>("This sheet spans more than 1,048,576 rows, 1,024 columns or 10 million cells. Copy the plan's rows to a new sheet, save it as .xlsx or .csv and import that.".into());
+    // Each sheet's box: (first row, last row, first column, last column).
+    let mut boxes: Vec<(u64, u64, u64, u64)> = vec![];
+    let grow = |b: &mut Option<(u64, u64, u64, u64)>, r0: u64, r1: u64, c0: u64, c1: u64| {
+        let o = b.get_or_insert((r0, r1, c0, c1));
+        *o = (o.0.min(r0), o.1.max(r1), o.2.min(c0), o.3.max(c1));
+    };
+    let ok = |b: (u64, u64, u64, u64)| b.1 < 1_048_576 && b.3 < 1024 && (b.1 - b.0 + 1).saturating_mul(b.3 - b.2 + 1) <= MAX_CELLS;
+    if ext == "xls" {
+        let mut cf = cfb::open(path).map_err(|e| bad(&e))?;
+        let mut st = cf.open_stream("/Workbook").or_else(|_| cf.open_stream("/Book")).map_err(|e| bad(&e))?;
+        let mut s = vec![];
+        st.by_ref().take(crate::doc::MAX_FILE).read_to_end(&mut s).map_err(|e| bad(&e))?;
+        let u16_at = |d: &[u8], i: usize| d.get(i..i + 2).map_or(0, |x| u16::from_le_bytes([x[0], x[1]]) as u64);
+        let u32_at = |d: &[u8], i: usize| d.get(i..i + 4).map_or(0, |x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]) as u64);
+        let (mut i, mut cur) = (0, None);
+        while i + 4 <= s.len() {
+            let (ty, len) = (u16_at(&s, i), u16_at(&s, i + 2) as usize);
+            let d = &s[i + 4..(i + 4 + len).min(s.len())];
+            i += 4 + len;
+            match ty {
+                0x0809 => boxes.extend(cur.take()), // BOF: a new sheet
+                // Number, Label, RString, BoolErr, Rk, LabelSst, Formula: row and column first.
+                0x0203 | 0x0204 | 0x00D6 | 0x0205 | 0x027E | 0x00FD | 0x0006 => { let (r, c) = (u16_at(d, 0), u16_at(d, 2)); grow(&mut cur, r, r, c, c) }
+                0x00BD if d.len() >= 6 => { let r = u16_at(d, 0); grow(&mut cur, r, r, u16_at(d, 2), u16_at(d, d.len() - 2)) }
+                // Dimensions: calamine reserves room for all of it.
+                0x0200 => {
+                    let (rf, rl, cf, cl) = match d.len() { 10 => (u16_at(d, 0), u16_at(d, 2), u16_at(d, 4), u16_at(d, 6)), 14 | 16 => (u32_at(d, 0), u32_at(d, 4), u16_at(d, 8), u16_at(d, 10)), _ => continue };
+                    let cf = if cf > 0xFF || cl < cf { 0 } else { cf };
+                    if rl >= 1 && cl >= 1 { if rl - 1 < rf || cl - 1 < cf { return too_big() } boxes.push((rf, rl - 1, cf, cl - 1)) }
+                }
+                _ => {}
+            }
+        }
+        boxes.extend(cur);
+    } else {
+        // content.xml, every table: rows and cells repeat by count, and only cells with content count.
+        use quick_xml::events::Event;
+        let file = std::fs::File::open(path).map_err(|e| bad(&e))?;
+        let mut z = zip::ZipArchive::new(file).map_err(|e| bad(&e))?;
+        let content = z.by_name("content.xml").map_err(|e| bad(&e))?;
+        let mut rd = quick_xml::Reader::from_reader(std::io::BufReader::new(content));
+        // As calamine reads it: <row/> is a row too.
+        (rd.config_mut().expand_empty_elements, rd.config_mut().check_end_names) = (true, false);
+        let (mut buf, mut cur, mut row, mut col, mut row_rep, mut end, mut raw) = (vec![], None, 0u64, 0u64, 1u64, 0u64, 0u64);
+        let num = |e: &quick_xml::events::BytesStart, k: &str| e.attributes().flatten().find(|a| a.key.as_ref() == k).and_then(|a| a.value.trim().parse::<u64>().ok()).unwrap_or(1).max(1);
+        loop {
+            match rd.read_event_into(&mut buf).map_err(|e| bad(&e))? {
+                Event::Start(e) => match e.name().as_ref() {
+                    "table:table" => { boxes.extend(cur.take()); row = 0 }
+                    "table:table-row" => { (col, row_rep, end) = (0, num(&e, "table:number-rows-repeated"), 0) }
+                    "table:table-cell" | "table:covered-table-cell" => {
+                        let n = num(&e, "table:number-columns-repeated");
+                        if e.attributes().flatten().any(|a| a.key.as_ref().starts_with("office:") || a.key.as_ref() == "table:formula") {
+                            grow(&mut cur, row, row.saturating_add(row_rep - 1), col, col.saturating_add(n - 1));
+                            end = col.saturating_add(n);
+                        }
+                        col = col.saturating_add(n);
+                    }
+                    _ => {}
+                },
+                Event::End(e) if e.name().as_ref() == "table:table-row" => {
+                    // Calamine first keeps each row up to its last cell with content.
+                    raw = raw.saturating_add(end.min(16_384));
+                    if raw > MAX_CELLS { return too_big() }
+                    row = row.saturating_add(row_rep);
+                }
+                Event::Eof => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+        boxes.extend(cur);
+    }
+    if boxes.into_iter().all(ok) { Ok(()) } else { too_big() }
+}
+
 pub fn read(path: &Path) -> Result<Table, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let mut rows = if ext == "csv" || ext == "txt" {
@@ -114,6 +200,7 @@ pub fn read(path: &Path) -> Result<Table, String> {
         }
         rows
     } else {
+        sheet_size(path, &ext)?;
         let mut wb = open_workbook_auto(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
         let range = wb.worksheet_range_at(0).ok_or("The workbook has no sheets.")?.map_err(|e| e.to_string())?;
         range.rows().map(|r| r.iter().map(cell).collect()).collect()

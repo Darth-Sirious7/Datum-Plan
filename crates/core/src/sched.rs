@@ -225,28 +225,35 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             };
             continue;
         }
-        let mut v = match data { Some(dd) if t.pct == 0 => dd.max(start), _ => start };
-        if !(t.manual && t.mstart.is_some()) {
-            for &e in inc[i].iter().filter(|&&e| !loe[edges[e].p]) {
-                let x = need(&edges[e], &es, &ef);
-                v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
+        // The earliest start on calendar `c`: finish links and constraints count back on it.
+        let want = |c: &WorkCal| {
+            let mut v = match data { Some(dd) if t.pct == 0 => dd.max(start), _ => start };
+            if !(t.manual && t.mstart.is_some()) {
+                for &e in inc[i].iter().filter(|&&e| !loe[edges[e].p]) {
+                    let x = need(&edges[e], &es, &ef);
+                    v = v.max(match edges[e].kind { LinkType::FS | LinkType::SS => x, _ => c.sub(x, sp) });
+                }
+                v = v.max(ext_need(i, c, sp).unwrap_or(v));
             }
-            v = v.max(ext_need(i, c, sp).unwrap_or(v));
-        }
-        if let Some(cd) = t.cdate {
-            match t.constraint {
-                C::SNET => v = v.max(at(cd)),
-                C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
-                C::MSO => v = at(cd),
-                C::MFO => v = c.sub(c.end_of(cd), sp),
-                _ => {}
+            if let Some(cd) = t.cdate {
+                match t.constraint {
+                    C::SNET => v = v.max(at(cd)),
+                    C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
+                    C::MSO => v = at(cd),
+                    C::MFO => v = c.sub(c.end_of(cd), sp),
+                    _ => {}
+                }
             }
-        }
-        if let (true, Some(m)) = (t.manual, t.mstart) {
-            v = at(m);
-        }
+            if let (true, Some(m)) = (t.manual, t.mstart) {
+                v = at(m);
+            }
+            v
+        };
+        let v = want(c);
         pick(i, v, sp);
         let c = &cals[ci[i].get()];
+        // When another person's calendar sets the finish, count back on that calendar.
+        let v = if cand[i].len() > 1 { want(c) } else { v };
         es[i] = if d > 0 || t.act_type == ActType::StartMs || !c.in_or_end(v) { c.next_start(v) } else { v };
         if t.level_delay > 0 {
             es[i] = c.next_start(c.add(es[i], t.level_delay));

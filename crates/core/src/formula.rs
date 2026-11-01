@@ -28,6 +28,12 @@ impl F {
     fn text(&self) -> String {
         match self { F::Num(n) if n.is_finite() => format!("{}", (n * 1e12).round() / 1e12), x => x.to_string() }
     }
+    /// As text where a date shows in the plan's date format (CStr, `&`, string functions).
+    fn text_in(&self, fmt: &str) -> String {
+        use fmt::Write;
+        let mut o = String::new();
+        match self { F::Date(d) if write!(o, "{}", crate::cal::date_of(*d).format(fmt)).is_ok() => o, x => x.text() }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -39,6 +45,8 @@ pub trait Ctx {
     fn now(&self) -> i64;
     fn work_between(&self, a: i64, b: i64) -> i64;
     fn work_add(&self, a: i64, m: i64) -> i64;
+    /// The date format dates take as text; VBA's short date unless the plan sets one.
+    fn date_fmt(&self) -> &str { "%-m/%-d/%Y" }
 }
 
 struct P<'a> { s: &'a [u8], i: usize, d: usize }
@@ -207,7 +215,7 @@ fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
             match op.as_str() {
                 "or" => F::Bool(x.truth() || y.truth()),
                 "and" => F::Bool(x.truth() && y.truth()),
-                "&" => F::Str(x.text() + &y.text()),
+                "&" => F::Str(x.text_in(c.date_fmt()) + &y.text_in(c.date_fmt())),
                 "+" if matches!((&x, &y), (F::Str(_), F::Str(_))) => F::Str(x.text() + &y.text()),
                 "+" if date_math => match (&x, &y) { (F::Date(d), o) | (o, F::Date(d)) => F::Date(d.saturating_add((o.num() * 1440.0) as i64)), _ => unreachable!() },
                 "-" if matches!((&x, &y), (F::Date(_), F::Date(_))) => F::Num((x.num() - y.num()).round()),
@@ -240,7 +248,7 @@ fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
         Ex::Call(name, a) => {
             let arg = |k: usize| -> Result<F, String> { a.get(k).map(|x| eval(x, c)).unwrap_or(Ok(F::Null)) };
             let need = |n: usize| -> Result<(), String> { if a.len() < n { Err(format!("{name} needs {n} values")) } else { Ok(()) } };
-            let s = |k: usize| -> Result<String, String> { Ok(arg(k)?.text()) };
+            let s = |k: usize| -> Result<String, String> { Ok(arg(k)?.text_in(c.date_fmt())) };
             let n = |k: usize| -> Result<f64, String> { Ok(arg(k)?.num()) };
             let date = |k: usize| -> Result<i64, String> { Ok(match arg(k)? { F::Date(d) => d, F::Null => return Err("a date is empty".into()), x => (x.num() * 1440.0) as i64 }) };
             let chars = |t: &str| t.chars().collect::<Vec<_>>();
@@ -324,6 +332,7 @@ fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 }
                 "cstr" => F::Str(s(0)?),
                 "cdbl" => F::Num(n(0)?),
+                "max" | "min" if a.is_empty() => return Err(format!("{name} needs at least 1 value")),
                 "max" => F::Num(a.iter().map(|x| eval(x, c).map(|v| v.num())).collect::<Result<Vec<_>, _>>()?.into_iter().fold(f64::MIN, f64::max)),
                 "min" => F::Num(a.iter().map(|x| eval(x, c).map(|v| v.num())).collect::<Result<Vec<_>, _>>()?.into_iter().fold(f64::MAX, f64::min)),
                 f => return Err(format!("{f} is not a known function")),

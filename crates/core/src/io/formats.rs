@@ -86,18 +86,30 @@ pub fn mpx(c: &Calc) -> String {
         let _ = writeln!(o, "20,{},{}\r", q(&cal.name), days.join(","));
     }
     let _ = writeln!(o, "30,{},,,{},{}\r", q(&p.name), mpx_date(s.start), mpx_date(s.finish));
-    o.push_str("40,Unique ID,Name,Standard Rate,Cost Per Use\r\n41,49,1,45,46\r\n");
-    for r in &p.resources {
-        let _ = writeln!(o, "50,{},{},{}/h,{}\r", r.uid, q(&r.name), r.rate, r.per_use);
+    // Field numbers as MPX defines them: 40 ID, 49 Unique ID, 1 Name, 42 Standard Rate, 44 Cost Per Use.
+    o.push_str("40,ID,Unique ID,Name,Standard Rate,Cost Per Use\r\n41,40,49,1,42,44\r\n");
+    for (k, r) in p.resources.iter().enumerate() {
+        let _ = writeln!(o, "50,{},{},{},{}/h,{}\r", k + 1, r.uid, q(&r.name), r.rate, r.per_use);
     }
     o.push_str("60,Unique ID,ID,Name,Outline Level,Duration,Start,Finish,% Complete,Predecessors,Text1\r\n61,98,90,1,3,40,50,51,44,70,4\r\n");
     let id_of: std::collections::HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i + 1)).collect();
     for (i, t) in p.tasks.iter().enumerate() {
-        let preds: Vec<String> = t.preds.iter().filter_map(|l| id_of.get(&l.pred).map(|k| format!("{k}{}", if l.kind == LinkType::FS { String::new() } else { format!("{:?}", l.kind) }))).collect();
+        // "3", "3SS" or "3FS+1.5d": a lag needs the type; a percent lag becomes days of the predecessor.
+        let preds: Vec<String> = t.preds.iter().filter_map(|l| {
+            let (k, j) = (id_of.get(&l.pred)?, p.idx(l.pred)?);
+            let lag = if l.pct { p.tasks[j].dur * l.lag / 100 } else { l.lag };
+            Some(match (l.kind, lag) {
+                (LinkType::FS, 0) => k.to_string(),
+                (kind, 0) => format!("{k}{kind:?}"),
+                (kind, m) => format!("{k}{kind:?}{}{}d", if m > 0 { "+" } else { "" }, (m as f64 / p.day_min as f64 * 100.0).round() / 100.0),
+            })
+        }).collect();
         let _ = writeln!(o, "70,{},{},{},{},{}d,{},{},{},{},{}\r", t.uid, i + 1, q(&t.name), t.level + 1, (s.cals[s.ci[i]].between(s.es[i], s.ef[i]) as f64 / p.day_min as f64 * 100.0).round() / 100.0,
             mpx_date(s.es[i]), mpx_date((s.ef[i] - 1).max(s.es[i])), c.pct[i], q(&preds.join(",")), q(&t.code));
+        // Record 75 names the resource by ID (field 1) and Unique ID (field 13); units are 1 = 100 %.
         for a in &t.res {
-            let _ = writeln!(o, "75,{},{}\r", a.res, a.units * 100.0);
+            let Some(k) = p.res_idx(a.res) else { continue };
+            let _ = writeln!(o, "75,{},{}{}{}\r", k + 1, a.units, ",".repeat(11), a.res);
         }
     }
     o
@@ -138,15 +150,21 @@ pub fn pmxml(c: &Calc) -> String {
             t.uid, esc(if t.code.is_empty() { &t.name } else { &t.code }), esc(&t.name), parent[i].map_or(String::new(), |j| (100000 + p.tasks[j].uid).to_string()),
             t.dur as f64 / 60.0, t.dur as f64 * (100 - c.pct[i] as i64) as f64 / 6000.0, pdt(s.es[i]), pdt(s.ef[i]), c.pct[i], s.ci[i].min(p.calendars.len() - 1) + 1);
     }
-    let leaf: std::collections::HashSet<u32> = (0..p.tasks.len()).filter(|&i| !s.summary[i]).map(|i| p.tasks[i].uid).collect();
+    // As in XER: a link to or from a summary applies to every activity under it; a percent lag becomes hours.
+    let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
     let mut n = 0;
-    for t in p.tasks.iter().filter(|t| leaf.contains(&t.uid)) {
-        for l in t.preds.iter().filter(|l| leaf.contains(&l.pred)) {
-            n += 1;
+    for (i, t) in p.tasks.iter().enumerate() {
+        for l in &t.preds {
+            let Some(k) = p.idx(l.pred) else { continue };
+            let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
             let kind = match l.kind { LinkType::FS => "Finish to Start", LinkType::SS => "Start to Start", LinkType::FF => "Finish to Finish", LinkType::SF => "Start to Finish" };
-            let _ = writeln!(o, "<Relationship><ObjectId>{n}</ObjectId><PredecessorActivityObjectId>{}</PredecessorActivityObjectId><SuccessorActivityObjectId>{}</SuccessorActivityObjectId><Type>{kind}</Type><Lag>{}</Lag></Relationship>", l.pred, t.uid, l.lag as f64 / 60.0);
+            for b in under(i) { for a in under(k) {
+                n += 1;
+                let _ = writeln!(o, "<Relationship><ObjectId>{n}</ObjectId><PredecessorActivityObjectId>{}</PredecessorActivityObjectId><SuccessorActivityObjectId>{}</SuccessorActivityObjectId><Type>{kind}</Type><Lag>{}</Lag></Relationship>", p.tasks[a].uid, p.tasks[b].uid, lag as f64 / 60.0);
+            } }
         }
     }
+    let leaf: std::collections::HashSet<u32> = (0..p.tasks.len()).filter(|&i| !s.summary[i]).map(|i| p.tasks[i].uid).collect();
     let mut n = 0;
     for t in p.tasks.iter().filter(|t| leaf.contains(&t.uid)) {
         for a in &t.res {

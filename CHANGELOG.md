@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.13 — 2026-11-01
+
+A guided tutorial, and the last open items from the full check.
+
+- **The tutorial (Help › Tutorial, or the tile on the Home page):** a small office fit-out, five weeks into the work, that uses every part of Datum Plan. A note at the bottom right of each view says how it was filled in and what to try; **Next** and **Back** go through the views in the sidebar. **×** hides the notes and **Help › Tutorial Notes** shows them again. The plan uses:
+  - links with lags, a constraint, a deadline, elapsed days, an inactive task and a recurring meeting;
+  - activity codes, your own columns with formulas, and conditional formatting;
+  - people, a material and a cost, resource calendars with leave, and a six-day week for one task;
+  - a baseline, five closed weeks of progress, and a rule of credit with quantities;
+  - risks with duration ranges, a constraint log and the week's notes;
+  - a sheet that reads the plan, a dashboard of your own, a saved report and a saved filter.
+- **Fixed: a cost or material amount above 1,000 was cut to 1,000 when a plan was opened** (a 1,500 fee became 1,000).
+- **File exchange:**
+  - PMXML keeps links to and from summaries, and percent lags.
+  - MPX writes link lags, and names each assignment's resource by ID and unique ID.
+  - MPX writes units as 1 = 100 % and the rates in their right fields.
+  - XER keeps physical % complete both ways.
+  - Very large .xls and .ods sheets are refused with a message instead of exhausting memory.
+- **Formulas:**
+  - Resource custom fields with a VBA-style formula now work out their value for each resource.
+  - In a formula column, `Tasks[Cost]` and `Resources[...]` read the whole column.
+  - Dates in text show in the plan's date format.
+  - `Max()` and `Min()` with nothing in them show an error.
+- **Sheets and dashboards:**
+  - Dashboard tiles follow a sheet that is renamed, or whose rows or columns are inserted or deleted.
+  - An insert that would push cells off the sheet is refused.
+- **Scheduling:** a task shared by people on different calendars counts finish-to-finish links and finish constraints back on the right calendar.
+- **Schedule risk:** the hit rate of a risk counts only the runs kept.
+- The guide explains the tutorial, in English and Chinese.
+
 ## 0.5.12 — 2026-10-31
 
 A dashboard that leads with the S-curve, and a full check of every engine: formulas, scheduling, links between plans, progress, file exchange and security.

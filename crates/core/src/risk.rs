@@ -82,10 +82,10 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     let (mut crit, mut hits) = (vec![0usize; n], vec![0usize; risks.len()]);
     let mut failed = 0;
     for _ in 0..runs {
-        let mut add = vec![0i64; n];
+        let (mut add, mut hit) = (vec![0i64; n], vec![]);
         for (k, r) in risks.iter().enumerate() {
             if rng.f() < chance(r.prob) {
-                hits[k] += 1;
+                hit.push(k);
                 let m = (r.days.abs() * p.day_min as f64).round() as i64 * if r.kind == "Opportunity" { -1 } else { 1 };
                 // A risk on a phase delays its last task.
                 r.tasks.iter().filter_map(|u| p.idx(*u)).map(|i| if base.summary[i] { p.subtree(i).filter(|&j| !base.summary[j]).max_by_key(|&j| base.ef[j]).unwrap_or(i) } else { i }).for_each(|i| add[i] += m);
@@ -102,6 +102,8 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
             cost += fixed + (cost0[i] - fixed) * if m > 0.0 { d as f64 / m } else { 1.0 };
         }
         let Ok(s) = schedule(&q) else { failed += 1; continue };
+        // Only runs kept count, so a risk's rate shares the runs the other results use.
+        hit.into_iter().for_each(|k| hits[k] += 1);
         durs.iter_mut().zip(drawn).for_each(|(v, d)| v.push(d));
         fin.push(s.finish);
         costs.push(cost + (0..n).filter(|i| !leaves.contains(i) && !base.summary[*i]).map(|i| cost0[i]).sum::<f64>());
@@ -130,7 +132,7 @@ pub fn simulate(p: &Project, o: &SimOpts) -> Result<SimResult, String> {
     res.criticality = (0..n).filter(|&i| crit[i] > 0).map(|i| TaskRisk { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), value: crit[i] as f64 / runs_f }).collect();
     res.criticality.sort_by(|a, b| b.value.total_cmp(&a.value));
     res.criticality.truncate(15);
-    res.risks = risks.iter().zip(&hits).map(|(r, &h)| TaskRisk { uid: r.id, name: r.name.clone(), value: h as f64 / runs as f64 }).collect();
+    res.risks = risks.iter().zip(&hits).map(|(r, &h)| TaskRisk { uid: r.id, name: r.name.clone(), value: h as f64 / runs_f }).collect();
     res.planned_chance = fin.iter().filter(|&&f| f <= base.finish).count() as f64 / runs_f;
     fin.sort_unstable();
     (res.p10, res.p50, res.p80, res.p90) = (pct(&fin, 0.1), pct(&fin, 0.5), pct(&fin, 0.8), pct(&fin, 0.9));

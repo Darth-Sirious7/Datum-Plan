@@ -52,13 +52,26 @@ pub fn col_name(mut c: u32) -> String {
 }
 
 /// Replaces `[Field]` references (outside string literals) using `col`, which returns the cell
-/// reference to put in their place. Unknown fields are an error.
+/// reference to put in their place. Unknown fields are an error. A table reference such as
+/// `Tasks[Cost]` goes to `col` whole; when it has no answer it stays as written.
 pub fn translate(src: &str, mut col: impl FnMut(&str) -> Option<String>) -> Result<String, String> {
     let body = src.trim().strip_prefix('=').unwrap_or(src.trim());
     let (mut out, mut quoted, mut chars) = (String::new(), false, body.chars().peekable());
     while let Some(ch) = chars.next() {
+        let table = out.len() - out.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '.').len();
         match ch {
             '"' => { quoted = !quoted; out.push(ch) }
+            '[' if !quoted && table > 0 => {
+                // Up to the matching "]", so Tasks[[#This Row],[Cost]] stays whole.
+                let (mut r, mut depth) = (String::from("["), 1);
+                for c in chars.by_ref() {
+                    r.push(c);
+                    depth += match c { '[' => 1, ']' => -1, _ => 0 };
+                    if depth == 0 { break }
+                }
+                let whole = format!("{}{r}", &out[out.len() - table..]);
+                if let Some(x) = col(&whole) { out.truncate(out.len() - table); out.push_str(&x) } else { out.push_str(&r) }
+            }
             '[' if !quoted => {
                 let name: String = chars.by_ref().take_while(|&c| c != ']').collect();
                 out.push_str(&col(name.trim()).ok_or_else(|| format!("There is no field called [{}].", name.trim()))?);
@@ -90,8 +103,23 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
     // Formula columns first (A, B, …), then the plain fields they read.
     let mut cols: HashMap<String, u32> = defs.iter().enumerate().map(|(k, (key, _))| (format!("c:{key}"), k as u32)).collect();
     let mut texts = vec![];
+    let (tcols, rows, mut res) = (task_columns(c), n.max(1), false);
     for (_, f) in defs {
         let t = translate(f, |name| {
+            // Tasks[Col] is that column of every task; Resources[Col] reads a Resources sheet as in the tabs.
+            if let Some((tb, col)) = name.strip_suffix(']').and_then(|x| x.split_once('[')).filter(|(_, x)| !x.contains(['[', '#'])) {
+                let col = col.trim();
+                if tb.eq_ignore_ascii_case("resources") {
+                    let k = RES_COLS.iter().position(|(_, x)| x.eq_ignore_ascii_case(col))? as u32;
+                    res = true;
+                    return Some(format!("Resources!${0}$2:${0}${1}", col_name(k), p.resources.len().max(1) + 1));
+                }
+                if !tb.eq_ignore_ascii_case("tasks") { return None }
+                let key = tcols.iter().find(|(_, x)| x.eq_ignore_ascii_case(col)).map(|x| x.0.clone()).or_else(|| c.key_of(col))?;
+                let next = cols.len() as u32;
+                let k = *cols.entry(key).or_insert(next);
+                return Some(format!("${0}$1:${0}${rows}", col_name(k)));
+            }
             let key = c.key_of(name)?;
             let next = cols.len() as u32;
             let col = *cols.entry(key).or_insert(next);
@@ -99,6 +127,7 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
         });
         texts.push(t.ok());
     }
+    if res { wb.sheets.push(Arc::new(res_sheet(c))) }
     let sheet: &mut Sheet = match wb.sheet_mut(0) { Some(s) => s, None => return HashMap::new() };
     for (key, &col) in cols.iter().filter(|(k, _)| !defs.iter().any(|(d, _)| &&format!("c:{d}") == k)) {
         let kind = c.kind(key);
@@ -271,6 +300,28 @@ pub fn book(c: &Calc) -> Workbook {
     book_with(c, &[])
 }
 
+/// The "Resources" sheet and table.
+fn res_sheet(c: &Calc) -> Sheet {
+    let p = c.p;
+    let mut rs = Sheet::new("Resources");
+    for (k, (key, name)) in RES_COLS.iter().enumerate() {
+        rs.set_value(CellRef::new(0, k as u32), Value::text(*name));
+        for r in 0..p.resources.len() {
+            let v = match *key {
+                "max" => Value::number(p.resources[r].max),
+                "rate" => Value::number(p.resources[r].rate),
+                "work" => Value::number(c.l.res_work[r] / 60.0),
+                "cost" => Value::number(c.l.res_cost[r]),
+                "country" => Value::text(p.resources[r].country.as_str()),
+                _ => Value::text(crate::fields::res_text(c, r, key).as_str()),
+            };
+            rs.set_value(CellRef::new(r as u32 + 1, k as u32), v);
+        }
+    }
+    rs.tables.push(table(2, "Resources", RES_COLS.iter().map(|x| x.1.to_string()).collect(), p.resources.len() as u32));
+    rs
+}
+
 /// [`book`] with one extra sheet per formula in `extra` (after the user's tabs), each in its A1.
 fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     let p = c.p;
@@ -288,23 +339,7 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
         }
         sh.tables.push(table(1, "Tasks", cols.iter().map(|x| x.1.clone()).collect(), n));
     }
-    let mut rs = Sheet::new("Resources");
-    for (k, (key, name)) in RES_COLS.iter().enumerate() {
-        rs.set_value(CellRef::new(0, k as u32), Value::text(*name));
-        for r in 0..p.resources.len() {
-            let v = match *key {
-                "max" => Value::number(p.resources[r].max),
-                "rate" => Value::number(p.resources[r].rate),
-                "work" => Value::number(c.l.res_work[r] / 60.0),
-                "cost" => Value::number(c.l.res_cost[r]),
-                "country" => Value::text(p.resources[r].country.as_str()),
-                _ => Value::text(crate::fields::res_text(c, r, key).as_str()),
-            };
-            rs.set_value(CellRef::new(r as u32 + 1, k as u32), v);
-        }
-    }
-    rs.tables.push(table(2, "Resources", RES_COLS.iter().map(|x| x.1.to_string()).collect(), p.resources.len() as u32));
-    wb.sheets.push(Arc::new(rs));
+    wb.sheets.push(Arc::new(res_sheet(c)));
     for (name, v, _) in project_names(c) {
         let formula = match &v {
             Value::Number(x) => format!("{x}"),

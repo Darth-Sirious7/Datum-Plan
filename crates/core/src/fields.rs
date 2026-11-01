@@ -545,6 +545,7 @@ impl Ctx for Row<'_, '_> {
     fn now(&self) -> i64 { at(self.c.today) }
     fn work_between(&self, a: i64, b: i64) -> i64 { self.c.dur_between(self.i, a, b) }
     fn work_add(&self, a: i64, m: i64) -> i64 { self.c.s.cals[self.c.s.ci[self.i]].add(a, m) }
+    fn date_fmt(&self) -> &str { &self.c.fmt }
 }
 
 /// Parses filter text into a value of the field's kind.
@@ -625,7 +626,73 @@ pub fn res_text(c: &Calc, k: usize, key: &str) -> String {
         "cost" => money(c.l.res_cost[k], cur),
         "over" => if c.l.over[k] { "Yes".into() } else { "No".into() },
         "notes" => r.notes.clone(),
+        f if f.starts_with("c:") && c.defs.get(&f[2..]).is_some_and(|(_, ex)| ex.is_some()) => {
+            let kind = resource_fields().iter().find(|d| d.key == f).map_or(Kind::Text, |d| d.kind);
+            match (kind, res_custom(c, k, &f[2..])) {
+                (_, F::Null) => String::new(),
+                (_, F::Str(s)) => s,
+                (Kind::Flag, x) => if x.truth() { "Yes".into() } else { "No".into() },
+                (Kind::Cost, x) => money(x.num(), cur),
+                (Kind::Dur, x) => parse::fmt_dur(x.num().round() as i64, Unit::D, p.day_min),
+                (Kind::Date | Kind::Fin, F::Date(d)) => date_of(d).format(&c.fmt).to_string(),
+                (Kind::Num, x) => num(x.num()),
+                (_, x) => x.to_string(),
+            }
+        }
         k if k.starts_with("c:") => r.custom.get(&k[2..]).map(|v| v.as_str().map(String::from).unwrap_or_else(|| v.to_string())).unwrap_or_default(),
         _ => String::new(),
     }
+}
+
+/// A resource custom field: its formula's result (VBA style, reading this resource's fields) or the stored value.
+fn res_custom(c: &Calc, k: usize, key: &str) -> F {
+    if let Some((_, Some(ex))) = c.defs.get(key) {
+        // Same guard as task formulas; resource rows are memoised under an "r:" key.
+        let (at, circ) = ((format!("r:{key}"), k), || F::Str("#ERROR: the formula refers to itself".into()));
+        if let Some(v) = c.memo.borrow_mut().get_mut(&at) {
+            return v.get_or_insert_with(circ).clone();
+        }
+        c.memo.borrow_mut().insert(at.clone(), None);
+        let v = formula::eval(ex, &ResRow { c, k }).unwrap_or_else(|e| F::Str(format!("#ERROR: {e}")));
+        let v = if c.memo.borrow()[&at].is_some() { circ() } else { v };
+        c.memo.borrow_mut().insert(at, Some(v.clone()));
+        return v;
+    }
+    match c.p.resources[k].custom.get(key) {
+        None | Some(serde_json::Value::Null) => F::Null,
+        Some(serde_json::Value::Bool(b)) => F::Bool(*b),
+        Some(serde_json::Value::Number(n)) => F::Num(n.as_f64().unwrap_or(0.0)),
+        Some(v) => F::Str(v.as_str().map(String::from).unwrap_or_else(|| v.to_string())),
+    }
+}
+
+struct ResRow<'a, 'b> { c: &'b Calc<'a>, k: usize }
+
+impl Ctx for ResRow<'_, '_> {
+    /// [Standard Rate], [Max Units], [Work], [Cost], [Number1] or an alias: numbers as task formulas see them.
+    fn field(&self, name: &str) -> Option<F> {
+        let (c, k) = (self.c, self.k);
+        let n = name.trim().to_lowercase();
+        let alias = match n.as_str() { "standard rate" => "rate", "overtime rate" => "ovt", "cost per use" => "per_use", "resource name" => "name", "type" => "kind", _ => "" };
+        let key = resource_fields().iter().find(|f| f.key == n || f.key == alias || f.name.to_lowercase() == n).map(|f| f.key.clone())
+            .or_else(|| c.p.fields.iter().find(|d| d.key.starts_with('r') && d.alias.to_lowercase() == n).map(|d| format!("c:{}", d.key)))?;
+        let (r, l) = (&c.p.resources[k], &c.l);
+        Some(match key.as_str() {
+            "id" => F::Num(k as f64 + 1.0),
+            "max" => F::Num(r.max * 100.0),
+            "rate" => F::Num(r.rate),
+            "ovt" => F::Num(r.ovt),
+            "per_use" => F::Num(r.per_use),
+            "work" => F::Num(l.res_work[k] / 60.0),
+            "cost" => F::Num(l.res_cost[k]),
+            "over" => F::Bool(l.over[k]),
+            x if x.starts_with("c:") => res_custom(c, k, &x[2..]),
+            x => F::Str(res_text(c, k, x)),
+        })
+    }
+    fn now(&self) -> i64 { at(self.c.today) }
+    // Working time on the resource's own calendar.
+    fn work_between(&self, a: i64, b: i64) -> i64 { let w = &self.c.s.cals[self.c.s.rcal[self.k]]; if b >= a { w.between(a, b) } else { -w.between(b, a) } }
+    fn work_add(&self, a: i64, m: i64) -> i64 { self.c.s.cals[self.c.s.rcal[self.k]].add(a, m) }
+    fn date_fmt(&self) -> &str { &self.c.fmt }
 }

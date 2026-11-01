@@ -162,8 +162,73 @@ fn vba_chain_perf() {
 
 #[test] fn sgn_zero() { assert_eq!(ev("Sgn(0)"), Ok(F::Num(0.0))); }
 #[test] fn instr_start_arg() { assert_eq!(ev(r#"InStr(3, "abcabc", "b")"#), Ok(F::Num(5.0))); }
-#[test] #[ignore] /* minor: CStr(date) gives ISO, VBA gives locale short date */ fn date_text() { assert_eq!(ev(r#"CStr(#11/5/2026#)"#), Ok(F::Str("11/5/2026".into()))); }
-#[test] fn max_empty() { eprintln!("{:?} {:?}", ev("Max()"), ev("Min()")); }
+#[test] fn date_text() { assert_eq!(ev(r#"CStr(#11/5/2026#)"#), Ok(F::Str("11/5/2026".into()))); }
+#[test] fn max_empty() { assert!(ev("Max()").is_err() && ev("Min()").is_err(), "{:?} {:?}", ev("Max()"), ev("Min()")); }
+
+// A date in text takes the plan's date format, as the grid shows it.
+#[test]
+fn date_text_in_plan_format() {
+    let mut doc = Doc::new(plan(1));
+    op(&mut doc, def("text1", "", r#""Starts " & [Start]"#)).unwrap();
+    op(&mut doc, def("text2", "", "CStr([Start])")).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    assert_eq!((c.text(0, "c:text1").as_str(), c.text(0, "c:text2").as_str()), ("Starts 02-Nov-26", "02-Nov-26"));
+}
+
+#[test]
+fn resource_formula_reads_resource_fields() {
+    let mut doc = Doc::new(plan(1));
+    doc.p.resources.push(Resource { uid: 1, name: "Fitter".into(), rate: 50.0, max: 1.0, ..Default::default() });
+    let uid = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Set { uid, field: "res".into(), value: "Fitter".into() }).unwrap();
+    op(&mut doc, def("rnumber1", "Day rate", "[Standard Rate]*8")).unwrap();
+    op(&mut doc, def("rtext1", "", r#"IIf([Work] >= 8, "Busy at " & [Max Units] & "%, " & [Day rate] & " a day", "Free")"#)).unwrap();
+    op(&mut doc, def("rcost1", "", "[Cost]*2")).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    assert_eq!(fields::res_text(&c, 0, "c:rnumber1"), "400");
+    assert_eq!(fields::res_text(&c, 0, "c:rtext1"), "Busy at 100%, 400 a day");
+    assert_eq!(fields::res_text(&c, 0, "c:rcost1"), fields::money(800.0, &doc.p.currency));
+}
+
+#[test]
+fn formula_column_reads_whole_table_columns() {
+    let mut doc = Doc::new(plan(2));
+    (doc.p.tasks[0].fixed_cost, doc.p.tasks[1].fixed_cost) = (100.0, 300.0);
+    doc.p.resources.push(Resource { uid: 1, name: "Fitter".into(), ..Default::default() });
+    op(&mut doc, def("number1", "Share", "=[Cost]/SUM(Tasks[Cost])")).unwrap();
+    op(&mut doc, def("number2", "People", "=COUNTA(Resources[Name])")).unwrap();
+    let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 2));
+    assert_eq!((c.text(0, "c:number1").as_str(), c.text(1, "c:number1").as_str()), ("0.25", "0.75"));
+    assert_eq!(c.text(0, "c:number2"), "1");
+}
+
+#[test]
+fn sheet_insert_refuses_to_push_cells_off_the_sheet() {
+    let mut doc = sheet_doc(&[("A1", "1"), ("A1048570", "2"), ("XFA1", "3")]);
+    assert!(op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 5, count: 10 }).is_err_and(|e| e.contains("last row")));
+    assert!(op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 2, count: 5 }).is_err_and(|e| e.contains("last column")));
+    assert_eq!(cell(&doc, 0, "A1048570"), "2");
+    // Far past every cell: nothing moves, and the arithmetic does not overflow.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: u32::MAX - 5, count: 10 }).unwrap();
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: u32::MAX - 5, count: -10 }).unwrap();
+    assert_eq!(cell(&doc, 0, "A1048570"), "2");
+}
+
+#[test]
+fn dashboard_tiles_follow_sheet_rename_and_insert() {
+    let mut doc = sheet_doc(&[("E4", "1")]);
+    let mut s = doc.p.sheets[0].clone(); s.name = "Weekly report".into();
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) }).unwrap();
+    let tile = serde_json::json!({ "formula": "=HSTACK('Weekly report'!E4:E6,'Weekly report'!F4:F6)", "sub": "Weekly report!A1", "src": "='Weekly report'!A1:B2" });
+    op(&mut doc, Op::Ui { key: "dashboards".into(), value: serde_json::json!([{ "name": "Main", "tiles": [tile] }]) }).unwrap();
+    let mut s = doc.p.sheets[0].clone(); s.name = "Week".into();
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) }).unwrap();
+    let t = || doc.p.ui["dashboards"][0]["tiles"][0].clone();
+    assert_eq!(t()["formula"], "=HSTACK(Week!E4:E6,Week!F4:F6)");
+    assert_eq!((t()["src"].as_str(), t()["sub"].as_str()), (Some("=Week!A1:B2"), Some("Weekly report!A1")), "plain text stays as typed");
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 1 }).unwrap();
+    assert_eq!(doc.p.ui["dashboards"][0]["tiles"][0]["src"], "=Week!A2:B3");
+}
 #[test] fn nan_display() { eprintln!("{:?} {:?}", ev("CStr(-1^0.5)"), ev("CStr(10^400)")); }
 
 fn try_on(stack: usize, s: String) -> bool {

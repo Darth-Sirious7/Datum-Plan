@@ -171,8 +171,10 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
                 _ => (String::new(), String::new()),
             };
             let code = if t.code.is_empty() { format!("A{}", (i + 1) * 10) } else { clean(&t.code) };
-            format!("{}\t1\t{}\t{}\t{}\tCP_Phys\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}",
-                t.uid, wbs_of[i], cal_id(t.cal.as_deref()), t.pct, clean(&t.name), t.dur as f64 / 60.0, t.dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
+            // A physical-% task carries its physical %; the duration % stays in the remaining duration.
+            let (pc, pt) = match t.pct_type { PctType::Physical => (t.phys, "CP_Phys"), PctType::Units => (t.pct, "CP_Units"), PctType::Duration => (t.pct, "CP_Drtn") };
+            format!("{}\t1\t{}\t{}\t{pc}\t{pt}\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}",
+                t.uid, wbs_of[i], cal_id(t.cal.as_deref()), clean(&t.name), t.dur as f64 / 60.0, t.dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
                 t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
                 dt(s.es[i]), dt(s.ef[i]), dt(s.es[i]), dt(s.ef[i]))
         }).collect());
@@ -295,10 +297,15 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let ty = g(t, "task_type");
         let dur = if ty.contains("Mile") { 0 } else { (g(t, "target_drtn_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64 };
         let ct = cons(&g(t, "cstr_type"));
+        let phys = g(t, "complete_pct_type") == "CP_Phys";
+        let pc = g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).clamp(0.0, 100.0).round() as u8;
+        // With physical %, the duration % comes from the remaining duration when the file has one.
+        let (target, remain) = (g(t, "target_drtn_hr_cnt").parse::<f64>().unwrap_or(0.0), g(t, "remain_drtn_hr_cnt").parse::<f64>().ok());
+        let pct = match remain { Some(r) if phys && target > 0.0 => ((1.0 - r / target) * 100.0).clamp(0.0, 100.0).round() as u8, _ => pc };
         let act_type = match ty.as_str() { "TT_LOE" => ActType::Loe, "TT_WBS" => ActType::WbsSummary, "TT_Rsrc" => ActType::ResourceDep, "TT_Mile" => ActType::StartMs, "TT_FinMile" => ActType::FinishMs, _ => ActType::Task };
         Task {
             uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type, ignore_rc: ty == "TT_Task",
-            pct: g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).round() as u8,
+            pct, phys: if phys { pc } else { 0 }, pct_type: if phys { PctType::Physical } else { PctType::Duration },
             constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")) },
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
             act_start: date(g(t, "act_start_date")), act_finish: date(g(t, "act_end_date")),

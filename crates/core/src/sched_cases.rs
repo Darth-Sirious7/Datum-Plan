@@ -78,6 +78,17 @@ fn two_people_start_when_the_first_one_can() {
 }
 
 #[test]
+fn finish_link_counts_back_on_the_calendar_of_the_last_to_finish() {
+    // T1 Mon 2 – Fri 6. T2 (2d, FF on T1) for Ahmed and Bina; Ahmed is off Wed 4 – Thu 5, so he
+    // works Tue 3 and Fri 6 and the task still finishes with T1 (not on Mon 9).
+    let mut p = build(&["5d", "2d|1FF|res=Ahmed, Bina"], |_| {});
+    let r = p.resources.iter_mut().find(|r| r.name == "Ahmed").unwrap();
+    r.exceptions.push(Exception { name: "Leave".into(), from: d(2026, 11, 4), to: d(2026, 11, 5), hours: vec![] });
+    p.opts.res_cals = true;
+    assert_eq!(dates(&p)[1], "Nov03 08:00 Nov06 17:00 0");
+}
+
+#[test]
 fn started_task_waits_for_unfinished_ext_pred_with_retained_logic() {
     // B started Mon 2, 50 % of 4d; status Tue 3. Its other-plan FS predecessor finishes Fri 6 17:00.
     // Retained logic: the remaining 2d wait for it → Mon 9 – Tue 10 (as an in-plan predecessor would).

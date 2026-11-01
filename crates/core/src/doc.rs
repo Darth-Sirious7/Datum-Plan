@@ -959,13 +959,20 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let n = count.unsigned_abs().min(100_000);
             let axis = if cols { Axis::Cols } else { Axis::Rows };
             let edit = if count > 0 { Edit::Insert { axis, at, count: n } } else { Edit::Delete { axis, at, count: n } };
+            // An insert must not push anything past the last row or column: it would be lost.
+            let last = if cols { 16_383 } else { 1_048_575 };
+            let s = &p.sheets[k];
+            let used = s.cells.keys().chain(s.fmt.keys()).chain(s.style.keys()).filter_map(|a| gridcraft_core::CellRef::parse(a)).map(|r| if cols { r.col } else { r.row });
+            if count > 0 && used.chain(s.widths.keys().copied().filter(|_| cols)).any(|pos| pos >= at && pos.saturating_add(n) > last) {
+                return Err(if cols { "Inserting these columns would push cells past the last column (XFD). Clear the cells at the right first." } else { "Inserting these rows would push cells past the last row (1,048,576). Clear the cells at the bottom first." }.into());
+            }
             rewrite_sheets(p, |f, host| crate::sheet::adjust(f, host, &target, &edit));
             let s = &mut p.sheets[k];
             // Moves every keyed map of the tab: cells, formats, styles (and column widths).
             let shift = |a1: &str| -> Option<String> {
                 let r = gridcraft_core::CellRef::parse(a1)?;
                 let (pos, other) = if cols { (r.col, r.row) } else { (r.row, r.col) };
-                let pos = if pos < at { pos } else if count > 0 { pos + n } else if pos < at + n { return None } else { pos - n };
+                let pos = if pos < at { pos } else if count > 0 { pos.saturating_add(n) } else if pos < at.saturating_add(n) { return None } else { pos - n };
                 let (row, col) = if cols { (other, pos) } else { (pos, other) };
                 Some(format!("{}{}", crate::sheet::col_name(col), row + 1))
             };
@@ -973,7 +980,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
             }
             if cols {
-                s.widths = std::mem::take(&mut s.widths).into_iter().filter_map(|(c, w)| if c < at { Some((c, w)) } else if count > 0 { Some((c + n, w)) } else if c < at + n { None } else { Some((c - n, w)) }).collect();
+                s.widths = std::mem::take(&mut s.widths).into_iter().filter_map(|(c, w)| if c < at { Some((c, w)) } else if count > 0 { Some((c.saturating_add(n), w)) } else if c < at.saturating_add(n) { None } else { Some((c - n, w)) }).collect();
             }
         }
         Op::SheetCells { k, cells, fmt } => {
@@ -1012,5 +1019,12 @@ fn rewrite_sheets(p: &mut Project, f: impl Fn(&str, &str) -> String) {
     for s in &mut p.sheets {
         let host = s.name.clone();
         for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = f(v, &host); }
+    }
+    // Dashboard tiles hold formulas too (ui.dashboards[].tiles[]); they live on no sheet of their own.
+    let tiles = p.ui.get_mut("dashboards").and_then(|d| d.as_array_mut()).into_iter().flatten().filter_map(|d| d.get_mut("tiles")?.as_array_mut()).flatten();
+    for t in tiles.filter_map(|t| t.as_object_mut()) {
+        for key in ["formula", "sub", "src"] {
+            if let Some(serde_json::Value::String(v)) = t.get_mut(key).filter(|v| v.as_str().is_some_and(|x| x.starts_with('='))) { *v = f(v, "__dashboard") }
+        }
     }
 }
