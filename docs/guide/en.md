@@ -38,6 +38,23 @@ Datum Plan checks for a new version when it starts. When one is ready, an amber 
 
 The left side of the File page also has **Open**, **Import**, **Save**, **Save As**, **Export**, **Print**, **Roadmap**, **Options** and **Updates**. The arrow at the top goes back to the plan.
 
+### The tutorial: learn by looking
+
+![The tutorial example on the Gantt chart, with its note.](img/tutorial.png)
+
+**Help › Tutorial** (or the **Tutorial (guided example)** tile on the Home page) opens a small office fit-out that uses every part of Datum Plan, five weeks into the work. It opens on **Setup**, with a note at the bottom right saying how that view was filled in and what to try.
+
+1. **The note** changes with the view. **Next** and **Back** go through the views in the sidebar, top to bottom: Gantt, Tracking, Network, Calendar, the resource views, Sheets, Update, Look-ahead, Dashboard, Progress, S-Curves, Reports, Builder, Checks, Risks, Schedule Risk and Portfolio.
+2. **Everything is filled in:**
+   - links with lags, milestones on the timeline, a constraint, a deadline, elapsed days, an inactive task and a recurring meeting;
+   - your own columns with formulas and conditional formatting;
+   - people with rates and countries, a material, a cost and resource calendars with leave;
+   - a baseline, five weeks of progress closed as periods, and a rule of credit;
+   - risks, a constraint log, a sheet that reads the plan, a dashboard and a saved report.
+3. **×** hides the notes; **Help › Tutorial Notes** shows them again.
+
+The tutorial is a new plan: change anything you like, and save it if you want to keep it.
+
 ### Project Setup
 
 When you start a new plan, **Project Setup** walks you through the basics. You can change everything later.

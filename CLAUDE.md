@@ -23,5 +23,5 @@ Checks before pushing:
 Releasing:
 1. Bump the version in `src-tauri/Cargo.toml`, `crates/core/Cargo.toml` and `crates/cli/Cargo.toml`.
 2. Add a CHANGELOG section, and keep `docs/site.json` true to the release (`about`, `steps`, `highlights`, `roadmap`; no commercial product names).
-3. If the release changes how something is used, update the guide (`docs/guide/en.md` and `zh.md`, both languages), then `npm run build:ui && npm run guide` (screenshots and PDFs; needs Playwright and `cargo run -p datum-core --example dump guide > tests_ui/guide_fixture.json`). The release attaches `docs/guide/pdf/*.pdf`.
+3. If the release changes how something is used, update the guide (`docs/guide/en.md` and `zh.md`, both languages), then `npm run build:ui && npm run guide` (screenshots and PDFs; needs Playwright and `cargo run -p datum-core --example dump guide > tests_ui/guide_fixture.json` and `... dump tutorial > tests_ui/tutorial_fixture.json`). The release attaches `docs/guide/pdf/*.pdf`.
 4. Push the tag `vX.Y.Z`, or run `release.yml` with workflow_dispatch when tag pushes are blocked. The workflow creates the tag and publishes the installer.
