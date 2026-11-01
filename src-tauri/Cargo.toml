@@ -1,6 +1,6 @@
 [package]
 name = "datum-plan"
-version = "0.5.14"
+version = "0.5.15"
 edition = "2021"
 description = "Datum Plan: project scheduling for Windows."
 license = "MIT"

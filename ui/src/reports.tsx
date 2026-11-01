@@ -67,7 +67,7 @@ export const Tools = (p: { title: string; help?: string; children?: JSX.Element 
 export const SCurveChart = (p: { c: SCurve; unit: string; title?: string; size?: "tall" | "short" | "fill"; money?: boolean; bare?: boolean }) => {
   const k = createMemo(() => p.c.days.findIndex(d => d >= p.c.status_day));
   const conv = (v: (number | null)[]) => (p.money ? v.map(x => (x === null ? null : (x / 100) * p.c.total)) : v);
-  return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} labels={p.c.days.map(d => label(d, p.unit))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
+  return <ChartBox title={p.title ?? `S-curve: ${p.c.name}`} type="line" size={p.size} days={p.c.days} labels={p.c.days.map(d => label(d, p.unit))} fmt={p.money ? "money" : "pct"} max={p.money ? undefined : 100}
     y={p.money ? `Cumulative (${P().currency.code})` : "Cumulative progress"} marker={k() >= 0 ? k() : null} bare={p.bare}
     datasets={[line("Planned (baseline)", conv(p.c.planned), COL.grey, [6, 4]), line("Actual", conv(p.c.actual), COL.blue, undefined, true), line("Forecast", conv(p.c.forecast.map((v, i) => (i >= k() && k() >= 0 ? v : null))), COL.red, [2, 3])]} />;
 };
@@ -76,7 +76,7 @@ export const PeriodBars = (p: { c: SCurve; unit: string; last?: number; size?: "
   const n = () => p.c.days.length;
   const from = () => Math.max(1, n() - (p.last ?? 24));
   const delta = (v: (number | null)[]) => v.slice(from()).map((x, i) => (x === null || v[from() + i - 1] === null ? null : x - (v[from() + i - 1] as number)));
-  return <ChartBox title={`Progress per ${p.unit}`} type="bar" fmt="pct" y="Progress in period" size={p.size} bare={p.bare} labels={p.c.days.slice(from()).map(d => label(d, p.unit))}
+  return <ChartBox title={`Progress per ${p.unit}`} type="bar" fmt="pct" y="Progress in period" size={p.size} bare={p.bare} days={p.c.days.slice(from())} labels={p.c.days.slice(from()).map(d => label(d, p.unit))}
     datasets={[bar("Planned", delta(p.c.planned), COL.grey), bar("Actual", delta(p.c.actual), COL.blue)]} />;
 };
 
@@ -137,10 +137,10 @@ const ProjectDashboard = () => {
         <Show when={on("period") && sc()}>{c => <PeriodBars c={c()} unit={unit()} />}</Show>
         <Show when={on("phase") && rep()}>{x => <ChartBox title="Progress by phase" type="bar" horizontal fmt="pct" max={100} y="Complete" labels={x().wbs.map(w => w.name)}
           datasets={[bar("Planned", x().wbs.map(w => w.planned), COL.grey), bar("Actual", x().wbs.map(w => w.actual), COL.blue)]} />}</Show>
-        <Show when={on("evm") && curve()}>{c => <ChartBox title="Cost and earned value" type="line" fmt="money" y={`Cumulative (${P().currency.code})`} labels={c().buckets.map(d => label(d, unit()))}
+        <Show when={on("evm") && curve()}>{c => <ChartBox title="Cost and earned value" type="line" fmt="money" y={`Cumulative (${P().currency.code})`} days={c().buckets} labels={c().buckets.map(d => label(d, unit()))}
           marker={c().buckets.findIndex(d => d >= (s().status_day ?? 0))}
           datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show>
-        <Show when={on("manpower") && use()}>{u => <ChartBox title="Manpower histogram" type="bar" fmt="hours" y="Hours" stacked labels={u().buckets.map(d => label(d, unit()))}
+        <Show when={on("manpower") && use()}>{u => <ChartBox title="Manpower histogram" type="bar" fmt="hours" y="Hours" stacked days={u().buckets} labels={u().buckets.map(d => label(d, unit()))}
           datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>
       </div>
       <div class="cols">
@@ -171,7 +171,7 @@ export const SCurves = () => {
         <Show when={main()}>{c => <SCurveChart c={c()} unit={unit()} title="Project progress" size="tall" />}</Show>
         <Show when={main()}>{c => <PeriodBars c={c()} unit={unit()} />}</Show>
         <Show when={costc()?.weight === "cost" && costc()}>{c => <SCurveChart c={c()} unit={unit()} title="Cost S-curve" money />}</Show>
-        <Show when={hours()?.weight === "work" && hours()}>{c => <ChartBox title="Hours S-curve" type="line" fmt="hours" y="Cumulative hours" labels={c().days.map(d => label(d, unit()))}
+        <Show when={hours()?.weight === "work" && hours()}>{c => <ChartBox title="Hours S-curve" type="line" fmt="hours" y="Cumulative hours" days={c().days} labels={c().days.map(d => label(d, unit()))}
           datasets={[line("Planned", c().planned.map(v => (v / 100) * c().total), COL.grey, [6, 4]), line("Actual", c().actual.map(v => (v === null ? null : (v / 100) * c().total)), COL.blue, undefined, true), line("Forecast", c().forecast.map(v => (v / 100) * c().total), COL.red, [2, 3])]} />}</Show>
         <For each={each() ?? []}>{c => <Show when={c}><SCurveChart c={c!} unit={unit()} size="short" /></Show>}</For>
       </div>
@@ -234,7 +234,7 @@ export const Progress = () => {
           <Show when={sc()}>{c => <PeriodBars c={c()} unit={kind()} last={16} />}</Show>
           <ChartBox title={`Progress by phase: last ${kind()} vs this ${kind()}`} type="bar" horizontal fmt="pct" max={100} labels={x().wbs.map(w => w.name)}
             datasets={[bar("Actual (previous)", x().wbs.map(w => w.actual_prev), COL.sky), bar("Actual (this period)", x().wbs.map(w => w.actual), COL.blue), bar("Planned", x().wbs.map(w => w.planned), COL.grey)]} />
-          <ChartBox title="Planned hours per period" type="bar" fmt="hours" labels={x().hours.slice(-16).map(h => label(h[0], kind()))} marker={x().hours.slice(-16).findIndex(h => h[0] >= x().to)}
+          <ChartBox title="Planned hours per period" type="bar" fmt="hours" days={x().hours.slice(-16).map(h => h[0])} labels={x().hours.slice(-16).map(h => label(h[0], kind()))} marker={x().hours.slice(-16).findIndex(h => h[0] >= x().to)}
             datasets={[bar("Hours", x().hours.slice(-16).map(h => h[1]), COL.orange)]} />
         </div>
         <div class="panel"><h2>Progress by phase</h2>
@@ -321,10 +321,10 @@ const Report = (p: { kind: string; back: () => void }) => {
         const c = cv();
         const k = c.buckets.findIndex(d => d >= (s().status_day ?? 0));
         return <div class="charts">
-          <ChartBox title={p.kind === "ev" ? "Earned value over time" : "Cumulative cost"} type="line" fmt="money" size="tall" labels={c.buckets.map(d => label(d, unit()))} marker={k}
+          <ChartBox title={p.kind === "ev" ? "Earned value over time" : "Cumulative cost"} type="line" fmt="money" size="tall" days={c.buckets} labels={c.buckets.map(d => label(d, unit()))} marker={k}
             datasets={p.kind === "ev" ? [line("Planned value (PV)", cum(c.planned), COL.grey, [6, 4]), line("Earned value (EV)", cum(c.earned), COL.green), line("Actual cost (AC)", cum(c.actual), COL.red)]
               : [line("Baseline", cum(c.planned), COL.grey, [6, 4]), line("Forecast", cum(c.forecast), COL.blue, undefined, true)]} />
-          <ChartBox title="Cash flow per period" type="bar" fmt="money" labels={c.buckets.map(d => label(d, unit()))} marker={k}
+          <ChartBox title="Cash flow per period" type="bar" fmt="money" days={c.buckets} labels={c.buckets.map(d => label(d, unit()))} marker={k}
             datasets={[bar("Baseline", c.planned, COL.grey), bar("Forecast", c.forecast, COL.blue), bar("Actual", c.actual, COL.red)]} />
         </div>;
       }}</Show>

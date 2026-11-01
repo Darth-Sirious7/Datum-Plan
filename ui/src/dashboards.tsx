@@ -219,9 +219,9 @@ const ChartTile = (p: TileProps) => {
       <Match when={p.t.plan === "periodbars"}><Show when={p.sc}>{c => <PeriodBars c={c()} unit={p.unit} size="fill" bare />}</Show></Match>
       <Match when={p.t.plan === "phases"}><Show when={p.rep}>{x => <ChartBox title={p.t.title} type="bar" horizontal fmt="pct" max={100} size="fill" bare labels={x().wbs.map(w => w.name)}
         datasets={[bar("Planned", x().wbs.map(w => w.planned), COL.grey), bar("Actual", x().wbs.map(w => w.actual), COL.blue)]} />}</Show></Match>
-      <Match when={p.t.plan === "costev"}><Show when={p.curve}>{c => <ChartBox title={p.t.title} type="line" fmt="money" size="fill" bare labels={c().buckets.map(d => label(d, p.unit))} marker={c().buckets.findIndex(d => d >= (out()!.summary.status_day ?? 0))}
+      <Match when={p.t.plan === "costev"}><Show when={p.curve}>{c => <ChartBox title={p.t.title} type="line" fmt="money" size="fill" bare days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={c().buckets.findIndex(d => d >= (out()!.summary.status_day ?? 0))}
         datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show></Match>
-      <Match when={p.t.plan === "manpower"}><Show when={p.use}>{u => <ChartBox title={p.t.title} type="bar" fmt="hours" stacked size="fill" bare labels={u().buckets.map(d => label(d, p.unit))}
+      <Match when={p.t.plan === "manpower"}><Show when={p.use}>{u => <ChartBox title={p.t.title} type="bar" fmt="hours" stacked size="fill" bare days={u().buckets} labels={u().buckets.map(d => label(d, p.unit))}
         datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, pal[i % 8], "h"))} />}</Show></Match>
     </Switch>
   );

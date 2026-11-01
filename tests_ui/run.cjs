@@ -386,6 +386,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ptools button:has-text('Cards')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Show the cards that have data')"); await p.waitForTimeout(400);
   check("the cards that have data come back", !!(await p.$(".charts.wide")));
+  // 0.5.15: a chart's values open in Datum Plot as a one-way copy, with dates for a time chart.
+  await p.click(".charts.wide .chartbox header button:has-text('Datum Plot')"); await p.waitForTimeout(200);
+  const toPlot = await p.evaluate(() => window.__calls.filter(c => c[0] === "open_in_plot").pop()?.[1]?.chart);
+  check("Datum Plot gets the chart's series, colours and dates", !!toPlot && toPlot.series.length === 3 && toPlot.days.length === toPlot.labels.length && toPlot.days.length > 2 && /^#/.test(toPlot.series[1].color) && toPlot.units === "%", JSON.stringify(toPlot)?.slice(0, 200));
+  check("charts draw at twice the screen's sharpness", await p.$eval(".charts.wide canvas", c => c.width >= 2 * c.getBoundingClientRect().width - 2));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
 
   // 0.5.5: plans in tabs, links to tasks in other plans, the Linked Plans panel.

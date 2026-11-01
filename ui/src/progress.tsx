@@ -24,7 +24,7 @@ export const Manpower = () => {
     </>}>
       <Show when={t() && (m()?.trades.length ?? 0) > 1} fallback={<p class="empty">Assign work resources to tasks to see the people each trade needs. A resource's Group is its trade.</p>}>
         <div class="panel">
-          <ChartBox title={`${t()!.name}: people per ${unit()}`} type="bar" fmt="num" y="People" size="tall" labels={m()!.buckets.map(b => label(b, unit()))}
+          <ChartBox title={`${t()!.name}: people per ${unit()}`} type="bar" fmt="num" y="People" size="tall" days={m()!.buckets} labels={m()!.buckets.map(b => label(b, unit()))}
             marker={m()!.buckets.findIndex(b => b > m()!.status_day) - 1} markerLabel="Status"
             datasets={[bar("Planned", t()!.planned.map(r1), COL.grey), bar("Done (earned from progress)", t()!.actual.map(r1), COL.blue), { ...line("Forecast", t()!.forecast.map(r1), COL.red, [5, 4]), tension: 0, cubicInterpolationMode: "default" as const }]} />
           <p class="muted">Planned spreads each task's hours over its baseline dates (current dates without a baseline). Done is the work earned from progress (% complete × planned hours) in each period, as stored at each period close; it is not hours booked. People = hours ÷ one person's working hours in the period.</p>

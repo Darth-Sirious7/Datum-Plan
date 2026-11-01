@@ -1,6 +1,7 @@
 //! File exchange: MS Project XML, Primavera XER and PMXML, Excel, CSV, MPX, JSON, HTML and iCalendar.
 pub mod formats;
 pub mod mspdi;
+pub mod dplot;
 pub mod table;
 pub mod xer;
 pub(crate) mod xml;

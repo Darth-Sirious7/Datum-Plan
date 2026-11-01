@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.15 — 2026-11-01
+
+Sharper charts, and any chart in Datum Plot.
+
+- **Charts look sharper on screen and in print.** They are drawn at twice the screen's resolution, and at three times when printing or saving a PDF, so lines and text stay crisp.
+- **Easier to read:**
+  - each line ends with its latest value (for example 27.6 % actual against 100 % planned);
+  - the status line names its date;
+  - the bottom axis has a baseline, and the gridlines are lighter.
+- **Datum Plot** button on every chart: it opens a copy of the chart's values in Datum Plot, to style the graph for a report or a paper.
+  - Charts over time keep their dates; other charts become a grouped table drawn as bars.
+  - The copy is saved in Documents › Datum Plan › To Datum Plot.
+  - It is a one-way copy: what you change in Datum Plot never changes the plan.
+  - If Datum Plot is not installed, the message says where the file is.
+- The guide explains the chart buttons, in English and Chinese.
+
 ## 0.5.14 — 2026-11-01
 
 Plan tabs where you work.

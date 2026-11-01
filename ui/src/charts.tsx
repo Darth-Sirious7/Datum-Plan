@@ -41,6 +41,29 @@ const lines = (marker: () => number | null | undefined, label: string): Plugin =
     ctx.restore();
   },
 });
+/** The last value of each line, at its end, in the line's colour (as in an engineering report). */
+const ends = (f: () => Fmt | undefined): Plugin => ({
+  id: "ends",
+  afterDatasetsDraw(ch) {
+    const { ctx, chartArea: a } = ch;
+    ctx.save(); ctx.font = "600 10.5px 'IBM Plex Sans', sans-serif"; ctx.textBaseline = "middle";
+    const used: number[] = [];
+    ch.data.datasets.forEach((d, k) => {
+      if ((d as { type?: string }).type !== "line" || !ch.isDatasetVisible(k)) return;
+      const pts = ch.getDatasetMeta(k).data, vals = d.data as (number | null)[];
+      let i = vals.length - 1; while (i >= 0 && (vals[i] === null || vals[i] === undefined)) i--;
+      if (i < 0 || !pts[i]) return;
+      const text = fmtv(vals[i] as number, f()), w = ctx.measureText(text).width;
+      let y = pts[i].y;
+      while (used.some(u => Math.abs(u - y) < 13)) y -= 13;
+      used.push(y);
+      const x = Math.min(pts[i].x + 6, a.right + 44 - w);
+      ctx.fillStyle = cssv("--bg2") || "#fff"; ctx.fillRect(x - 2, y - 7, w + 4, 14);
+      ctx.fillStyle = String(d.borderColor ?? "#333"); ctx.fillText(text, x, y);
+    });
+    ctx.restore();
+  },
+});
 /** White (or dark) background so saved pictures are not transparent. */
 const paper: Plugin = { id: "paper", beforeDraw(ch) { const c = ch.ctx; c.save(); c.globalCompositeOperation = "destination-over"; c.fillStyle = cssv("--bg2") || "#fff"; c.fillRect(0, 0, ch.width, ch.height); c.restore(); } };
 /** Fills fade from the line colour to nothing at the bottom of the plot. */
@@ -52,9 +75,10 @@ const fade = (color: string) => (ctx: ScriptableContext<"line">) => {
   return g;
 };
 // Charts follow their box when the page is laid out for printing, so nothing is cut off.
+// They draw at twice the screen's sharpness (three times for printing), so lines and text stay crisp in a PDF.
 const live = new Set<Chart>();
-const refit = () => live.forEach(c => c.resize());
-addEventListener("beforeprint", refit); addEventListener("afterprint", refit);
+const sharp = (k: number) => live.forEach(c => { c.options.devicePixelRatio = Math.max(k, window.devicePixelRatio || 1); c.resize(); });
+addEventListener("beforeprint", () => sharp(3)); addEventListener("afterprint", () => sharp(2));
 
 export type Fmt = "pct" | "money" | "hours" | "num";
 export const fmtv = (v: number, f: Fmt = "num") => f === "pct" ? `${v.toFixed(1)}%` : f === "money" ? money(v, { ...P().currency, decimals: 0 }) : f === "hours" ? `${Math.round(v).toLocaleString()} h` : (Math.round(v * 100) / 100).toLocaleString();
@@ -76,6 +100,8 @@ export interface ChartProps {
   size?: "tall" | "short" | "fill";
   /** No title bar (a dashboard tile has its own). */
   bare?: boolean;
+  /** The day (since 1970) of each label, for a time axis in Datum Plot. */
+  days?: number[];
   extra?: JSX.Element;
 }
 
@@ -90,8 +116,8 @@ export const ChartBox = (p: ChartProps) => {
     const font = { family: "'IBM Plex Sans', 'Segoe UI', sans-serif", size: 11 };
     const axis = (title?: string, isY = false) => ({
       title: { display: !!title, text: title, color: muted, font: { ...font, weight: 500 as const }, padding: { bottom: 6 } },
-      border: { display: false },
-      grid: { display: isY, color: grid, drawTicks: false, lineWidth: 1 },
+      border: { display: !isY, color: cssv("--line3") || "#9AA3AF", width: 1 },
+      grid: { display: isY, color: grid, drawTicks: false, lineWidth: 1, borderDash: [3, 3] },
       ticks: { color: muted, font, padding: 8, maxRotation: 0, autoSkipPadding: 18, ...(isY ? { maxTicksLimit: 6, callback: (v: string | number) => fmtv(+v, p.fmt) } : {}) },
       stacked: p.stacked,
     });
@@ -109,7 +135,7 @@ export const ChartBox = (p: ChartProps) => {
         type: p.type,
         data: { labels: p.labels, datasets: p.datasets.map(d => ({ ...d, backgroundColor: p.labels.map((_, i) => pal[i % pal.length]), borderColor: bg, borderWidth: 2, hoverOffset: 6 })) as never },
         options: {
-          responsive: true, maintainAspectRatio: false, animation: first ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
+          responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1), animation: first ? { duration: 600, easing: "easeOutQuart" } : false, cutout: p.type === "doughnut" ? "62%" : 0,
           layout: { padding: 6 },
           plugins: {
             legend: { position: "right", labels: { color: ink, font, usePointStyle: true, pointStyle: "circle", boxWidth: 7, boxHeight: 7, padding: 10 } },
@@ -129,7 +155,8 @@ export const ChartBox = (p: ChartProps) => {
         responsive: true, maintainAspectRatio: false, animation: first ? { duration: 600, easing: "easeOutQuart" } : false,
         indexAxis: p.horizontal ? "y" : "x",
         interaction: { mode: "index", intersect: false },
-        layout: { padding: { top: 2, right: 8, left: 2 } },
+        layout: { padding: { top: 2, right: p.type === "line" || p.datasets.some(d => (d as { type?: string }).type === "line") ? 48 : 8, left: 2 } },
+        devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
         elements: {
           line: { borderWidth: 2.5, tension: 0.4, cubicInterpolationMode: "monotone", borderCapStyle: "round" },
           point: { radius: 0, hoverRadius: many ? 3 : 5, hitRadius: 10, hoverBorderWidth: 2, hoverBackgroundColor: "#fff" },
@@ -146,7 +173,7 @@ export const ChartBox = (p: ChartProps) => {
           },
         },
       },
-      plugins: [paper, lines(() => p.marker, p.markerLabel ?? "Status")],
+      plugins: [paper, lines(() => p.marker, `${p.markerLabel ?? "Status"}${p.marker !== null && p.marker !== undefined && p.labels[p.marker] ? ` · ${p.labels[p.marker]}` : ""}`), ends(() => p.fmt)],
     });
     ch.options.color = muted;
     live.add(ch);
@@ -161,9 +188,16 @@ export const ChartBox = (p: ChartProps) => {
     const path = await call<string | null>("save_file", { name: `${p.title}.png`, data: ch.toBase64Image("image/png", 1) });
     if (path) toast(`Saved ${path}`, true);
   };
+  /** A one-way copy of the values in Datum Plot: changes there never come back. */
+  const toPlot = async () => {
+    const units = p.fmt === "pct" ? "%" : p.fmt === "money" ? P().currency.code : p.fmt === "hours" ? "h" : "";
+    const series = p.datasets.map(d => ({ name: String(d.label ?? ""), values: (d.data as (number | null)[]).map(v => (v === null || v === undefined ? null : +v)), color: String(typeof d.borderColor === "string" && d.borderColor !== cssv("--bg2") ? d.borderColor : typeof d.backgroundColor === "string" ? d.backgroundColor : ""), line: (d as { type?: string }).type === "line" || p.type === "line" }));
+    const msg = await call<string>("open_in_plot", { chart: { title: p.title, y: p.y ?? "", units, labels: p.labels, days: p.days ?? [], series } });
+    if (msg) toast(msg, true);
+  };
   return (
     <div class="chartbox" classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button></header></Show>
+      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

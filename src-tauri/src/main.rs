@@ -1370,6 +1370,41 @@ fn allowed_url(url: &str) -> bool {
     (rest.is_empty() || rest.starts_with(['/', '?', '#'])) && rest.len() < 300 && rest.chars().all(|c| c.is_ascii_alphanumeric() || "-._~/?#&=%+".contains(c))
 }
 
+/// Chart › Open in Datum Plot: the chart's values saved as a Datum Plot project in
+/// Documents\Datum Plan\To Datum Plot and opened there. A one-way copy: nothing comes back to the plan.
+#[tauri::command]
+fn open_in_plot(app: AppHandle, st: State<St>, chart: datum_core::io::dplot::ChartData) -> R<String> {
+    let (plan, company) = { let a = st.lock(); (a.doc.p.name.clone(), a.doc.p.company.clone()) };
+    let json = datum_core::io::dplot::project(&chart, &plan, &company, &today().format("%Y-%m-%d").to_string());
+    let dir = app.path().document_dir().map_err(|e| e.to_string())?.join("Datum Plan").join("To Datum Plot");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not make the folder {}: {e}", dir.display()))?;
+    let clean = |s: &str| s.chars().map(|c| if c.is_alphanumeric() || " -_().".contains(c) { c } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
+    let base = clean(&format!("{plan} - {}", chart.title)).chars().take(120).collect::<String>();
+    let mut path = dir.join(format!("{base}.dplot"));
+    for n in 2..1000 { if !path.exists() { break } path = dir.join(format!("{base} ({n}).dplot")) }
+    doc::write_atomic(&path, json.to_string().as_bytes())?;
+    if !plot_installed() {
+        return Ok(format!("Datum Plot is not installed, so the chart's values were saved as {}. Install Datum Plot (Datum Home or the Datum website) and open that file.", path.display()));
+    }
+    #[cfg(windows)]
+    let r = std::process::Command::new("explorer").arg(&path).spawn();
+    #[cfg(not(windows))]
+    let r = std::process::Command::new("xdg-open").arg(&path).spawn();
+    r.map_err(|e| e.to_string())?;
+    Ok("Opening a copy in Datum Plot. Changes made there do not change this plan.".into())
+}
+
+/// Whether Datum Plot is installed: Windows knows which program opens .dplot files.
+fn plot_installed() -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        ["HKCU\\Software\\Classes\\.dplot", "HKLM\\Software\\Classes\\.dplot"].iter().any(|k| std::process::Command::new("reg").args(["query", k]).creation_flags(0x0800_0000).output().is_ok_and(|o| o.status.success()))
+    }
+    #[cfg(not(windows))]
+    { true }
+}
+
 /// Opens one of the project's GitHub pages in the browser (only those, so the window cannot open anything else).
 #[tauri::command]
 fn open_url(url: String) -> R<()> {
@@ -1443,7 +1478,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

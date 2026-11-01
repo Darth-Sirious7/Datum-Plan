@@ -253,7 +253,9 @@ Make the dashboard your client or manager wants, as many as you like; they are s
 
 1. **Earned schedule.** SPI(t) compares when the plan expected today's progress with today: 0.92 means 92% of planned speed. **Earned schedule 23 of 25 days** means the progress made in 25 working days was planned for 23, so the project is 2 days behind, and **Finish at this pace** projects the finish date.
 
-The S-curve shows cumulative progress: grey dashes are the baseline (planned), the blue line is actual (it follows the progress you stored at each **Close period**), and the dotted line is the forecast. The status line marks the status date. You can weight progress by duration, cost, hours or physical % complete.
+The S-curve shows cumulative progress: grey dashes are the baseline (planned), the blue line is actual (it follows the progress you stored at each **Close period**), and the dotted line is the forecast. The status line marks the status date, and each line ends with its latest value. You can weight progress by duration, cost, hours or physical % complete.
+
+Every chart has two buttons at its top right. **PNG** saves it as a picture. **Datum Plot** opens a copy of its values in Datum Plot, where you can style the graph for a report or a paper. The copy is saved in **Documents › Datum Plan › To Datum Plot**. It is a one-way copy: what you change in Datum Plot never changes the plan. Charts over time keep their dates, as days from the first date with each row titled by its date.
 
 ### The progress report
 

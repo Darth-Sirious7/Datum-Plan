@@ -57,7 +57,7 @@ export const ScheduleRisk = () => {
           </div>
           <div class="cols riskcharts">
             <div class="panel" style={{ "grid-column": "span 2" }}>
-              <ChartBox title="Finish date: share of runs per day and cumulative" type="bar" fmt="pct" y="Runs" labels={r().days.map(([d]) => fmtDay(d))}
+              <ChartBox title="Finish date: share of runs per day and cumulative" type="bar" fmt="pct" y="Runs" days={r().days.map(([d]) => d)} labels={r().days.map(([d]) => fmtDay(d))}
                 datasets={[bar("Finished that day", r().days.map(([, n]) => n / total() * 100), COL.sky), line("Finished by then (cumulative)", cum(), COL.blue)]}
                 marker={mark()} markerLabel="Planned" />
             </div>
