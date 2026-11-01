@@ -1,6 +1,7 @@
 //! Prints engine output for a template as JSON fixtures for the UI tests (tests_ui/run.cjs).
 //! `dump guide` prints a plan in progress (baseline, two closed periods, risks, constraints) for
-//! the guide's screenshots (tests_ui/guide_shots.cjs).
+//! the guide's screenshots (tests_ui/guide_shots.cjs); `dump tutorial` the tutorial example
+//! (tests_ui/tutorial_fixture.json, for the guide's picture of the tutorial notes).
 use datum_core::{doc::{Doc, Op}, fields::Calc, query::Query, *};
 use chrono::NaiveDate;
 
@@ -80,7 +81,9 @@ fn dash_map(c: &Calc) -> serde_json::Value {
 }
 
 fn main() {
-    let (p, today) = if std::env::args().nth(1).as_deref() == Some("guide") { guide_plan() } else {
+    let arg = std::env::args().nth(1).unwrap_or_default();
+    let tday = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
+    let (p, today) = if arg == "guide" { guide_plan() } else if arg == "tutorial" { (tutorial::tutorial(tday), tday) } else {
         let t = &templates::TEMPLATES[2];
         let mut p = templates::build(t, NaiveDate::from_ymd_opt(2026, 10, 26).unwrap());
         // A vendor list on a sheet: flags, a total and a live count from the plan.
@@ -89,7 +92,7 @@ fn main() {
         p.sheets.push(SheetData { name: "Vendors".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() });
         (p, NaiveDate::from_ymd_opt(2026, 10, 24).unwrap())
     };
-    let guide = std::env::args().nth(1).as_deref() == Some("guide");
+    let guide = arg == "guide" || arg == "tutorial";
     let c = Calc::new(&p, "%d-%b-%y", today);
     let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
     let mut g = c.grid(&q);

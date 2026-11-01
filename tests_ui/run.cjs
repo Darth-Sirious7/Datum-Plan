@@ -23,7 +23,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -446,6 +446,19 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg button:has-text('Update All Open Plans')"); await p.waitForTimeout(200);
   check("Update All Open Plans asks the engine to update every open plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "update_links").pop())).includes('"all":true'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
+  // 0.5.13: the tutorial: a note per view, Back and Next through the views, × hides the notes.
+  await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Tutorial'):not(:has-text('Notes'))"); await p.waitForTimeout(500);
+  check("Help › Tutorial opens the guided example on Setup with its note", (await p.textContent(".tour")).includes("Setup holds the facts") && (await p.textContent(".tour")).includes("1 of 3"));
+  await p.click(".tour button:has-text('Next')"); await p.waitForTimeout(300);
+  check("Next goes to the next view with a note, and its bullets show as a list", (await p.$eval(".side button.on", b => b.title)) === "Gantt" && (await p.$$(".tour li")).length === 2);
+  await p.click(".tour .x"); await p.waitForTimeout(150);
+  check("× hides the tutorial notes", !(await p.$(".tour")));
+  await p.click(".ribbon button:has-text('Tutorial Notes')"); await p.waitForTimeout(150);
+  check("Help › Tutorial Notes shows them again", !!(await p.$(".tour")));
+  await p.click(".tour .x"); await p.waitForTimeout(100);
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
 
   // 0.5.1: Tell Me dims the window instead of hiding it.

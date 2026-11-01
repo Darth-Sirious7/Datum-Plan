@@ -703,6 +703,8 @@ impl Project {
         let span = |v: i64| v.clamp(-MAX_SPAN, MAX_SPAN);
         let fin = |v: f64| if v.is_finite() { v } else { 0.0 };
         let mut prev: i32 = -1;
+        // People work at most 1000 %; a material quantity or a cost amount can be far larger.
+        let work: std::collections::HashSet<u32> = self.resources.iter().filter(|r| r.kind == ResKind::Work).map(|r| r.uid).collect();
         for t in &mut self.tasks {
             t.level = (t.level as i32).min(prev + 1).max(0) as u8;
             prev = t.level as i32;
@@ -716,7 +718,7 @@ impl Project {
             t.splits.truncate(100);
             t.preds.iter_mut().for_each(|l| l.lag = if l.pct { l.lag.clamp(-10_000, 10_000) } else { span(l.lag) });
             (t.qty, t.qty_done, t.fixed_cost) = (fin(t.qty).max(0.0), fin(t.qty_done).max(0.0), fin(t.fixed_cost));
-            t.res.iter_mut().for_each(|a| a.units = fin(a.units).clamp(0.0, 1000.0));
+            t.res.iter_mut().for_each(|a| a.units = fin(a.units).clamp(0.0, if work.contains(&a.res) { 1000.0 } else { 1e12 }));
         }
         self.next_uid = self.next_uid.max(self.tasks.iter().map(|t| t.uid.saturating_add(1)).max().unwrap_or(1));
         let uids: std::collections::HashSet<u32> = self.tasks.iter().map(|t| t.uid).collect();

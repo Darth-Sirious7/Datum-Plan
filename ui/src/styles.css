@@ -861,3 +861,14 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .pimg2 .acts { display: flex; gap: 2px; }
 .pind { margin-left: 22px; }
 .ptab input.wide { width: 100%; }
+/* Tutorial notes (a plan's ui.tour): one card per view, bottom right. */
+.content { position: relative; }
+.tour { position: absolute; right: 16px; bottom: 16px; z-index: 30; width: min(400px, calc(100% - 32px)); max-height: min(60%, 460px); display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--blue, #2F6FCF); border-radius: 8px; box-shadow: 0 8px 28px rgba(15, 30, 60, 0.18); font-size: 12.5px; line-height: 1.5; }
+.tour header { display: flex; align-items: center; gap: 8px; padding: 9px 12px 6px; }
+.tour header b { flex: 1; color: var(--navy); font-size: 13px; }
+.tour header .x { border: 0; background: none; font-size: 17px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.tour .tbody { overflow: auto; padding: 0 12px; }
+.tour .tbody p { margin: 0 0 8px; }
+.tour .tbody ul { margin: 0 0 8px; padding-left: 16px; }
+.tour .tbody li { margin: 2px 0; }
+.tour footer { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--line); }

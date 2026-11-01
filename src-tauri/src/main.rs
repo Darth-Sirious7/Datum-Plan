@@ -1173,6 +1173,16 @@ fn update_links(st: State<St>, all: bool) -> R<(Out, String)> {
     Ok((out(&a), msg))
 }
 
+/// File › New › Tutorial: a small fit-out that uses every view, with a note on each (unsaved, in a new tab).
+#[tauri::command]
+fn tutorial_example(st: State<St>) -> Out {
+    let mut a = st.lock();
+    let mut p = fresh(&a, datum_core::tutorial::tutorial(today()));
+    p.setup_done = true;
+    add_tab(&mut a, Doc::new(p));
+    out(&a)
+}
+
 /// File › New › Example: a main schedule and three linked subplans, saved in a new folder and opened in tabs.
 #[tauri::command]
 async fn linked_example(app: AppHandle, st: State<'_, St>) -> R<Option<Out>> {
@@ -1433,7 +1443,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

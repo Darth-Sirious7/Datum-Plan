@@ -26,6 +26,7 @@ import { Menu, Toast, Icon, Dialog } from "./ui";
 import * as D from "./dialogs";
 import { ScheduleRisk } from "./risk";
 import { Lookahead, Manpower } from "./progress";
+import { TourCard } from "./tour";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
@@ -154,6 +155,7 @@ const App = () => {
               <Match when={view() === "portfolio"}><Portfolio /></Match>
             </Switch>
           </Show>
+          <TourCard views={SIDE.filter(x => x !== "-").map(x => [(x as [View, string, string])[0], (x as [View, string, string])[2]] as [View, string])} />
         </div>
       </main>
       <Status />

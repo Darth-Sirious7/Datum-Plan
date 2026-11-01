@@ -19,6 +19,7 @@ pub mod risk;
 pub mod sched;
 pub mod sheet;
 pub mod templates;
+pub mod tutorial;
 
 pub use model::*;
 

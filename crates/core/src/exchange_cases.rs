@@ -246,3 +246,13 @@ fn earned_schedule_matches_plan_when_on_time() {
     assert!((e.es - 5.0).abs() < 0.01 && (e.at - 5.0).abs() < 0.01 && (e.spi_t - 1.0).abs() < 0.01, "{e:?}");
     let _ = at(d(2026, 11, 2));
 }
+
+// A cost resource's amount is not capped like a person's units when a file is loaded.
+#[test]
+fn a_cost_amount_above_1000_survives_loading() {
+    let mut p = plan(&[(2, "")]);
+    p.resources.push(Resource { uid: 1, name: "Permit fee".into(), kind: ResKind::Cost, max: 1.0, ..Default::default() });
+    p.tasks[0].res = vec![Assign { res: 1, units: 1500.0, table: 0 }];
+    let q = Project::from_json(&serde_json::to_string(&p).unwrap()).unwrap();
+    assert_eq!(q.tasks[0].res[0].units, 1500.0);
+}

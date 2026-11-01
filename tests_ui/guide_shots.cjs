@@ -14,7 +14,7 @@ const srv = http.createServer((q, r) => {
 (async () => {
   await new Promise(ok => srv.listen(0, ok));
   const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
-  const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+  const page = async fx => { const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
   await p.addInitScript(f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "Northwind Engineering", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "0.5.3", checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
@@ -27,11 +27,13 @@ const srv = http.createServer((q, r) => {
       if (c === "apply") return f.state;
       return null;
     } }, event: { listen: async () => () => {} } };
-  }, fix);
+  }, fx);
   await p.goto(`http://localhost:${srv.address().port}/`);
   await p.waitForTimeout(800);
   await p.click(".bs aside .back");
   await p.waitForTimeout(600);
+  return p; };
+  let p = await page(fix);
 
   const wait = ms => p.waitForTimeout(ms);
   const side = async t => { await p.click(`.side button[title="${t}"]`); await wait(700); };
@@ -126,6 +128,12 @@ const srv = http.createServer((q, r) => {
   await p.click(".tabs .file"); await wait(200);
   await p.click(".bs aside button:has-text('Print')"); await wait(1200);
   await shot("print", [[".pbtns", 1], [".pset", 2, 0, "in"], [".pwrap", 3]]);
+  // 8. The tutorial example with its note (dump tutorial > tests_ui/tutorial_fixture.json).
+  const tut = path.join(__dirname, "tutorial_fixture.json");
+  if (fs.existsSync(tut)) {
+    p = await page(JSON.parse(fs.readFileSync(tut)));
+    await side("Gantt"); await shot("tutorial", [[".tour", 1]]);
+  }
   await b.close();
   srv.close();
 })();

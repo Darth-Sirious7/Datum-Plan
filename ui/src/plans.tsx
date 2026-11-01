@@ -198,6 +198,7 @@ const plusMenu = (e: MouseEvent) => openMenu(e, [
   ...(out()?.path && out()!.tabs[out()!.tab].role !== "sub" ? [{ label: `New Subplan of “${P().name}”…`, run: newSubplan }] : []),
   "-",
   { label: "Example: a main plan with three linked subplans", run: example },
+  { label: "Tutorial: a guided example of every view", run: () => import("./tour").then(m => m.tutorial()) },
 ]);
 export const example = async () => {
   const o = await call<Out | null>("linked_example");

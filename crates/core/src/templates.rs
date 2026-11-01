@@ -5,7 +5,7 @@
 use crate::{parse, Project};
 use chrono::NaiveDate;
 
-pub struct Template { pub id: &'static str, pub name: &'static str, pub desc: &'static str, pub color: &'static str, rows: &'static str, people: &'static str, assign: &'static str, costs: &'static str }
+pub struct Template { pub id: &'static str, pub name: &'static str, pub desc: &'static str, pub color: &'static str, pub(crate) rows: &'static str, pub(crate) people: &'static str, pub(crate) assign: &'static str, pub(crate) costs: &'static str }
 
 pub const TEMPLATES: &[Template] = &[
     Template { id: "engineering", name: "Engineering design", color: "#2F6FCF",
