@@ -387,6 +387,15 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
             if let Some((r, k)) = a1_index(a1) { ws.write_blank(r, k, &styled(Format::new(), st)).map_err(e)?; }
         }
         for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
+        // Pictures placed on the sheet, at their cell and size (SVG pictures cannot go into a workbook).
+        for im in &s.images {
+            let (Some((r, k)), Some(x)) = (a1_index(&im.cell), c.p.pictures.iter().find(|x| x.id == im.pic)) else { continue };
+            let Some(bytes) = x.data.split_once(";base64,").filter(|(m, _)| !m.contains("svg")).and_then(|(_, b)| unbase64(b)) else { continue };
+            let Ok(img) = rust_xlsxwriter::Image::new_from_buffer(&bytes) else { continue };
+            let (iw, ih) = (img.width().max(1.0), img.height().max(1.0));
+            let img = img.set_scale_width(im.w as f64 / iw).set_scale_height(im.h as f64 / ih).set_alt_text(&x.name);
+            ws.insert_image(r, k, &img).map_err(e)?;
+        }
     }
     if !c.p.sheets.is_empty() {
         // The sheets' formulas read the plan as tables (Tasks[Finish]) and names (=ProjectFinish).
@@ -429,4 +438,11 @@ fn a1_index(a1: &str) -> Option<(u32, u16)> {
     let split = a1.find(|ch: char| ch.is_ascii_digit())?;
     let col = a1[..split].bytes().try_fold(0u32, |acc, b| b.is_ascii_uppercase().then(|| acc * 26 + (b - b'A' + 1) as u32))?;
     Some((a1[split..].parse::<u32>().ok()?.checked_sub(1)?, col.checked_sub(1)? as u16))
+}
+
+/// Standard base64 (a picture's data URL) to bytes; None when it is not valid.
+fn unbase64(s: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| match c { b'A'..=b'Z' => Some(c - b'A'), b'a'..=b'z' => Some(c - b'a' + 26), b'0'..=b'9' => Some(c - b'0' + 52), b'+' => Some(62), b'/' => Some(63), _ => None };
+    let v: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=').map(val).collect::<Option<_>>()?;
+    Some(v.chunks(4).flat_map(|c| { let n = c.iter().enumerate().fold(0u32, |n, (k, &x)| n | (x as u32) << (18 - 6 * k)); (0..c.len().saturating_sub(1)).map(move |k| (n >> (16 - 8 * k)) as u8) }).collect())
 }

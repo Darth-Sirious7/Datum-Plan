@@ -5,13 +5,14 @@
 import { For, Show, Switch, Match, createMemo, createResource, createSignal, JSX } from "solid-js";
 import { act, call, out, P, tick, openMenu, openDialog, Item } from "./store";
 import { Curve, PeriodReport, SCurve, Usage } from "./api";
+import { pictures, picData, addPicture } from "./pictures";
 import { Dialog, Row } from "./ui";
 import { ChartBox, COL, bar, line } from "./charts";
 import { Brand, PeriodBars, Rows, SCurveChart, Table, cum, label, q, r, useRows } from "./reports";
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { ERRORS } from "./formulas";
 
-export type Kind = "number" | "ring" | "chart" | "table" | "countries" | "text";
+export type Kind = "number" | "ring" | "chart" | "table" | "countries" | "text" | "image";
 export type Tile = {
   id: string; kind: Kind; title: string; w: number; h: number;
   /** number / ring: the value; countries: the list of countries. */
@@ -23,6 +24,8 @@ export type Tile = {
   /** chart / table: a plan chart or list, or a sheet range or formula. */
   plan?: string; src?: string; chart?: string;
   text?: string;
+  /** image: a picture of the plan's library, and whether its title shows. */
+  pic?: number;
 };
 export type Dash = { name: string; tiles: Tile[] };
 type Shown = [string, number | null, string];
@@ -41,6 +44,7 @@ const KINDS: [Kind, string, string][] = [
   ["table", "Table", "A plan list (milestones, late tasks…), or a sheet range or formula"],
   ["countries", "Countries", "Flags with how many vendors or people come from each country"],
   ["text", "Text", "A heading or a note"],
+  ["image", "Picture", "A logo or picture from the plan's library (Project › Pictures)"],
 ];
 const PLAN_CHARTS: [string, string][] = [["scurve", "S-curve"], ["periodbars", "Progress per period"], ["phases", "Progress by phase"], ["costev", "Cost and earned value"], ["manpower", "Manpower histogram"]];
 const PLAN_LISTS: [string, string][] = [["milestones", "Milestones"], ["late", "Late tasks"], ["critical", "Critical tasks"], ["upcoming", "Starting next period"], ["completed", "Completed this period"]];
@@ -173,6 +177,7 @@ const TileView = (p: TileProps): JSX.Element => (
     <Match when={p.t.kind === "table"}><h3>{p.t.title}</h3><div class="tbody scroll"><TableTile {...p} /></div></Match>
     <Match when={p.t.kind === "countries"}><h3>{p.t.title}</h3><div class="tbody scroll"><CountriesTile {...p} /></div></Match>
     <Match when={p.t.kind === "text"}><h3>{p.t.title}</h3><div class="tbody dtext">{p.t.text}</div></Match>
+    <Match when={p.t.kind === "image"}><Show when={p.t.title}><h3>{p.t.title}</h3></Show><div class="tbody dimg">{picData(p.t.pic ?? 0) ? <img src={picData(p.t.pic ?? 0)} alt={p.t.title} /> : <span class="muted">Choose a picture (✎).</span>}</div></Match>
   </Switch>
 );
 
@@ -292,7 +297,7 @@ const editTile = (t: Tile | null, done: (t: Tile) => void) => openDialog(() => {
   const kindDefaults: Record<Kind, Partial<Tile>> = {
     number: { w: 3, h: 1, formula: "=PercentComplete", title: "Actual progress" }, ring: { w: 4, h: 3, formula: "=PercentComplete", title: "Complete" },
     chart: { w: 6, h: 3, plan: "scurve", title: "S-curve" }, table: { w: 6, h: 3, plan: "milestones", title: "Milestones" },
-    countries: { w: 6, h: 3, formula: "=Resources[Country]", title: "Countries" }, text: { w: 6, h: 1, text: "", title: "Notes" },
+    countries: { w: 6, h: 3, formula: "=Resources[Country]", title: "Countries" }, text: { w: 6, h: 1, text: "", title: "Notes" }, image: { w: 3, h: 1, title: "" },
   };
   // A component (not a call in the JSX), so typing never rebuilds the field and the cursor stays in it.
   const Formula = (q: { label: string; k: "formula" | "src" | "sub"; hint: string }) => (
@@ -322,6 +327,9 @@ const editTile = (t: Tile | null, done: (t: Tile) => void) => openDialog(() => {
           </Show>
         </Show>
         <Show when={x().kind === "countries"}><Formula label={"Countries from"} k="formula" hint={"=Resources[Country] or =Vendors!B2:B40"} /></Show>
+        <Show when={x().kind === "image"}><Row label="Picture"><span class="stackr"><select onChange={e => set({ pic: +e.currentTarget.value || undefined })}><option value="">(choose)</option>
+          <For each={pictures()}>{q => <option value={q.id} selected={x().pic === q.id}>{q.name || "Picture"}{q.role ? ` (${q.role})` : ""}</option>}</For></select>
+          <button class="btn sm" onClick={() => addPicture().then(id => id && set({ pic: id }))}>Add…</button></span></Row></Show>
         <Show when={x().kind === "text"}><Row label="Text"><textarea rows={4} value={x().text ?? ""} onInput={e => set({ text: e.currentTarget.value })} /></Row></Show>
         <Row label="Size"><span class="stackr"><select onChange={e => set({ w: +e.currentTarget.value })}><For each={SIZES}>{([w, l]) => <option value={w} selected={x().w === w}>{l}</option>}</For></select>
           <select onChange={e => set({ h: +e.currentTarget.value })}><For each={[1, 2, 3, 4]}>{h => <option value={h} selected={x().h === h}>{h === 1 ? "One row" : `${h} rows`}</option>}</For></select></span></Row>

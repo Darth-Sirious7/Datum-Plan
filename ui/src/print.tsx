@@ -70,7 +70,7 @@ const Slot = (p: { t: string; page: number; pages: number; h: number }) => (
 );
 
 /** A header or footer picture: the company logo (File › Options), the client logo, or one chosen here. */
-const pic = (v: string) => (v === "@company" ? out()?.project.logo : v === "@client" ? ps.clientLogo : v) || "";
+const pic = (v: string) => (v === "@company" ? out()?.project.logo : v === "@client" ? ps.clientLogo : v.startsWith("@pic:") ? (out()?.project.pictures ?? []).find(x => x.id === +v.slice(5))?.data : v) || "";
 const now = () => { const d = new Date(); return `${fmtDay(dateDay(d), "long")}${ps.fTime ? `, ${d.toTimeString().slice(0, 5)}` : ""}`; };
 const footParts = (page: number, pages: number, flow = false): Slots => [
   [ps.fPrinted ? `Printed ${now()}` : "", ps.fRev.trim() ? `Revision ${ps.fRev.trim()}` : ""].filter(Boolean).join("  ·  "),
@@ -522,6 +522,7 @@ const HeaderFooter = (p: { pickClient: () => void }) => {
       <p class="muted">As many as you like in each place, side by side; they repeat on every page.</p>
       <For each={["Left", "Centre", "Right"]}>{(l, i) => (
         <div class="pplace"><div class="pph"><b>{l}</b>
+          <button class="btn sm" title="A picture from the plan's library (client, vendor and sub-vendor logos)" onClick={e => import("./pictures").then(m => m.pictureMenu(e, id => setPs("pics", i(), list => [...list, { v: `@pic:${id}`, h: 40 }])))}>+ Logo ▾</button>
           <button class="btn sm" onClick={() => add(i())}>+ Picture…</button>
           <Show when={P().logo && !ps.pics[i()].some(x => x.v === "@company")}><button class="btn sm" title="The company logo from File › Options" onClick={() => setPs("pics", i(), list => [...list, { v: "@company", h: 40 }])}>+ Company logo</button></Show></div>
           <For each={ps.pics[i()]} fallback={<span class="muted">No picture</span>}>{(x, k) => (

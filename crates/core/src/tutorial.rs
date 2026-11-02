@@ -111,7 +111,7 @@ pub fn tutorial(today: NaiveDate) -> Project {
     for r in 4..8 { fmt.push((format!("F{r}"), "#,##0".into())); fmt.push((format!("G{r}"), "#,##0".into())) }
     for r in 11..16 { fmt.push((format!("B{r}"), "date".into())); fmt.push((format!("C{r}"), "0\"%\"".into())) }
     let style = ["A1", "A10", "B10", "C10", "E3", "F3", "G3", "E7", "F7", "G7"].iter().map(|a| (a.to_string(), "b".to_string())).collect();
-    doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 160), (4, 130)].into_iter().collect(), style });
+    doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 160), (4, 130)].into_iter().collect(), style, images: vec![] });
     // Views the user can come back to: a dashboard, a saved report, a filter, a highlight.
     let tile = |kind: &str, title: &str, w: u8, h: u8, extra: serde_json::Value| { let mut t = json!({ "id": title, "kind": kind, "title": title, "w": w, "h": h }); t.as_object_mut().into_iter().for_each(|o| o.extend(extra.as_object().cloned().unwrap_or_default())); t };
     let ui = json!({

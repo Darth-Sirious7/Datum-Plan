@@ -345,3 +345,44 @@ fn a_cost_amount_above_1000_survives_loading() {
     let q = Project::from_json(&serde_json::to_string(&p).unwrap()).unwrap();
     assert_eq!(q.tasks[0].res[0].units, 1500.0);
 }
+
+// The plan keeps its own pictures (logos of the parties, images) and the pictures placed on sheets.
+#[test]
+fn pictures_are_kept_in_the_plan_and_placed_on_sheets() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    let png = "data:image/png;base64,iVBORw0KGgo=".to_string();
+    op(&mut doc, Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Client".into(), role: "Client".into(), data: png.clone() }) });
+    op(&mut doc, Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Vendor".into(), role: "Sub-vendor".into(), data: png.clone() }) });
+    assert_eq!(doc.p.pictures.iter().map(|x| x.id).collect::<Vec<_>>(), vec![1, 2]);
+    assert!(doc.apply(Op::Picture { id: 0, pic: Some(Picture { data: "javascript:alert(1)".into(), ..Default::default() }) }, "%d-%b-%y").is_err(), "only images");
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Board".into(), ..Default::default() }) });
+    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60 }, SheetImage { pic: 9, cell: "C3".into(), w: 1, h: 1 }] });
+    assert_eq!(doc.p.sheets[0].images, vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60 }], "unknown pictures are left out");
+    // Renaming the sheet keeps its pictures; saving and opening keeps everything.
+    let s = SheetData { name: "Client board".into(), ..doc.p.sheets[0].clone() };
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(SheetData { images: vec![], ..s }) });
+    assert_eq!(doc.p.sheets[0].images.len(), 1);
+    let q = Project::from_json(&serde_json::to_string(&doc.p).unwrap()).unwrap();
+    assert_eq!((q.pictures.len(), q.sheets[0].images.len()), (2, 1));
+    // Removing a picture removes it from the sheets too.
+    op(&mut doc, Op::Picture { id: 2, pic: None });
+    assert!(doc.p.sheets[0].images.is_empty() && doc.p.pictures.len() == 1);
+}
+
+// A sheet's pictures go into the Excel (.xlsx) workbook at their cell.
+#[test]
+fn sheet_pictures_go_into_the_workbook() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    // A 1×1 PNG.
+    let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    op(&mut doc, Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Logo".into(), role: "Client".into(), data: png.into() }) });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Board".into(), ..Default::default() }) });
+    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 1, cell: "B2".into(), w: 80, h: 40 }] });
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let f = std::env::temp_dir().join(format!("dp-pics-{}-{}.xlsx", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+    crate::io::export(&doc.p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let bytes = std::fs::read(&f).unwrap();
+    std::fs::remove_file(&f).ok();
+    let zip = String::from_utf8_lossy(&bytes);
+    assert!(zip.contains("xl/media/image1.png"), "the picture is in the workbook");
+}

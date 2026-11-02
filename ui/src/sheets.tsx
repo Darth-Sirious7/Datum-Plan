@@ -11,6 +11,8 @@ import { createSel, aggregate } from "./selection";
 import { Catalog, ERRORS, Suggestion, a1, blankStrings, callAt, canPoint, colName, cycleAnchor, refs, sheetRef, sigArgs, suggest } from "./formulas";
 import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
+import { SheetImage } from "./api";
+import { pictureMenu, picData } from "./pictures";
 
 const RH = 22, CW = 96, HW = 46;
 const COLORS = ["#2F6FDE", "#D64545", "#7A4FD8", "#1F9D55", "#C77700", "#C2185B"];
@@ -140,6 +142,7 @@ export const Sheets = () => {
   // ---------- keys, clipboard, fill ----------
   const clear = () => { const out: [string, string][] = []; S.each((r, c) => { if (input(k(), r, c)) out.push([a1(r, c), ""]); }); put(out); };
   const key = (e: KeyboardEvent) => {
+    if (picSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putImgs(imgs().filter((_, j) => j !== picSel())); setPicSel(-1); return; }
     // Keys typed before the cell editor has focus still go into it (fast typing loses nothing).
     if (edit() !== null) { if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const t = edit()!, at = caret(); setText(t.slice(0, at) + e.key + t.slice(at), at + 1); } return; }
     const [r, c] = e.shiftKey ? end() : cur();
@@ -309,7 +312,30 @@ export const Sheets = () => {
     const y = vy < fr * RH ? vy : vy + box.scrollTop, x = fc && vx < lefts()[fc] ? vx : vx + box.scrollLeft;
     return [Math.floor(y / RH), lefts().findIndex((l, j) => x >= l && x < l + width(j))];
   };
+  // Pictures on the sheet: anchored at a cell, dragged to another cell, resized from the corner.
+  const [picSel, setPicSel] = createSignal(-1);
+  const imgs = () => (sheet()?.images ?? []) as SheetImage[];
+  const putImgs = (images: SheetImage[]) => act({ SheetImages: { k: k(), images } });
+  const placePic = (id: number) => {
+    const im = new Image();
+    im.onload = () => { const w = Math.min(240, im.naturalWidth || 160), h = Math.max(8, Math.round(w * (im.naturalHeight || 80) / (im.naturalWidth || 160))); putImgs([...imgs(), { pic: id, cell: a1(...cur()), w, h }]).then(() => { setPicSel(imgs().length - 1); box.focus(); }); };
+    im.src = picData(id);
+  };
+  const picDrag = (e: MouseEvent, i: number, resize: boolean) => {
+    e.preventDefault(); e.stopPropagation(); setPicSel(i); box.focus();
+    const o = imgs()[i], x0 = e.clientX;
+    let next = o;
+    const mv = (m: MouseEvent) => {
+      if (resize) { const w = Math.max(16, o.w + m.clientX - x0); next = { ...o, w: Math.round(w), h: Math.max(8, Math.round(w * o.h / o.w)) }; }
+      else { const [r, c] = at(m.clientX, m.clientY); if (r >= 0 && c >= 0) next = { ...o, cell: a1(r, c) }; }
+      const el = document.querySelector<HTMLElement>(`.simg[data-i="${i}"]`);
+      if (el) { const [r, c] = parseA1(next.cell); Object.assign(el.style, { left: `${lefts()[c]}px`, top: `${r * RH}px`, width: `${next.w}px`, height: `${next.h}px` }); }
+    };
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); if (next !== o) putImgs(imgs().map((x, j) => (j === i ? next : x))); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
   const down = (e: MouseEvent) => {
+    setPicSel(-1);
     if (e.button !== 0) return;
     const [r, c] = at(e.clientX, e.clientY);
     if (r < 0) return;
@@ -389,6 +415,7 @@ export const Sheets = () => {
         <span class="sep" />
         <button class="btn sm" title="Insert rows or columns (Ctrl+Shift++)" onClick={e => openMenu(e, [{ label: "Insert Rows Above", run: () => insertCells(false, false) }, { label: "Insert Columns Left", run: () => insertCells(false, true) }])}>Insert ▾</button>
         <button class="btn sm" title="Delete rows or columns (Ctrl+−)" onClick={e => openMenu(e, [{ label: "Delete Rows", run: () => insertCells(true, false) }, { label: "Delete Columns", run: () => insertCells(true, true) }])}>Delete ▾</button>
+        <button class="btn sm" title="Place a logo or picture from the plan's library on the selected cell" onClick={e => pictureMenu(e, placePic)}>Picture ▾</button>
         <button class="btn sm" title="Keep the rows above and the columns left of the selected cell in view" onClick={() => freeze(frozen()[0] || frozen()[1] ? [0, 0] : [cur()[0], cur()[1]])}>{frozen()[0] || frozen()[1] ? "Unfreeze Panes" : "Freeze Panes"}</button>
         <span class="grow" />
         <span class="muted hintline">Type = and click cells · plan data: Tasks[Finish], Resources[Country], ProjectFinish</span>
@@ -409,6 +436,12 @@ export const Sheets = () => {
             <div class="gbody">
               <For each={vis().filter(r => r >= frozen()[0])}>{r => rowView(r)}</For>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${b.r0 * RH}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${(Math.min(b.r1, nrows() - 1) - b.r0 + 1) * RH}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
+              <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell); return (
+                <div class="simg" data-i={i()} classList={{ on: picSel() === i() }} style={{ left: `${lefts()[rc()[1]] ?? 0}px`, top: `${rc()[0] * RH}px`, width: `${im.w}px`, height: `${im.h}px` }}
+                  title="Drag to move; drag the corner to resize; Delete removes it" onMouseDown={e => picDrag(e, i(), false)}>
+                  <img src={picData(im.pic)} alt="" draggable={false} />
+                  <Show when={picSel() === i()}><i class="corner" onMouseDown={e => picDrag(e, i(), true)} /><button class="x" title="Remove the picture from the sheet" onMouseDown={e => e.stopPropagation()} onClick={() => { putImgs(imgs().filter((_, j) => j !== i())); setPicSel(-1); }}>×</button></Show>
+                </div>); }}</For>
               <Show when={fillTo()}>{t => { const [a, b] = cur(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(b, range()[1])]}px`, top: `${Math.min(a, range()[0]) * RH}px`, width: `${lefts()[t()[1]] + width(t()[1]) - lefts()[Math.min(b, range()[1])]}px`, height: `${(t()[0] - Math.min(a, range()[0]) + 1) * RH}px` }} />; }}</Show>
               <Show when={edit() === null}><i class="fill" title="Drag to fill (series; formulas follow); hold Ctrl to copy" style={{ left: `${lefts()[range()[3]] + width(range()[3]) - 4}px`, top: `${(range()[2] + 1) * RH - 4}px` }} onMouseDown={fillDrag} /></Show>
               <Show when={edit() !== null && home()?.k === k()}>

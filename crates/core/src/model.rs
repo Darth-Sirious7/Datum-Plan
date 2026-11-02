@@ -460,7 +460,24 @@ pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8,
 /// A spreadsheet tab in the plan: typed cell inputs by A1 address, number formats, column widths.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16>, #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub style: BTreeMap<String, String> }
+pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16>, #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub style: BTreeMap<String, String>,
+    /// Pictures placed on the sheet: a library picture, its top-left cell and its size in px.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub images: Vec<SheetImage> }
+
+/// A picture on a sheet, anchored at a cell ("B2") like a picture over a spreadsheet's cells.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SheetImage { pub pic: u32, pub cell: String, pub w: u16, pub h: u16 }
+
+/// A picture kept in the plan file: a logo of a party to the project (the client, our company, a
+/// vendor or sub-vendor) or any image used on dashboards, sheets and printouts. `data` is a data URL.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Picture { pub id: u32, pub name: String, pub role: String, pub data: String }
+
+/// Pictures a plan may keep, and the size of each (data URL characters, about 4 MB of image).
+pub const MAX_PICTURES: usize = 200;
+pub const MAX_PICTURE_LEN: usize = 6_000_000;
 
 /// Reporting periods: the weekday a week ends on (0 = Monday … 6 = Sunday), the day of the month
 /// the month closes (0 = last day), and how progress is weighted on S-curves.
@@ -533,6 +550,9 @@ pub struct Project {
     /// Column titles chosen by the user (field key → title).
     pub titles: BTreeMap<String, String>,
     pub sheets: Vec<SheetData>,
+    /// The plan's picture library (logos of the parties, images for dashboards and sheets).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pictures: Vec<Picture>,
     pub periods: PeriodOpts,
     pub notes: Vec<PeriodNote>,
     /// Settings owned by the window: saved views, tables, filters, groups, bar and text styles,
@@ -589,7 +609,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
         }
     }
 
@@ -689,6 +709,16 @@ impl Project {
 
     /// Repairs anything an edit or a hand-made file can leave inconsistent.
     pub fn normalize(&mut self) {
+        // Pictures: images only, within the size limits, unique ids; sheet pictures point at one.
+        self.pictures.retain(|x| x.data.starts_with("data:image/") && x.data.len() <= MAX_PICTURE_LEN);
+        self.pictures.truncate(MAX_PICTURES);
+        let mut seen = std::collections::HashSet::new();
+        self.pictures.retain(|x| x.id > 0 && seen.insert(x.id));
+        for s in &mut self.sheets {
+            s.images.retain(|i| seen.contains(&i.pic));
+            s.images.truncate(500);
+            s.images.iter_mut().for_each(|i| (i.w, i.h) = (i.w.clamp(8, 4000), i.h.clamp(8, 4000)));
+        }
         if self.calendars.is_empty() {
             self.calendars.push(Calendar::standard("Standard"));
         }

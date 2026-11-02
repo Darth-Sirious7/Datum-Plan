@@ -4,8 +4,9 @@ import { act, call, grid, P, refresh, setSetupOpen, toast, opts } from "./store"
 import * as D from "./dialogs";
 import { CurrencyPick } from "./backstage";
 import { Help } from "./help";
+import { Library } from "./pictures";
 
-const STEPS = ["Project", "Calendar", "Currency", "WBS", "Resources", "Branding", "Done"];
+const STEPS = ["Project", "Calendar", "Currency", "WBS", "Resources", "Logos", "Done"];
 
 export const Setup = () => {
   const [step, setStep] = createSignal(0);
@@ -75,11 +76,13 @@ export const Setup = () => {
           <button class="btn pri" onClick={addRes}>Add resources</button>
         </Show>
         <Show when={step() === 5}>
-          <p class="muted">The logo and company name appear on reports and printouts.</p>
+          <p class="muted">Your company name and logo appear on reports and printouts.</p>
           <label>Company<input value={p().company} onChange={e => put("company", e.currentTarget.value)} /></label>
           <Show when={p().logo}><img src={p().logo} class="logoprev" /></Show>
           <div class="inline"><button class="btn" onClick={async () => { const l = await call<string | null>("pick_logo"); if (l) put("logo", l); }}>Choose logo…</button>
             <Show when={!p().logo && opts().logo}><button class="btn" onClick={() => put("logo", opts().logo)}>Use my default logo</button></Show></div>
+          <p class="muted">The logos of the other parties (the client above you, vendors and sub-vendors below you) and any other pictures for dashboards and sheets. They are kept in the plan file.</p>
+          <Library />
         </Show>
         <Show when={step() === 6}>
           <p>All set. Next: add tasks in the Gantt chart, link them, assign resources and set a baseline.</p>

@@ -88,6 +88,10 @@ pub enum Op {
     Log { id: u32, item: Option<LogItem> },
     /// Saves the notes of a reporting period (replacing the same kind and end date).
     Note { note: PeriodNote },
+    /// Adds (id 0), changes or removes (None) a picture in the plan's library.
+    Picture { id: u32, pic: Option<Picture> },
+    /// Replaces the pictures placed on sheet k.
+    SheetImages { k: usize, images: Vec<SheetImage> },
     Batch(Vec<Op>),
 }
 
@@ -929,7 +933,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                     if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
                     rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, &s.name, &[]));
                     // A rename keeps the cells, now pointing at the new name.
-                    p.sheets[k] = SheetData { cells: std::mem::take(&mut p.sheets[k].cells), ..s };
+                    p.sheets[k] = SheetData { cells: std::mem::take(&mut p.sheets[k].cells), images: std::mem::take(&mut p.sheets[k].images), ..s };
                 } else {
                     p.sheets[k] = s;
                 }
@@ -1009,6 +1013,31 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::Note { note } => {
             p.notes.retain(|n| !(n.kind == note.kind && n.end == note.end));
             p.notes.push(note);
+        }
+        Op::Picture { id, pic } => match pic {
+            None => {
+                p.pictures.retain(|x| x.id != id);
+                p.sheets.iter_mut().for_each(|s| s.images.retain(|i| i.pic != id));
+            }
+            Some(mut x) => {
+                if !x.data.starts_with("data:image/") { return Err("Choose a picture (PNG, JPEG, GIF or SVG).".into()) }
+                if x.data.len() > MAX_PICTURE_LEN { return Err("That picture is too large; choose one under 4 MB.".into()) }
+                x.name = x.name.trim().chars().take(120).collect();
+                x.role = x.role.trim().chars().take(60).collect();
+                match p.pictures.iter_mut().find(|y| y.id == id && id > 0) {
+                    Some(y) => { x.id = id; *y = x }
+                    None => {
+                        if p.pictures.len() >= MAX_PICTURES { return Err(format!("A plan keeps up to {MAX_PICTURES} pictures.")) }
+                        x.id = p.pictures.iter().map(|y| y.id).max().unwrap_or(0) + 1;
+                        p.pictures.push(x);
+                    }
+                }
+            }
+        },
+        Op::SheetImages { k, images } => {
+            let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();
+            let s = p.sheets.get_mut(k).ok_or("There is no such sheet.")?;
+            s.images = images.into_iter().filter(|i| ids.contains(&i.pic)).take(500).map(|mut i| { (i.w, i.h) = (i.w.clamp(8, 4000), i.h.clamp(8, 4000)); i }).collect();
         }
     }
     Ok(())

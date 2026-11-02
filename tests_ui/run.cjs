@@ -23,7 +23,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -451,6 +451,22 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg button:has-text('Update All Open Plans')"); await p.waitForTimeout(200);
   check("Update All Open Plans asks the engine to update every open plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "update_links").pop())).includes('"all":true'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
+  // 0.5.16: the plan's picture library: logos by party, in the print header, on a dashboard and on a sheet.
+  await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Pictures')"); await p.waitForTimeout(250);
+  await p.click(".dlg button:has-text('+ Client logo')"); await p.waitForTimeout(300);
+  await p.click(".dlg button:has-text('+ Sub-vendor logo')"); await p.waitForTimeout(300);
+  check("Project › Pictures adds logos by party, kept in the plan", (await p.$$(".dlg .picrow")).length === 2 && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Picture).map(c => c[1].op.Picture.pic.role))) === '["Client","Sub-vendor"]');
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(300);
+  await p.click(".ptools button:has-text('Picture'), .sheetbar button:has-text('Picture'), button:has-text('Picture ▾')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('(Sub-vendor)')"); await p.waitForTimeout(500);
+  check("a library picture can be placed on a sheet cell", (await p.$$(".simg img")).length === 1);
+  await p.keyboard.press("Delete"); await p.waitForTimeout(300);
+  check("Delete removes the selected picture from the sheet", (await p.$$(".simg")).length === 0);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
 
   // 0.5.13: the tutorial: a note per view, Back and Next through the views, × hides the notes.

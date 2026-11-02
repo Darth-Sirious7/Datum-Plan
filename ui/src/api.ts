@@ -32,7 +32,7 @@ export interface Project {
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
   subplans?: SubPlan[]; master?: string;
-  titles: Record<string, string>; sheets: SheetData[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
+  titles: Record<string, string>; sheets: SheetData[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
   name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; measured_at: string; dur: string; pct: number; work: string; cost: string;
@@ -97,7 +97,11 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string> }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[] }
+/** A picture in the plan's library (a party's logo or any image), as a data URL. */
+export interface Picture { id: number; name: string; role: string; data: string }
+/** A library picture placed on a sheet at a cell, with its size in px. */
+export interface SheetImage { pic: number; cell: string; w: number; h: number }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
 export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean][] }
