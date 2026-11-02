@@ -61,7 +61,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 
 ![Project Setup.](img/setup.png)
 
-1. **The steps:** Project, Calendar, Currency, WBS, Resources, Branding and Done. Click a step to jump to it.
+1. **The steps:** Project, Calendar, Currency, WBS, Resources, Logos and Done. Click a step to jump to it.
 2. **The fields** of the current step: here the project name, code, start date, client, manager, location and how Activity IDs are numbered (for example A1000, A1010…).
 3. **Next** goes to the next step; **Skip Setup** closes it and keeps what you entered.
 4. **Setup** in the sidebar opens it again at any time.
@@ -279,7 +279,7 @@ Every chart has two buttons at its top right. **PNG** saves it as a picture. **D
 
 **Header & footer** keeps it simple:
 
-- **Pictures at the top, on every page:** on the left, in the centre and on the right, as many as you like side by side (**+ Picture…** a logo or any picture; **+ Company logo** uses the one in **File › Options**). Each picture has its own size slider; ← and → move it along the row or to the next place, and × takes it out. The header grows to fit the tallest picture.
+- **Pictures at the top, on every page:** on the left, in the centre and on the right, as many as you like side by side (**+ Logo ▾** a logo from the plan's pictures, below; **+ Picture…** any picture file; **+ Company logo** uses the one in **File › Options**). Each picture has its own size slider; ← and → move it along the row or to the next place, and × takes it out. The header grows to fit the tallest picture.
 - **Title** (the plan's name unless you type another), a **Subtitle**, for example "Revision B · Issued for review", and the **Title size**. With pictures in the centre, the title and subtitle sit under them.
 - **At the bottom of each page**, only what you tick: the printed date (and time), the page number, the status date, the company name, a revision and your own text, such as "Confidential".
 
@@ -288,6 +288,17 @@ Nothing else is printed: no program name and no web address. **Advanced** gives 
 The **legend** lists only what the pages show: tasks, critical tasks, progress, milestones, summaries, subplans, baselines, deadlines, links and the status date, with the project's name, start, finish and status date beside them. Bars print with their baseline and deadline, as on screen.
 
 A master plan prints its subplans as on screen: expand a subplan in the Gantt and it prints expanded. **Subplans** (under What to print) can instead print them one row each, with all their tasks, or leave them out.
+
+### Pictures and logos
+
+A plan keeps its own pictures: the logos of the client, your company, the main contractor, consultants, vendors and sub-vendors, and any other image. They are saved inside the .dplan file, so a plan sent to someone else prints with the same logos.
+
+- **Project › Pictures** (or the **Logos** step of **Project Setup**) lists them. **+ Client logo…**, **+ Our company logo…**, **+ Vendor logo…**, **+ Sub-vendor logo…** and **+ Other picture…** add one; each row has its party, a name you can change and **×** to remove it.
+- **In the print header:** **+ Logo ▾** in **Header & footer** puts any of them on the left, in the centre or on the right.
+- **On a dashboard:** a **Picture** tile shows one of them.
+- **On a sheet:** **Picture ▾** places one at the selected cell. Drag it to move it from cell to cell, drag its corner to resize it, and press [[Delete]] to take it off. It prints with the sheet and goes into an exported .xlsx workbook.
+
+Removing a picture from the plan also takes it off the sheets that use it.
 
 ### The Network Diagram
 
