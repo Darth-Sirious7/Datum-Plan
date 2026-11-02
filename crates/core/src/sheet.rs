@@ -305,7 +305,7 @@ pub fn book(c: &Calc) -> Workbook {
 fn grid_names(c: &Calc, cols: &[(String, String)], f: &str) -> String {
     if !f.contains('[') { return f.to_string() }
     translate(f, |name| {
-        let Some((tb, col)) = name.strip_suffix(']').and_then(|x| x.split_once('[')).filter(|(t, x)| t.eq_ignore_ascii_case("tasks") && !x.contains(['[', '#'])) else { return Some(format!("[{name}]")).filter(|_| !name.contains('[')) };
+        let Some((tb, col)) = name.strip_suffix(']').and_then(|x| x.split_once('[')).filter(|(t, x)| t.eq_ignore_ascii_case("tasks") && !x.contains(['[', '#'])) else { return (!name.contains('[')).then(|| format!("[{name}]")) };
         if cols.iter().any(|(_, n)| n.eq_ignore_ascii_case(col.trim())) { return None }
         let key = c.key_of(col)?;
         cols.iter().find(|(k, _)| *k == key).map(|(_, n)| format!("{tb}[{n}]"))
