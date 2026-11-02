@@ -2,7 +2,7 @@
 // (cargo run -p datum-core --example dump > tests_ui/fixture.json) behind a mocked Tauri bridge.
 // Run: npm run build:ui && node tests_ui/run.cjs
 const { chromium } = require("playwright");
-const fs = require("fs"), http = require("http"), path = require("path");
+const fs = require("fs"), http = require("http"), path = require("path"), zlib = require("zlib");
 const root = path.join(__dirname, "../ui/dist"), fix = JSON.parse(fs.readFileSync(path.join(__dirname, "fixture.json")));
 const types = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".woff": "font/woff", ".html": "text/html" };
 const srv = http.createServer((q, r) => {
@@ -10,6 +10,21 @@ const srv = http.createServer((q, r) => {
   fs.readFile(f, (e, b) => { if (e) { r.writeHead(404); return r.end(); } r.writeHead(200, { "content-type": types[path.extname(f)] ?? "application/octet-stream" }); r.end(b); });
 });
 let failed = 0;
+/** Per page of a PDF from Chromium: how many text runs it draws (its own stream and the forms it uses). */
+const pdfTexts = buf => {
+  const s = buf.toString("latin1"), obj = {};
+  for (const m of s.matchAll(/(\d+) 0 obj\s*([\s\S]*?)endobj/g)) obj[m[1]] = m[2];
+  const refs = (t, key) => [...((t.match(new RegExp(`/${key}\\s*(<<[^>]*>>|\\[[^\\]]*\\]|\\d+ 0 R)`)) || [])[1] ?? "").matchAll(/(\d+) 0 R/g)].map(m => m[1]);
+  const text = (id, seen) => {
+    if (seen.has(id) || !obj[id]) return 0; seen.add(id);
+    const o = obj[id], head = o.split("stream")[0]; let n = 0;
+    if (o.includes("stream")) { const d = Buffer.from(o.slice(o.indexOf("stream") + 6, o.lastIndexOf("endstream")).replace(/^\r?\n/, ""), "latin1"); try { n += (zlib.inflateSync(d).toString("latin1").match(/T[jJ]\b/g) || []).length; } catch {} }
+    for (const k of ["Contents", "Resources", "XObject"]) for (const r of refs(head, k)) n += text(r, seen);
+    return n;
+  };
+  const walk = id => (/\/Type\s*\/Pages/.test(obj[id]) ? refs(obj[id], "Kids").flatMap(walk) : [id]);
+  return walk((s.match(/\/Pages\s+(\d+) 0 R/) || [])[1]).map(id => text(id, new Set()));
+};
 const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${ok ? "" : "  " + info}`); if (!ok) failed++; };
 
 (async () => {
@@ -494,6 +509,73 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Tell Me shows the window behind it, dimmed", /rgba\(.*0\.\d+\)/.test(ovBg), ovBg);
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
 
+  // 0.5.16: dialogs: Escape closes them after a click on their text; the tutorial notes never cover their buttons.
+  await p.click(".tabs > button:text-is('Project')"); await p.click(".ribbon button:has-text('Project Information')"); await p.waitForTimeout(250);
+  await p.click(".ov .dlg header", { position: { x: 20, y: 8 } }); await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+  check("Escape closes a dialog after a click on its title", !(await p.$(".ov .dlg")));
+  if (await p.$(".ov .dlg")) await p.click(".ov .dlg header .x");
+  await p.click(".tabs > button:text-is('Help')"); await p.click(".ribbon button:has-text('Tutorial Notes')"); await p.waitForTimeout(150);
+  await p.click(".gbody .row:nth-child(3) .c:nth-child(3)"); await p.click(".tabs > button:text-is('Task')"); await p.click(".ribbon button:has-text('Information')"); await p.waitForTimeout(250);
+  check("the tutorial notes stay under a dialog's buttons", await p.evaluate(() => [(document.querySelector(".tour").style.cssText += ";top:0;max-height:none;width:60%")][0] && [...document.querySelectorAll(".ov .dlg footer .btn")].every(b => { const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); })));
+  await p.evaluate(() => document.querySelector(".ov .dlg header .x")?.click()); await p.waitForTimeout(100); if (await p.$(".tour .x")) await p.click(".tour .x");
+  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+
+  // 0.5.16: printing, hardened. Save as PDF is caught when the shell would print, and printed there.
+  let job = null;
+  await p.exposeFunction("__pdfNow", async () => {
+    await p.emulateMedia({ media: "print" });
+    const dom = await p.evaluate(() => ({ canvases: [...document.querySelectorAll("#printroot canvas")].map(c => { if (!c.width) return false; const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 16) if (d[i]) return true; return false; }),
+      wide: [...document.querySelectorAll("#printroot .pflow table")].filter(t => t.getBoundingClientRect().right > document.querySelector("#printroot .pflow").getBoundingClientRect().right + 2).length,
+      bg: getComputedStyle(document.querySelector("#printroot .page") ?? document.body).backgroundColor }));
+    await p.emulateMedia({ media: null });
+    job = { ...dom, texts: pdfTexts(await p.pdf({ preferCSSPageSize: true, printBackground: true })) };
+    return null;
+  });
+  await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => (c === "save_pdf" ? window.__pdfNow() : inv(c, a)); });
+  const printView = async (v, set) => {
+    await p.click(`.side button[title="${v}"]`); await p.waitForTimeout(400);
+    await p.click(".tabs .file"); await p.waitForTimeout(150); await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(500);
+    await p.click(".pset button:has-text('Reset to defaults')"); await p.waitForTimeout(150);
+    if (set) await set();
+    job = null; await p.click(".pbtns button:has-text('Save as PDF')");
+    for (let i = 0; i < 100 && !job; i++) await p.waitForTimeout(100);
+    await p.click(".bs aside .back"); await p.waitForTimeout(150);
+    return job ?? { texts: [], canvases: [] };
+  };
+  const num = async (label, v) => { await p.fill(`.ptab label:has-text('${label}') input`, v); await p.press(`.ptab label:has-text('${label}') input`, "Tab"); await p.waitForTimeout(200); };
+  // A Gantt shrunk to one page wide that runs to two pages: page 1 lost its chart and table (only the header printed).
+  const tall = await printView("Gantt", async () => { await p.click(".pset .seg button:has-text('View')"); await num("Row height", "40"); });
+  check("a shrunk Gantt over several pages prints the chart on every page, page 1 too", tall.texts.length > 1 && tall.texts.every(n => n > 150), JSON.stringify(tall.texts));
+  const trk = await printView("Tracking", async () => { await p.click(".pset .seg button:has-text('View')"); await num("Row height", "40"); });
+  check("…and so does the Tracking Gantt", trk.texts.length > 1 && trk.texts.every(n => n > 150), JSON.stringify(trk.texts));
+  // The legend on the last page only: a full last page kept no room for it, cutting off the legend and the footer.
+  await p.click(".tabs .file"); await p.waitForTimeout(150); await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(500);
+  await p.click(".pset .seg button:has-text('Page')"); await p.click(".ptab input[type=radio]"); await p.click(".pset .seg button:has-text('Legend')"); await p.click(".ptab .seg button:has-text('Last page')");
+  await p.click(".pset .seg button:has-text('View')"); let cutAt = [];
+  for (const r of ["26", "27"]) { await num("Row height", r); cutAt.push(await p.evaluate(() => [...document.querySelectorAll(".pprev .ppage")].filter(pg => { const b = pg.querySelector(".pin").getBoundingClientRect().bottom; return [...pg.querySelector(".pin").children].some(e => e.getBoundingClientRect().bottom > b + 1); }).length)); }
+  check("a legend on the last page only never pushes the footer off the page", cutAt.every(n => n === 0), JSON.stringify(cutAt));
+  await p.selectOption(".pset .prow label:has-text('Orientation') select", "0"); await p.click(".pset .seg button:has-text('Margins')");
+  for (const m of ["Right", "Left"]) { await p.fill(`.ptab label:has-text('${m}') input`, "45"); await p.press(`.ptab label:has-text('${m}') input`, "Tab"); } await p.waitForTimeout(200);
+  const legFit = await p.$$eval(".pprev .plegend", ls => ls.map(l => { const r = document.createRange(); r.selectNodeContents(l.querySelector(".plt")); const t = r.getBoundingClientRect(), b = l.getBoundingClientRect(); return t.top >= b.top - 1 && t.bottom <= b.bottom + 1; }));
+  check("on portrait paper the legend's text stays inside its box", legFit.length > 0 && legFit.every(Boolean), JSON.stringify(legFit));
+  await p.click(".pset button:has-text('Reset to defaults')"); await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  // Reports: a long table in a panel moved whole to page 2, leaving page 1 nearly blank; charts printed empty; grey paper.
+  const upd = await printView("Update");
+  check("a report's long table starts on page 1 (page 1 is not left blank)", upd.texts.length >= 1 && upd.texts[0] > 300, JSON.stringify(upd.texts));
+  const prog = await printView("Progress");
+  check("printed reports draw their charts", prog.canvases.length >= 2 && prog.canvases.every(Boolean), JSON.stringify(prog.canvases));
+  check("printed reports are on white paper", prog.bg === "rgb(255, 255, 255)", prog.bg);
+  const dash = await printView("Dashboard");
+  check("side-by-side tables on a printed dashboard fit the paper", dash.wide === 0 && dash.canvases.every(Boolean), JSON.stringify(dash));
+  // Prints show what is on screen: the opened report, the chosen weeks.
+  await p.click('.side button[title="Reports"]'); await p.waitForTimeout(300); await (await p.$$(".tiles .tile"))[3].click(); await p.waitForTimeout(300);
+  const rname = await p.textContent(".content .page h1"); await p.keyboard.press("Control+p"); await p.waitForTimeout(600);
+  check("Reports prints the report that is open, not the list", (await p.textContent(".pprev h1")) === rname, `${rname} / ${await p.textContent(".pprev h1")}`);
+  await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  await p.click('.side button[title="Look-ahead"]'); await p.waitForTimeout(300); await p.click(".seg button:has-text('6 weeks')"); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.__calls.length = 0; }); await p.keyboard.press("Control+p"); await p.waitForTimeout(600);
+  check("the printed look-ahead covers the weeks chosen on screen", await p.evaluate(() => window.__calls.filter(c => c[0] === "lookahead").every(c => c[1].weeks === 6)));
+  await p.click(".bs aside .back"); await p.waitForTimeout(150); await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

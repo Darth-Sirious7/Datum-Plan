@@ -363,7 +363,8 @@ tr.link:hover td { background: var(--pale); }
   html, body, #app, .app, .work, .content, .page { height: auto !important; overflow: visible !important; background: var(--bg2); }
   .app { display: block; }
   .page { padding: 0; }
-  .panel, .kpi { break-inside: avoid; }
+  /* a panel holding a table may break: kept whole, a long table left page 1 nearly blank */
+  .panel:not(:has(table)), .kpi { break-inside: avoid; }
 }
 
 /* ---------- 0.3.1: spreadsheet-style grid ---------- */
@@ -563,7 +564,8 @@ tr.behind td { background: var(--err-bg); }
 .pzoom .muted { color: #F3F5F8; }
 .pwrap { position: relative; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
 .pwrap small { position: absolute; bottom: -17px; left: 0; color: #F3F5F8; font-size: 11px; }
-.ppage { position: relative; background: #fff; color: #1B2733; overflow: hidden; }
+/* contain: a printed page is one piece: the scaled-down .pin inside is never split across sheets (a shrunk 2–3 page print lost page 1's chart). */
+.ppage { position: relative; background: #fff; color: #1B2733; overflow: hidden; contain: strict; }
 .pin { position: absolute; transform-origin: 0 0; display: flex; flex-direction: column; gap: 6px; }
 .phead, .pfoot { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; font-size: 11px; color: #33404F; }
 .phead { border-bottom: 1px solid #C9CFD8; padding-bottom: 4px; font-size: 13px; }
@@ -573,7 +575,9 @@ tr.behind td { background: var(--err-bg); }
 .ps0, .ps1, .ps2 { display: flex; gap: 8px; align-items: center; overflow: hidden; }
 .ps1 { justify-content: center; } .ps2 { justify-content: flex-end; }
 .plegend { display: flex; gap: 16px; align-items: center; border: 1px solid #C9CFD8; padding: 4px 8px; font-size: 10.5px; }
-.plt { flex: 1; color: #33404F; }
+.plt { flex: 1; min-width: 190px; color: #33404F; }
+/* the marks shrink on narrow paper, so the legend text keeps its room (it ran over the rows) */
+.plegend > svg { flex: 0 1 auto; min-width: 0; height: auto; max-height: 44px; }
 .psvg { flex: none; }
 #printroot { display: none; }
 @media print {
@@ -646,7 +650,10 @@ tr.behind td { background: var(--err-bg); }
 .pflowbody .page { padding: 0; height: auto; overflow: visible; }
 .pflowbody .ptools, .pflowbody .noprint { display: none !important; }
 .pflowprev { background: #fff; height: auto !important; }
-@media print { html.printing #printroot.flow { background: #fff; } html.printing #printroot.flow .pflow { width: 100% !important; } }
+/* A report's printed copy is laid out off screen first, so its charts can measure and draw before the print. */
+html.printing #printroot.flow { display: block; position: fixed; left: -30000px; top: 0; visibility: hidden; pointer-events: none; }
+@media print { html.printing #printroot.flow { position: static; visibility: visible; background: #fff; } html.printing #printroot.flow .pflow { width: 100% !important; } html.printing #printroot .page { background: #fff; }
+  .dtile .tbl, .cols .panel .tbl { table-layout: fixed; width: 100%; } :is(.dtile, .cols .panel) .tbl :is(th, td) { overflow-wrap: anywhere; white-space: normal; } }
 .stackr { display: flex; flex-direction: column; gap: 4px; }
 .sfrozen { position: sticky; z-index: 4; }
 .sfrozen .row { position: absolute; left: 0; display: flex; border-bottom: 1px solid var(--line2); background: var(--bg2); }
@@ -862,7 +869,7 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .ptab input.wide { width: 100%; }
 /* Tutorial notes (a plan's ui.tour): one card per view, bottom right. */
 .content { position: relative; }
-.tour { position: absolute; right: 16px; bottom: 16px; z-index: 30; width: min(400px, calc(100% - 32px)); max-height: min(60%, 460px); display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--blue, #2F6FCF); border-radius: 8px; box-shadow: 0 8px 28px rgba(15, 30, 60, 0.18); font-size: 12.5px; line-height: 1.5; }
+.tour { position: absolute; right: 16px; bottom: 16px; z-index: 15; /* under dialogs (20): the notes covered their buttons */ width: min(400px, calc(100% - 32px)); max-height: min(60%, 460px); display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--blue, #2F6FCF); border-radius: 8px; box-shadow: 0 8px 28px rgba(15, 30, 60, 0.18); font-size: 12.5px; line-height: 1.5; }
 .tour header { display: flex; align-items: center; gap: 8px; padding: 9px 12px 6px; }
 .tour header b { flex: 1; color: var(--navy); font-size: 13px; }
 .tour header .x { border: 0; background: none; font-size: 17px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px; }

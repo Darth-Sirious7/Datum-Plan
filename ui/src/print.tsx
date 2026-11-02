@@ -55,7 +55,7 @@ const load = () => {
   if (saved.legendText === "&[Project]\nStatus date: &[Status]") delete saved.legendText;
   setPs({ ...defaults(), ...saved });
 };
-const save = () => { if (JSON.stringify(P().ui?.page ?? {}) !== JSON.stringify(ps)) act({ Ui: { key: "page", value: JSON.parse(JSON.stringify(ps)) } }); };
+const save = async () => { if (JSON.stringify(P().ui?.page ?? {}) !== JSON.stringify(ps)) await act({ Ui: { key: "page", value: JSON.parse(JSON.stringify(ps)) } }); };
 
 const codes = (t: string, page: number, pages: number) => {
   const p = P(), s = out()!.summary;
@@ -155,11 +155,12 @@ const layout = createMemo(() => {
   const RH = ps.rowH, ni = nameAt >= 0 ? colsP[nameAt] : null;
   const rowsH = g.rows.map(r => (ps.wrap && ni && r.name.length * fs * 0.55 + r.lvl * 10 > ni.w - 8 ? Math.round(RH * 1.75) : RH));
   const room = H - hH - fH - (ps.legend === "every" ? legH : 0) - SCALE_H - 6, pages: Page[] = [];
-  for (let r = 0; r < Math.max(1, g.rows.length);) {
-    let e = r, h = 0; while (e < g.rows.length && (h + rowsH[e] <= room || e === r)) h += rowsH[e++];
-    for (const x of across) pages.push({ rows: [r, Math.max(e, r + 1)], x, n: pages.length + 1 });
-    r = Math.max(e, r + 1);
-  }
+  const fill = (r: number, max: number) => { let e = r, h = 0; while (e < g.rows.length && (h + rowsH[e] <= max || e === r)) h += rowsH[e++]; return Math.max(e, r + 1); }, chunks: [number, number][] = [];
+  for (let r = 0; r < Math.max(1, g.rows.length);) { const e = fill(r, room); chunks.push([r, e]); r = e; }
+  // A legend on the last page only: that page keeps room for it (a full last page cut off the legend and footer).
+  const [r1, e1] = chunks[chunks.length - 1];
+  if (ps.legend === "last" && rowsH.slice(r1, e1).reduce((a, b) => a + b, 0) > room - legH) { const m = fill(r1, room - legH); if (m < e1) chunks.splice(-1, 1, [r1, m], [m, e1]); }
+  for (const [r, e] of chunks) for (const x of across) pages.push({ rows: [r, e], x, n: pages.length + 1 });
   return { pw, ph, k, W, H, headH: hH, footH: fH, legH, colsP, lefts, TW, RW, CW, pd, d0, d1, pages, rows: g.rows, rowsH, fs, RH, idw };
 });
 /** Task notes for the last pages, when "Print notes" is on. */
@@ -279,7 +280,7 @@ const GanttLegend = () => {
   ];
   const per = Math.ceil(items.length / 2), W = 132;
   return (
-    <svg width={per * W} height="44" font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
+    <svg width={per * W} height="44" viewBox={`0 0 ${per * W} 44`} font-size="9.5" fill="#1B2733" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
       <For each={items}>{([t, mark], k) => <g transform={`translate(${Math.floor(k() / 2) * W + 4},${(k() % 2) * 20 + 5})`}>{mark}<text x="32" y="10">{t}</text></g>}</For>
     </svg>);
 };
@@ -459,9 +460,10 @@ const [printing, setPrinting] = createSignal(false);
 let endJob: (() => void) | null = null;
 /** Lays the pages out for the printer and keeps the page setup (paper, orientation, margins) in
  *  place until the job has finished: the print window reads it after `window.print()` returns. */
-const startJob = () => {
+const startJob = async () => {
   endJob?.();
-  save();
+  // The page setup is kept with the plan first: its answer would otherwise rebuild the pages while they print.
+  await save();
   const G = pkind() === "gantt" ? layout() : geom(); if (!G) return null;
   setPrinting(true);
   const css = document.createElement("style"), flow = pkind() === "flow", m = ps.margins;
@@ -472,10 +474,16 @@ const startJob = () => {
   endJob = end;
   return { G, flow, end };
 };
-const settle = (flow: boolean) => new Promise(r => setTimeout(r, flow ? 900 : 250));
+/** Waits until the pages can print: reports drawn, fonts loaded, pictures decoded, then laid out and painted (two frames). */
+const settle = async (flow: boolean) => {
+  await new Promise(r => setTimeout(r, flow ? 900 : 100));
+  await document.fonts?.ready;
+  await Promise.all([...document.querySelectorAll<HTMLImageElement>("#printroot img")].map(i => i.decode().catch(() => {})));
+  await Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))), new Promise(r => setTimeout(r, 300))]);
+};
 /** Print…: the print window, for a printer (or its own Save as PDF). */
 export const printNow = async () => {
-  const job = startJob(); if (!job) return;
+  const job = await startJob(); if (!job) return;
   await settle(job.flow);
   window.addEventListener("afterprint", job.end);
   window.print();
@@ -483,7 +491,7 @@ export const printNow = async () => {
 /** Save as PDF: the pages written straight to a file at the paper size, no browser header or footer
  *  (Windows); where that is not available, the print window opens instead. */
 export const savePdf = async () => {
-  const job = startJob(); if (!job) return;
+  const job = await startJob(); if (!job) return;
   await settle(job.flow);
   const margins = job.flow ? [...ps.margins] : [0, 0, 0, 0];
   try {

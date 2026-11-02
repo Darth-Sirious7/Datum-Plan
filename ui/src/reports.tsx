@@ -152,10 +152,11 @@ const ProjectDashboard = () => {
 };
 
 // ---------- S-curves ----------
+// The choices on these pages live outside them: the printed copy is another instance and must show the same.
+const [unitPick, setUnit] = createSignal<string | null>(null), [howPick, setHow] = createSignal<string | null>(null);
 export const SCurves = () => {
   const s = () => out()!.summary;
-  const [unit, setUnit] = createSignal(s().f - s().s > 240 ? "month" : "week");
-  const [how, setHow] = createSignal(P().periods.weight || "duration");
+  const unit = () => unitPick() ?? (s().f - s().s > 240 ? "month" : "week"), how = () => howPick() ?? (P().periods.weight || "duration");
   const [phases] = useRows(() => "top", () => q(["name"], [r("level", "equals", "1"), r("summary", "equals", "Yes")]));
   const [main] = createResource(() => [tick(), unit(), how()], () => call<SCurve>("scurve", { unit: unit(), how: how(), scope: null }));
   const [each] = createResource(() => [tick(), unit(), how(), phases()?.rows.length], async () => Promise.all((phases()?.rows ?? []).slice(0, 12).map(x => call<SCurve>("scurve", { unit: unit(), how: how(), scope: x.uid }))));
@@ -189,10 +190,9 @@ const shrink = (file: File): Promise<string> => new Promise(ok => {
   img.onload = () => { const k = Math.min(1, 1400 / Math.max(img.width, img.height)); const cv = document.createElement("canvas"); cv.width = img.width * k; cv.height = img.height * k; cv.getContext("2d")!.drawImage(img, 0, 0, cv.width, cv.height); ok(cv.toDataURL("image/jpeg", 0.82)); URL.revokeObjectURL(img.src); };
   img.src = URL.createObjectURL(file);
 });
+const [kind, setKind] = createSignal("week"), [end, setEnd] = createSignal<number | null>(null);
 export const Progress = () => {
-  const [kind, setKind] = createSignal("week");
   const [ends] = createResource(() => [tick(), kind()], () => call<number[]>("periods", { kind: kind() }));
-  const [end, setEnd] = createSignal<number | null>(null);
   const [rep] = createResource(() => [tick(), kind(), end()], () => call<PeriodReport>("period_report", { kind: kind(), end: end() }));
   const [sc] = createResource(() => [tick(), kind(), P().periods.weight], () => call<SCurve>("scurve", { unit: kind(), how: P().periods.weight, scope: null }));
   const blank = (): PeriodNote => ({ kind: kind(), end: rep() ? iso(rep()!.to) : null, summary: "", progress: "", issues: "", actions: "", look_ahead: "", photos: [] });
@@ -280,8 +280,8 @@ const REPORTS: [string, string, string][] = [
   ["milestones", "Milestone Report", "Every milestone with baseline and variance."],
   ["trend", "Trend (Snapshots)", "Finish date, complete and cost across stored snapshots."],
 ];
+const [pick, setPick] = createSignal<string | null>(null);
 export const Reports = () => {
-  const [pick, setPick] = createSignal<string | null>(null);
   return (
     <Show when={pick()} fallback={
       <section class="page"><div class="ptools"><h1>Reports <Help k="reports" /></h1></div>

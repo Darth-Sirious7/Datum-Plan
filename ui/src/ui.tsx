@@ -66,6 +66,9 @@ export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element
   };
   let el!: HTMLDivElement;
   onMount(() => ((el.querySelector("input:not([type=checkbox]),textarea") ?? el.querySelector(".btn.pri") ?? el.querySelector("footer .btn")) as HTMLElement | null)?.focus());
+  // Escape also closes the top dialog when the focus has left it (a click on its text moves the focus to the page).
+  const away = (e: KeyboardEvent) => { if (e.key === "Escape" && !(e.target as Element)?.closest?.(".ov") && el.parentElement === [...document.querySelectorAll(".ov")].pop()) closeDialog(); };
+  document.addEventListener("keydown", away); onCleanup(() => document.removeEventListener("keydown", away));
   return (
     <div class="ov" onKeyDown={key}>
       <div class="dlg" classList={{ wide: p.wide }} ref={el}>

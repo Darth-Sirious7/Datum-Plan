@@ -11,9 +11,9 @@ import { label } from "./reports";
 import { Seg, Dialog } from "./ui";
 
 // ---------- Manpower ----------
+// The choices live outside the pages so that their printed copies show the same.
+const [unit, setUnit] = createSignal("week"), [trade, setTrade] = createSignal("All trades");
 export const Manpower = () => {
-  const [unit, setUnit] = createSignal("week");
-  const [trade, setTrade] = createSignal("All trades");
   const [m] = createResource(() => [tick(), unit()], () => call<MP>("manpower", { unit: unit() }));
   const t = () => m()?.trades.find(x => x.name === trade()) ?? m()?.trades[0];
   const r1 = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
@@ -37,8 +37,8 @@ export const Manpower = () => {
 // ---------- Look-ahead and constraint log ----------
 const KINDS = ["Material", "Drawing or information", "Permit", "Access", "Labour", "Equipment", "Previous work", "Other"];
 
+const [weeks, setWeeks] = createSignal("3");
 export const Lookahead = () => {
-  const [weeks, setWeeks] = createSignal("3");
   const [pick, setPick] = createSignal(0);
   const [la] = createResource(() => [tick(), weeks()], () => call<LA>("lookahead", { weeks: +weeks() }));
   const name = (uid: number) => grid().rows.find(r => r.uid === uid)?.name ?? la()?.rows.find(r => r.uid === uid)?.name ?? `Task ${uid}`;
