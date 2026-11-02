@@ -1,6 +1,6 @@
 [package]
 name = "datum-cli"
-version = "0.5.15"
+version = "0.5.16"
 edition = "2021"
 license = "MIT"
 description = "Datum Plan on the command line: inspect, schedule, change and export plans, and an MCP server for AI assistants."

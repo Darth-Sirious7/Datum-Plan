@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.16 — 2026-11-02
+
+Logos and pictures in the plan, a fix for Save as PDF, and a full hardening pass.
+
+- **Pictures and logos are saved in the plan.** **Project › Pictures** (or the **Logos** step of Project Setup) keeps the logos of the client, your company, the main contractor, consultants, vendors and sub-vendors, and any other picture, inside the .dplan file.
+  - **Print header:** **+ Logo ▾** puts any of them on the left, in the centre or on the right.
+  - **Dashboards:** a new **Picture** tile.
+  - **Sheets:** **Picture ▾** places one at a cell; drag to move, drag the corner to resize, Delete to remove. It prints with the sheet and goes into an exported .xlsx workbook.
+- **Fixed: Save as PDF could give a blank first page** (header and footer only) on prints of two or more pages shrunk to fit the paper. Each printed page is now kept whole, and printing waits for fonts and pictures.
+- **Printing, also fixed:**
+  - a long table in a report no longer leaves page 1 nearly empty;
+  - charts in printed reports (Progress, Dashboard, S-Curves) are drawn;
+  - printed reports are on white paper, and side-by-side tables fit the page;
+  - "Legend on the last page only" never pushes the footer off the page, and on portrait paper the legend's text stays in its box;
+  - the Reports view prints the open report, and the look-ahead prints the weeks you chose.
+- **Fixed in the window:** Escape closes a dialog after a click on its title; the tutorial notes no longer cover a dialog's buttons.
+- **Fixed in the engine** (each with a test):
+  - XER export keeps finish milestones on their day and keeps deadlines;
+  - XML and XER export of a master plan keep the dates held by other plans;
+  - odd numbers in resource rates and limits can no longer make a file that will not open;
+  - two-digit years ("5 Nov 26") read as 2026, and dates stay between 1800 and 2600;
+  - recurring tasks and dates at the end of the calendar stay in order;
+  - numbers are saved exactly;
+  - milestones constrained to their own day no longer show −1 day float;
+  - Mark on Track marks unstarted work; Actual Duration can be typed; % Complete above 100 is refused;
+  - remaining duration on elapsed-day tasks gives the right %, and split pieces are drawn in order;
+  - Activity ID numbering never overflows;
+  - sheet formulas accept the task sheet's column names (`Tasks[Task Name]`, `Tasks[Total Slack]`).
+- **Faster on big plans:** Update Project, Mark on Track, filling % Complete down, levelling and XER, XML, PMXML and MPX exchange.
+- **Public text:** the changelog, docs and code comments describe Datum Plan's own design and name no other products. Product and file-format names are trademarks of their owners and are used only to describe file compatibility.
+- The guide has a new section, "Pictures and logos", in English and Chinese.
+
 ## 0.5.15 — 2026-11-01
 
 Sharper charts, and any chart in Datum Plot.
