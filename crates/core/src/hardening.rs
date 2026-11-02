@@ -457,3 +457,188 @@ fn hostile_import_files_are_refused_not_crashing() {
     assert_eq!(t.headers, vec!["Name".to_string()]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// Dates typed with a two-digit year are this century's, whatever the display format; dates outside
+// the calendar's range (1800 to 2600) are refused instead of making a plan span millennia.
+#[test]
+fn typed_dates_have_sane_years() {
+    let d = |y, m, day| NaiveDate::from_ymd_opt(y, m, day).unwrap();
+    for f in ["%d-%b-%y", "%Y-%m-%d", "%d/%m/%Y"] {
+        assert_eq!(parse::date_in("05/11/26", f), Ok(d(2026, 11, 5)), "{f}");
+        assert_eq!(parse::date_in("5 Nov 26", f), Ok(d(2026, 11, 5)), "{f}");
+        assert_eq!(parse::date_in("05/11/2026", f), Ok(d(2026, 11, 5)), "{f}");
+    }
+    assert_eq!(parse::date_in("1/2/99", "%m/%d/%Y"), Ok(d(1999, 1, 2)));
+    let mut doc = Doc::new(sample());
+    let uid = doc.p.tasks[1].uid;
+    for (f, v) in [("start", "9999-12-31"), ("astart", "0001-01-01"), ("afinish", "2601-01-01"), ("deadline", "1799-12-31"), ("cdate", "+262143-12-31")] {
+        assert!(doc.apply(Op::Set { uid, field: f.into(), value: v.into() }, "%Y-%m-%d").is_err(), "{f} = {v} accepted");
+    }
+    assert!(doc.apply(Op::UpdateProject { through: "9999-12-31".into(), reschedule: true }, "%Y-%m-%d").is_err());
+}
+
+// A number that is not finite would be saved as null, and the file could not be opened again.
+#[test]
+fn no_number_makes_an_unopenable_file() {
+    let mut doc = Doc::new(sample());
+    let r = doc.p.resource("Crane");
+    for (f, v) in [("rate", "inf"), ("max", "-inf"), ("per_use", "NaN"), ("ovt", "1e308")] {
+        assert!(doc.apply(Op::ResSet { uid: r, field: f.into(), value: v.into() }, "%d-%b-%y").is_err(), "{f} = {v} accepted");
+    }
+    let uid = doc.p.tasks[1].uid;
+    assert!(doc.apply(Op::Set { uid, field: "fixedcost".into(), value: "9".repeat(400) }, "%d-%b-%y").is_err());
+    // A huge rate in a file: the baseline cost overflows, and the plan still saves and opens.
+    let k = doc.p.res_idx(r).unwrap();
+    doc.p.resources[k].rate = f64::MAX;
+    doc.p.tasks[1].res = vec![Assign { res: r, units: 1.0, table: 0 }];
+    doc.apply(Op::Baseline { uids: vec![], clear: false, n: 0 }, "%d-%b-%y").unwrap();
+    doc.apply(Op::Snapshot { label: "x".into(), comment: String::new() }, "%d-%b-%y").unwrap();
+    assert!(Project::from_json(&doc.json()).is_ok(), "the saved plan does not open");
+    // Availability is never negative or beyond any workforce.
+    doc.apply(Op::ResJson { uid: r, field: "avail".into(), value: serde_json::json!([{ "from": null, "to": null, "max": -1.0 }, { "from": null, "to": null, "max": 1e300 }]) }, "%d-%b-%y").unwrap();
+    assert_eq!(doc.p.resources[k].avail.iter().map(|a| a.max).collect::<Vec<_>>(), vec![0.0, 1e6]);
+}
+
+// Saving and opening a plan gives back the same plan, to the last digit of every fraction.
+#[test]
+fn save_and_open_are_exact() {
+    let mut doc = Doc::new(sample());
+    doc.p.snapshots.push(Snapshot { pct: 20.928139863735698, cost: 1234.5678901234567, ..Default::default() });
+    let j = doc.json();
+    let q = Project::from_json(&j).unwrap();
+    assert_eq!(q, doc.p);
+    assert_eq!(Doc::new(q).json(), j);
+}
+
+// Recurring tasks far apart or far ahead are refused, not a crash or dates past the calendar.
+#[test]
+fn recurring_tasks_stay_in_range() {
+    for (every, interval, count, start) in [("year", u32::MAX, 7, "2026-11-05"), ("day", u32::MAX, 500, "2026-11-05"), ("month", u32::MAX, 3, "2026-11-05"), ("week", 1, 7, "2600-12-01")] {
+        let mut doc = Doc::new(sample());
+        let op = Op::Recurring { at: 0, name: "Meet".into(), dur: "1".into(), every: every.into(), interval, count, start: start.into() };
+        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| doc.apply(op, "%Y-%m-%d")));
+        assert!(matches!(r, Ok(Err(_))), "{every} x{interval}: {r:?}");
+    }
+}
+
+// Every field the task sheet offers for editing takes a value; % complete stays within 0 to 100.
+#[test]
+fn editable_fields_take_values() {
+    let mut doc = Doc::new(sample());
+    let i = (0..doc.p.tasks.len()).find(|&i| !doc.p.is_summary(i) && doc.p.tasks[i].dur >= 960).unwrap();
+    let uid = doc.p.tasks[i].uid;
+    doc.apply(Op::Set { uid, field: "adur".into(), value: format!("{}m", doc.p.tasks[i].dur / 2) }, "%d-%b-%y").unwrap();
+    assert_eq!(doc.p.tasks[i].pct, 50);
+    assert!(doc.apply(Op::Set { uid, field: "pct".into(), value: "150".into() }, "%d-%b-%y").is_err());
+    assert_eq!(doc.p.tasks[i].pct, 50);
+}
+
+// Update Project and Mark on Track take one schedule, not one per task; levelling settles every
+// person on a day in one schedule, not one per person and day.
+#[test]
+fn progress_and_levelling_scale() {
+    let plan = |n: usize| {
+        let mut p = Project::new("L", start());
+        for k in 0..5 { p.resource(&format!("R{k}")); }
+        for i in 0..n {
+            let mut t = p.new_task(&format!("T{i}"), 0, 960);
+            t.res = vec![Assign { res: 1 + i as u32 % 5, units: 1.0, table: 0 }];
+            p.tasks.push(t);
+        }
+        Doc::new(p)
+    };
+    let mut d = plan(300);
+    let t = Instant::now();
+    d.apply(Op::Level { uids: vec![], clear: false }, "%Y-%m-%d").unwrap();
+    let level = t.elapsed();
+    let s = schedule(&d.p).unwrap();
+    assert!(s.finish - s.start > 150 * cal::DAY, "each person works one task at a time");
+    let mut d = plan(1000);
+    let t = Instant::now();
+    d.apply(Op::UpdateProject { through: "2026-12-04".into(), reschedule: false }, "%Y-%m-%d").unwrap();
+    let mut e = plan(1000);
+    e.p.status = NaiveDate::from_ymd_opt(2026, 11, 2);
+    e.apply(Op::MarkOnTrack { uids: e.p.tasks.iter().map(|t| t.uid).collect() }, "%Y-%m-%d").unwrap();
+    let update = t.elapsed();
+    assert_eq!(d.p.tasks.iter().filter(|t| t.pct == 100).count(), 1000);
+    assert_eq!(e.p.tasks.iter().filter(|t| t.pct == 50 && t.act_start == e.p.status).count(), 1000, "{:?}", (e.p.tasks[0].pct, e.p.tasks[0].act_start));
+    assert!(level.as_secs_f64() < 3.0 && update.as_secs_f64() < 1.0, "level {level:?}, update {update:?}");
+}
+
+// Mark on Track sets the progress the plan expects at the status date, also on tasks not yet
+// started (the status date holds their remaining work back, which is not "on track").
+#[test]
+fn mark_on_track_marks_unstarted_work() {
+    let mut p = Project::new("M", start());
+    for i in 0..2 { let t = p.new_task(&format!("T{i}"), 0, 4 * 480); p.tasks.push(t); }
+    p.status = NaiveDate::from_ymd_opt(2026, 11, 3);
+    let mut d = Doc::new(p);
+    d.apply(Op::MarkOnTrack { uids: vec![d.p.tasks[0].uid] }, "%Y-%m-%d").unwrap();
+    assert_eq!((d.p.tasks[0].pct, d.p.tasks[0].act_start), (50, Some(start())));
+    assert_eq!(d.p.tasks[1].pct, 0);
+}
+
+// Filling % complete or task mode down a long range takes one schedule, not one per cell.
+#[test]
+fn filling_progress_down_a_range_is_fast() {
+    let mut p = Project::new("F", start());
+    for i in 0..3000 {
+        let mut t = p.new_task(&format!("T{i}"), 0, 480);
+        if i > 0 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false }) }
+        p.tasks.push(t);
+    }
+    let mut d = Doc::new(p);
+    let uids: Vec<u32> = d.p.tasks.iter().map(|t| t.uid).take(1500).collect();
+    let t = Instant::now();
+    d.apply(Op::Cells { cells: uids.iter().map(|&u| (u, "pct".into(), "100".into())).collect() }, "%Y-%m-%d").unwrap();
+    d.apply(Op::Cells { cells: uids.iter().skip(1000).map(|&u| (u, "mode".into(), "Manual".into())).collect() }, "%Y-%m-%d").unwrap();
+    let s = schedule(&d.p).unwrap();
+    assert!(d.p.tasks[..1500].iter().enumerate().all(|(i, t)| t.pct == 100 && t.act_start == Some(cal::date_of(s.es[i])) && t.act_finish == Some(cal::date_of(s.ef[i] - 1))));
+    assert!(t.elapsed().as_secs_f64() < 3.0, "{:?}", t.elapsed());
+}
+
+// At the end of the calendar's range a task never starts after it finishes.
+#[test]
+fn dates_at_the_end_of_the_calendar_stay_in_order() {
+    let mut p = Project::new("E", NaiveDate::from_ymd_opt(2600, 12, 31).unwrap());
+    for i in 0..3 { let t = p.new_task(&format!("T{i}"), 0, 5 * 480); p.tasks.push(t); }
+    p.tasks[1].act_start = Some(cal::hi());
+    p.tasks[1].pct = 50;
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2400, pct: false }];
+    let s = schedule(&p).unwrap();
+    assert!((0..3).all(|i| s.es[i] <= s.ef[i] && s.ls[i] <= s.lf[i]), "{:?}", (&s.es, &s.ef));
+    let c = cal::WorkCal::new(&p.calendars[0]);
+    let t = cal::at(cal::hi()) + 2 * cal::DAY;
+    assert!(c.add(t, 60) >= t && c.next_start(t) >= t && c.sub(-t, 60) <= -t);
+}
+
+// Activity IDs at the top of the number range: no overflow, and copies get no duplicate ID.
+#[test]
+fn activity_ids_never_overflow() {
+    let mut d = Doc::new(sample());
+    let uid = d.p.tasks[1].uid;
+    d.apply(Op::Set { uid, field: "code".into(), value: format!("{}{}", d.p.id_prefix, u32::MAX) }, "%d-%b-%y").unwrap();
+    d.apply(Op::Insert { at: 0, name: "x".into(), ms: false }, "%d-%b-%y").unwrap();
+    let tasks = doc::copy(&d.p, &[uid]);
+    d.apply(Op::Paste { at: 0, tasks: tasks.clone() }, "%d-%b-%y").unwrap();
+    d.apply(Op::Paste { at: 0, tasks }, "%d-%b-%y").unwrap();
+    let codes: Vec<&str> = d.p.tasks.iter().map(|t| t.code.as_str()).filter(|c| !c.is_empty()).collect();
+    assert_eq!(codes.len(), codes.iter().collect::<std::collections::HashSet<_>>().len(), "duplicate Activity IDs");
+}
+
+// Remaining and actual duration typed on an elapsed task count elapsed time, as the cells show it.
+#[test]
+fn remaining_duration_of_an_elapsed_task() {
+    let mut d = Doc::new(sample());
+    let i = (0..d.p.tasks.len()).find(|&i| !d.p.is_summary(i)).unwrap();
+    let uid = d.p.tasks[i].uid;
+    d.apply(Op::Set { uid, field: "dur".into(), value: "3ed".into() }, "%d-%b-%y").unwrap();
+    for (f, v, pct) in [("rem", "1d", 67), ("rem", "1 edays", 67), ("adur", "2ed", 66), ("adur", "1.5d", 50)] {
+        d.apply(Op::Set { uid, field: f.into(), value: v.into() }, "%d-%b-%y").unwrap();
+        assert_eq!(d.p.tasks[i].pct, pct, "{f} = {v}");
+    }
+    // Splits from a file come in order, so the bar's pieces never run backwards.
+    d.apply(Op::Set { uid, field: "dur".into(), value: "5d".into() }, "%d-%b-%y").unwrap();
+    d.apply(Op::TaskList { uid, field: "splits".into(), value: serde_json::json!([[1920, 480], [480, 960], [480, 60]]) }, "%d-%b-%y").unwrap();
+    assert_eq!(d.p.tasks[i].splits, vec![(480, 60), (1920, 480)]);
+}

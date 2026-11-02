@@ -261,9 +261,12 @@ fn yes(v: &str) -> bool {
     matches!(v.trim().to_lowercase().as_str(), "yes" | "y" | "true" | "1" | "on")
 }
 
-fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> {
+fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> { set_pct_by(p, i, n, None) }
+
+/// Like `set_pct`, with the actual dates from schedule `s` (one schedule for many tasks, not one each).
+fn set_pct_by(p: &mut Project, i: usize, n: u8, s: Option<&sched::Sched>) -> Result<(), String> {
     let needs = (n > 0 && p.tasks[i].act_start.is_none()) || (n == 100 && p.tasks[i].act_finish.is_none());
-    let (es, ef) = if needs { let s = sched::schedule(p)?; (s.es[i], s.ef[i]) } else { (0, 0) };
+    let (es, ef) = match (needs, s) { (false, _) => (0, 0), (true, Some(s)) => (s.es[i], s.ef[i]), (true, None) => { let s = sched::schedule(p)?; (s.es[i], s.ef[i]) } };
     let t = &mut p.tasks[i];
     t.pct = n.min(100);
     if n == 0 {
@@ -275,7 +278,10 @@ fn set_pct(p: &mut Project, i: usize, n: u8) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> {
+pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str) -> Result<(), String> { set_by(p, i, field, value, fmt, None) }
+
+/// `set`, with % complete and task mode taking their dates from schedule `s` when given.
+fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Option<&sched::Sched>) -> Result<(), String> {
     let v = value.trim();
     let any_row = field.starts_with("c:") || field.starts_with("code:") || matches!(field, "name" | "notes" | "code" | "preds" | "active" | "timeline" | "deadline" | "priority" | "costaccount" | "responsible" | "hyperlink" | "style" | "fixedcost");
     if p.is_summary(i) && !any_row {
@@ -359,9 +365,14 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
             if field == "dmin" { p.tasks[i].dmin = m } else { p.tasks[i].dmax = m }
         }
         "style" => p.tasks[i].style = serde_json::from_str(value).unwrap_or(serde_json::Value::Null),
-        "pct" => set_pct(p, i, v.trim_end_matches('%').trim().parse().map_err(|_| "Enter a number from 0 to 100.")?)?,
+        "pct" => set_pct_by(p, i, v.trim_end_matches('%').trim().parse().ok().filter(|n| *n <= 100).ok_or("Enter a number from 0 to 100.")?, s)?,
+        "adur" => {
+            let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
+            let d = p.tasks[i].dur.max(1);
+            set_pct(p, i, (m.min(d) * 100 / d) as u8)?;
+        }
         "rem" => {
-            let (m, _) = parse::dur(v, day)?;
+            let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
             let d = p.tasks[i].dur.max(1);
             set_pct(p, i, (100 - (m.min(d) * 100 / d)) as u8)?;
         }
@@ -431,8 +442,8 @@ pub(crate) fn set(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str
         "mode" => {
             let manual = v.to_lowercase().starts_with('m');
             if manual && p.tasks[i].mstart.is_none() {
-                let s = sched::schedule(p)?;
-                p.tasks[i].mstart = Some(date_of(s.es[i]));
+                let es = match s { Some(s) => s.es[i], None => sched::schedule(p)?.es[i] };
+                p.tasks[i].mstart = Some(date_of(es));
             }
             p.tasks[i].manual = manual;
         }
@@ -470,7 +481,7 @@ fn work_units(p: &Project, i: usize) -> f64 {
 
 fn money(v: &str) -> Result<f64, String> {
     let t: String = v.chars().filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect();
-    if t.is_empty() { Ok(0.0) } else { t.parse().map_err(|_| format!("\"{v}\" is not an amount.")) }
+    if t.is_empty() { Ok(0.0) } else { t.parse::<f64>().ok().filter(|x| x.abs() < 1e15).ok_or_else(|| format!("\"{v}\" is not an amount.")) }
 }
 
 /// Checks and converts a custom field value for key `key` (text1, number2, flag3, date1, cost1,
@@ -525,7 +536,7 @@ fn insert_rows(p: &mut Project, at: usize, rows: Vec<Vec<(String, String)>>, fmt
 fn res_set(p: &mut Project, uid: u32, field: &str, v: &str) -> Result<(), String> {
     let i = p.res_idx(uid).ok_or("That resource no longer exists.")?;
     let v = v.trim();
-    let num = |s: &str| -> Result<f64, String> { s.trim_end_matches('%').replace(',', "").trim().parse::<f64>().map_err(|_| format!("\"{s}\" is not a number.")) };
+    let num = |s: &str| -> Result<f64, String> { s.trim_end_matches('%').replace(',', "").trim().parse::<f64>().ok().filter(|x| x.abs() < 1e12).ok_or_else(|| format!("\"{s}\" is not a number (up to a trillion).")) };
     let r = &mut p.resources[i];
     match field {
         "name" if v.is_empty() => return Err("A resource needs a name.".into()),
@@ -583,7 +594,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 if taken.contains(&t.code) {
                     while taken.contains(&next) {
                         let n: u32 = next.trim_start_matches(p.id_prefix.as_str()).parse().unwrap_or(p.id_start);
-                        next = format!("{}{}", p.id_prefix, n + p.id_step.max(1));
+                        // The numbers ran out: the copy keeps no Activity ID.
+                        let Some(m) = n.checked_add(p.id_step.max(1)) else { next.clear(); break };
+                        next = format!("{}{}", p.id_prefix, m);
                     }
                     t.code = next.clone();
                 }
@@ -667,7 +680,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let c = &s.cals[s.ci[i]];
                 let done = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { c.between(s.es[i], dd) * 100 / c.between(s.es[i], s.ef[i]).max(1) };
                 if done as u8 > p.tasks[i].pct {
-                    set_pct(p, i, done as u8)?;
+                    set_pct_by(p, i, done as u8, Some(&s))?;
                 }
             }
             p.status = Some(d);
@@ -805,11 +818,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         }
         Op::MarkOnTrack { uids } => {
             let dd = at(p.status.ok_or("Set a status date in Project › Project Information first.")?) + DAY;
-            let s = sched::schedule(p)?;
+            // On track means as planned: the dates before the status date holds unstarted work back.
+            let s = sched::schedule(&Project { status: None, ..p.clone() })?;
             for i in idxs(p, &uids).into_iter().filter(|&i| !s.summary[i]) {
                 let c = &s.cals[s.ci[i]];
                 let n = if dd <= s.es[i] { 0 } else if dd >= s.ef[i] { 100 } else { c.between(s.es[i], dd) * 100 / c.between(s.es[i], s.ef[i]).max(1) };
-                set_pct(p, i, n as u8)?;
+                set_pct_by(p, i, n as u8, Some(&s))?;
             }
         }
         Op::Baseline { uids, clear, n } => {
@@ -882,10 +896,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::Columns { cols } => p.columns = cols,
         Op::Batch(ops) => ops.into_iter().try_for_each(|o| exec(p, o, fmt))?,
         Op::Cells { cells } => {
-            let (mut done, mut first) = (0, None);
+            let (mut done, mut first, mut s) = (0, None, None);
             for (uid, field, value) in cells {
                 let Some(i) = p.idx(uid) else { continue };
-                match set(p, i, &field, &value, fmt) {
+                // A range of % complete or task mode takes its dates from one schedule, not one per cell.
+                if !matches!(field.as_str(), "pct" | "mode") { s = None } else if s.is_none() { s = sched::schedule(p).ok() }
+                match set_by(p, i, &field, &value, fmt, s.as_ref()) {
                     Ok(()) => done += 1,
                     Err(e) => { first.get_or_insert(e); }
                 }
@@ -907,12 +923,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let t = p.new_task(name.trim(), lv, d);
             p.tasks.insert(at, t);
             for k in 0..count {
-                let n = interval.max(1) * k;
+                let n = interval.max(1) as u64 * k as u64;
                 let day = match every.as_str() {
-                    "month" => first.checked_add_months(chrono::Months::new(n)).ok_or("Date out of range.")?,
-                    "week" => first + chrono::Days::new(7 * n as u64),
-                    _ => first + chrono::Days::new(n as u64),
-                };
+                    "month" => u32::try_from(n).ok().and_then(|n| first.checked_add_months(chrono::Months::new(n))),
+                    "week" => first.checked_add_days(chrono::Days::new(7 * n)),
+                    _ => first.checked_add_days(chrono::Days::new(n)),
+                }.filter(|d| *d <= crate::cal::hi()).ok_or("The occurrences run past the dates a plan can hold (to 2600).")?;
                 let mut t = p.new_task(&format!("{} {}", name.trim(), k + 1), lv + 1, d);
                 t.unit = unit;
                 (t.constraint, t.cdate) = (Constraint::SNET, Some(day));

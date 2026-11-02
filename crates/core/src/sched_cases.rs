@@ -176,3 +176,16 @@ fn update_all_tells_same_named_files_apart() {
     crate::links::update_all(&mut plans).unwrap();
     assert_eq!(plans[2].1.tasks[0].ext[0].plan, "Plan in B");
 }
+
+// A milestone at the end of its predecessor's day, constrained to that day (Start No Later Than or
+// Must Start On, as Constraint Type fills it in), keeps its place and its zero float.
+#[test]
+fn milestone_constrained_to_its_own_day() {
+    for c in ["SNLT", "MSO"] {
+        let p = build(&["1d | |", &format!("0 | 1 | ctype={c}"), "1d | 2 |"], |_| {});
+        assert_eq!(dates(&p), ["Nov02 08:00 Nov02 17:00 0", "Nov02 17:00 Nov02 17:00 0", "Nov03 08:00 Nov03 17:00 0"], "{c}");
+    }
+    // A link that would take it past its day still gives way to Must Start On (the predecessor shows the slip).
+    let p = build(&["2d | |", "0 | 1 | ctype=MSO;cdate=02-Nov-26"], |_| {});
+    assert_eq!(dates(&p), ["Nov02 08:00 Nov03 17:00 -1", "Nov02 17:00 Nov02 17:00 0"]);
+}

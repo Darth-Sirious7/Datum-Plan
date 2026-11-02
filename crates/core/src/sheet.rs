@@ -300,6 +300,18 @@ pub fn book(c: &Calc) -> Workbook {
     book_with(c, &[])
 }
 
+/// `Tasks[Task Name]`, `Tasks[Total Slack]`: a column called as the task sheet names it reads the
+/// plan column with that field, so names copied from the grid work too.
+fn grid_names(c: &Calc, cols: &[(String, String)], f: &str) -> String {
+    if !f.contains('[') { return f.to_string() }
+    translate(f, |name| {
+        let Some((tb, col)) = name.strip_suffix(']').and_then(|x| x.split_once('[')).filter(|(t, x)| t.eq_ignore_ascii_case("tasks") && !x.contains(['[', '#'])) else { return Some(format!("[{name}]")).filter(|_| !name.contains('[')) };
+        if cols.iter().any(|(_, n)| n.eq_ignore_ascii_case(col.trim())) { return None }
+        let key = c.key_of(col)?;
+        cols.iter().find(|(k, _)| *k == key).map(|(_, n)| format!("{tb}[{n}]"))
+    }).map_or_else(|_| f.to_string(), |x| format!("={x}"))
+}
+
 /// The "Resources" sheet and table.
 fn res_sheet(c: &Calc) -> Sheet {
     let p = c.p;
@@ -353,7 +365,7 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
         for (a1, input) in &s.cells {
             let Some(at) = CellRef::parse(a1) else { continue };
             let cell = if input.starts_with('=') && input.len() > 1 {
-                Cell::formula(Formula::new(input))
+                Cell::formula(Formula::new(&grid_names(c, &cols, input)))
             } else {
                 Cell::value(gridcraft_core::parse::parse_input(input, wb.date_system).value)
             };
@@ -363,7 +375,7 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     }
     for (k, f) in extra.iter().enumerate() {
         let mut sh = Sheet::new(format!("__eval{k}"));
-        let f = if f.starts_with('=') { f.clone() } else { format!("={f}") };
+        let f = grid_names(c, &cols, &if f.starts_with('=') { f.clone() } else { format!("={f}") });
         sh.set_cell(CellRef::new(0, 0), Cell::formula(Formula::new(&f)));
         wb.sheets.push(Arc::new(sh));
     }

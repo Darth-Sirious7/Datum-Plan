@@ -159,13 +159,17 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     }
     table("PROJWBS", "wbs_id proj_id seq_num proj_node_flag status_code wbs_short_name wbs_name parent_wbs_id", wbs_rows);
     let acts: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i]).collect();
-    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt act_start_date act_end_date early_start_date early_end_date target_start_date target_end_date cstr_date cstr_type",
+    let held = super::ext_held(p);
+    table("TASK", "task_id proj_id wbs_id clndr_id phys_complete_pct complete_pct_type task_type duration_type status_code task_code task_name target_drtn_hr_cnt remain_drtn_hr_cnt act_start_date act_end_date early_start_date early_end_date target_start_date target_end_date cstr_date cstr_type cstr_date2 cstr_type2",
         acts.iter().map(|&i| {
             let t = &p.tasks[i];
             let rsrc = t.act_type == ActType::ResourceDep || (p.opts.res_cals && !t.ignore_rc && t.res.iter().any(|a| p.res_idx(a.res).is_some_and(|k| p.resources[k].kind == ResKind::Work)));
-            let kind = match t.act_type { ActType::Loe => "TT_LOE", ActType::WbsSummary => "TT_WBS", _ if t.dur == 0 => if t.preds.is_empty() { "TT_Mile" } else { "TT_FinMile" }, _ if rsrc => "TT_Rsrc", _ => "TT_Task" };
+            let (dur, cons, cdate) = super::held(p, s, i, held[i]);
+            // A milestone at the end of a working period is a finish milestone (a start milestone would move to the next morning).
+            let kind = match t.act_type { ActType::Loe => "TT_LOE", ActType::WbsSummary => "TT_WBS", ActType::StartMs => "TT_Mile", ActType::FinishMs => "TT_FinMile",
+                _ if dur == 0 => if s.cals[s.ci[i]].next_start(s.es[i]) == s.es[i] { "TT_Mile" } else { "TT_FinMile" }, _ if rsrc => "TT_Rsrc", _ => "TT_Task" };
             let status = if t.act_finish.is_some() { "TK_Complete" } else if t.act_start.is_some() { "TK_Active" } else { "TK_NotStart" };
-            let (cd, ct) = match (t.cdate, CS.iter().find(|(c, _)| *c == t.constraint)) {
+            let (cd, ct) = match (cdate, CS.iter().find(|(c, _)| *c == cons)) {
                 (_, Some((Constraint::ALAP, n))) => (String::new(), n.to_string()),
                 (Some(d), Some((_, n))) => (format!("{d} 00:00"), n.to_string()),
                 _ => (String::new(), String::new()),
@@ -173,17 +177,20 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
             let code = if t.code.is_empty() { format!("A{}", (i + 1) * 10) } else { clean(&t.code) };
             // A physical-% task carries its physical %; the duration % stays in the remaining duration.
             let (pc, pt) = match t.pct_type { PctType::Physical => (t.phys, "CP_Phys"), PctType::Units => (t.pct, "CP_Units"), PctType::Duration => (t.pct, "CP_Drtn") };
-            format!("{}\t1\t{}\t{}\t{pc}\t{pt}\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}",
-                t.uid, wbs_of[i], cal_id(t.cal.as_deref()), clean(&t.name), t.dur as f64 / 60.0, t.dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
+            // A deadline goes as a secondary "finish on or before" constraint.
+            let (cd2, ct2) = t.deadline.map_or((String::new(), ""), |d| (format!("{d} 23:59"), "CS_MEOB"));
+            format!("{}\t1\t{}\t{}\t{pc}\t{pt}\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}\t{cd2}\t{ct2}",
+                t.uid, wbs_of[i], cal_id(t.cal.as_deref()), clean(&t.name), dur as f64 / 60.0, dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
                 t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
                 dt(s.es[i]), dt(s.ef[i]), dt(s.es[i]), dt(s.ef[i]))
         }).collect());
     // A link to or from a summary applies to every activity under it; a percent lag becomes hours.
     let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
     let mut links = vec![];
+    let idx: HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
     for (i, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
-            let Some(k) = p.idx(l.pred) else { continue };
+            let Some(&k) = idx.get(&l.pred) else { continue };
             let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
             for b in under(i) { for a in under(k) { links.push(format!("{}\t{}\t{}\t1\t1\tPR_{:?}\t{}", links.len() + 1, p.tasks[b].uid, p.tasks[a].uid, l.kind, lag as f64 / 60.0)) } }
         }
@@ -309,6 +316,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             constraint: ct, cdate: if matches!(ct, Constraint::ASAP | Constraint::ALAP) { None } else { date(g(t, "cstr_date")) },
             cal: cal_names.get(&g(t, "clndr_id")).cloned(),
             act_start: date(g(t, "act_start_date")), act_finish: date(g(t, "act_end_date")),
+            deadline: if g(t, "cstr_type2") == "CS_MEOB" { date(g(t, "cstr_date2")) } else { None },
             ..Default::default()
         }
     };
@@ -322,15 +330,16 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     let rest: Vec<Task> = rows("TASK").iter().filter(mine).filter(|t| !have.contains(&g(t, "task_id"))).map(|t| mk(t, 0)).collect();
     if !rest.is_empty() { notes.push(format!("{} activities are outside the WBS; they are at the end of the plan.", rest.len())) }
     p.tasks.extend(rest);
-    let second = rows("TASK").iter().filter(mine).filter(|t| !g(t, "cstr_type2").is_empty()).count();
-    if second > 0 { notes.push(format!("{second} activities have a secondary constraint, which Datum Plan does not use yet; only the primary constraint was kept.")) }
+    let second = rows("TASK").iter().filter(mine).filter(|t| !matches!(g(t, "cstr_type2").as_str(), "" | "CS_MEOB")).count();
+    if second > 0 { notes.push(format!("{second} activities have a secondary constraint other than finish on or before (kept as a deadline), which Datum Plan does not use yet; only the primary constraint was kept.")) }
     let mut dropped = 0;
+    let idx: HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
     for l in rows("TASKPRED") {
         let (s, q): (u32, u32) = (g(l, "task_id").parse().unwrap_or(0), g(l, "pred_task_id").parse().unwrap_or(0));
         let kind = match g(l, "pred_type").as_str() { "PR_SS" => LinkType::SS, "PR_FF" => LinkType::FF, "PR_SF" => LinkType::SF, _ => LinkType::FS };
         let lag = (g(l, "lag_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64;
-        match p.tasks.iter().position(|t| t.uid == q).and(p.tasks.iter_mut().find(|t| t.uid == s)) {
-            Some(t) => t.preds.push(Link { pred: q, kind, lag, pct: false }),
+        match idx.get(&q).and(idx.get(&s)) {
+            Some(&i) => p.tasks[i].preds.push(Link { pred: q, kind, lag, pct: false }),
             None => dropped += 1,
         }
     }
@@ -351,7 +360,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let money = qty == 0.0 && cost > 0.0;
         if let Some(r) = p.resources.iter_mut().find(|r| r.uid == ru && money) { r.kind = ResKind::Cost }
         let work = p.resources.iter().any(|r| r.uid == ru && r.kind == ResKind::Work);
-        if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
+        if let Some(t) = idx.get(&tu).map(|&i| &mut p.tasks[i]) {
             let units = if money { cost } else if work { per_hr.unwrap_or(if t.dur > 0 { qty * 60.0 / t.dur as f64 } else { 1.0 }) } else { qty };
             t.res.push(Assign { res: ru, units, table: 0 });
         }

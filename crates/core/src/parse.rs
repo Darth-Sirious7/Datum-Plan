@@ -9,22 +9,29 @@ pub fn unit_min(u: Unit, day: i64) -> i64 {
     match u { Unit::M => 1, Unit::H => 60, Unit::D => day, Unit::W => 5 * day, Unit::Mo => 20 * day }
 }
 
+/// Clock minutes per unit of an elapsed duration.
+fn clock(u: Unit) -> i64 { match u { Unit::M => 1, Unit::H => 60, Unit::D => 1440, Unit::W => 10080, Unit::Mo => 43200 } }
+
 /// Like `dur`, but also accepts elapsed durations ("3ed", "12eh"): returns clock minutes and true.
 pub fn dur_any(s: &str, day: i64) -> Result<(i64, Unit, bool), String> {
     let t = s.trim().to_lowercase();
     let cut = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ' ')).unwrap_or(t.len());
     if t[cut..].starts_with('e') && t.len() > cut + 1 {
         let (m, u) = dur(&format!("{}{}", &t[..cut], &t[cut + 1..]), day)?;
-        let clock = match u { Unit::M => 1, Unit::H => 60, Unit::D => 1440, Unit::W => 10080, Unit::Mo => 43200 };
-        return Ok(((m as f64 / unit_min(u, day) as f64 * clock as f64).round() as i64, u, true));
+        return Ok(((m as f64 / unit_min(u, day) as f64 * clock(u) as f64).round() as i64, u, true));
     }
     dur(&t, day).map(|(m, u)| (m, u, false))
 }
 
+/// A part of a task's duration as typed (remaining, actual): on an elapsed task "1d" is one elapsed day.
+pub fn dur_for(s: &str, day: i64, elapsed: bool) -> Result<i64, String> {
+    let (m, u, e) = dur_any(s, day)?;
+    Ok(if elapsed && !e { (m as f64 / unit_min(u, day) as f64 * clock(u) as f64).round() as i64 } else { m })
+}
+
 /// Shows an elapsed duration ("3 edays").
 pub fn fmt_edur(min: i64, u: Unit) -> String {
-    let clock = match u { Unit::M => 1, Unit::H => 60, Unit::D => 1440, Unit::W => 10080, Unit::Mo => 43200 };
-    let v = min as f64 / clock as f64;
+    let v = min as f64 / clock(u) as f64;
     let name = match u { Unit::M => "emins", Unit::H => "ehrs", Unit::D => "edays", Unit::W => "ewks", Unit::Mo => "emons" };
     format!("{} {name}", num(v))
 }
@@ -74,14 +81,22 @@ pub fn fmt_lag(min: i64, day: i64) -> String {
 
 const DATE_FORMATS: [&str; 9] = ["%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y", "%d/%m/%Y", "%d/%m/%y", "%d %b %Y", "%d %b %y", "%a %d-%b-%y", "%Y-%m-%dT%H:%M:%S"];
 
-/// Parses a date in any common form; `fmt` (the display format) is tried first.
+/// Parses a date in any common form; `fmt` (the display format) is tried first. A year typed with
+/// two digits is read as %y reads it (26 → 2026, 99 → 1999), even where a format asks for four.
 pub fn date_in(s: &str, fmt: &str) -> Result<NaiveDate, String> {
+    use chrono::Datelike;
     let s = s.trim();
     let s = s.get(..19).filter(|_| s.contains('T')).unwrap_or(s);
-    std::iter::once(fmt)
+    let d = std::iter::once(fmt)
         .chain(DATE_FORMATS)
         .find_map(|f| NaiveDate::parse_from_str(s, f).ok().or_else(|| chrono::NaiveDateTime::parse_from_str(s, f).ok().map(|d| d.date())))
-        .ok_or_else(|| format!("\"{s}\" is not a date. Try 24-Oct-26 or 2026-10-24."))
+        .ok_or_else(|| format!("\"{s}\" is not a date. Try 24-Oct-26 or 2026-10-24."))?;
+    let short = !s.split(|c: char| !c.is_ascii_digit()).any(|w| w.len() > 2);
+    let d = match d.year() { y @ 0..=68 if short => d.with_year(2000 + y), y @ 69..=99 if short => d.with_year(1900 + y), _ => Some(d) }.unwrap_or(d);
+    if d < crate::cal::lo() || d > crate::cal::hi() {
+        return Err(format!("\"{s}\" is outside the dates a plan can hold (1800 to 2600)."));
+    }
+    Ok(d)
 }
 
 pub fn date(s: &str) -> Result<NaiveDate, String> {

@@ -542,7 +542,7 @@ fn sheets_read_the_plan_by_name_and_behave_like_excel() {
     let cells = [
         ("A1", "=SUM(Tasks[Duration])"), ("A2", "=ROWS(Tasks)"), ("A3", "=ProjectFinish"), ("A4", "=XLOOKUP(\"T3\",Tasks[Name],Tasks[Finish])"),
         ("A5", "=COUNTIF(Tasks[Milestone],TRUE)"), ("A6", "=TODAY()-TODAY()"), ("A7", "1234.5"), ("A8", "=MAX(Tasks[% Complete])"), ("A9", "=SEQUENCE(3)"),
-        ("B1", "=A1*2"), ("C1", "=Dash!A1+1"),
+        ("B1", "=A1*2"), ("C1", "=Dash!A1+1"), ("D1", "=XLOOKUP(\"T3\",Tasks[Task Name],Tasks[Finish])"), ("D2", "=SUM(Tasks[Total Slack])=SUM(Tasks[Total Float])"),
     ];
     op(&mut doc, Op::SheetCells { k: 0, cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: None }).unwrap();
     op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A7".into(), String::new())], fmt: Some("#,##0.00".into()) }).unwrap();
@@ -552,6 +552,7 @@ fn sheets_read_the_plan_by_name_and_behave_like_excel() {
     assert_eq!((at("A1"), at("A2"), at("A5")), ("5".to_string(), "3".to_string(), "1".to_string()));
     assert_eq!(at("A3"), "06-Nov-26", "a date name shows as a date");
     assert_eq!(at("A4"), at("A3"), "lookups of plan dates show as dates");
+    assert_eq!((at("D1"), at("D2")), (at("A3"), "TRUE".to_string()), "columns named as on the task sheet work too");
     assert_eq!(at("A6"), "0", "date arithmetic stays a number");
     assert_eq!(at("A7"), "1,234.50", "spreadsheet number formats");
     assert_eq!(at("A8"), "0%", "plan percentages (0–100) get a % sign");

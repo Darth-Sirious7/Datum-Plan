@@ -684,7 +684,8 @@ impl Project {
             return String::new();
         }
         let n = self.tasks.iter().filter_map(|t| t.code.strip_prefix(self.id_prefix.as_str())?.parse::<u32>().ok()).max();
-        format!("{}{}", self.id_prefix, n.map_or(self.id_start, |n| n + self.id_step.max(1)))
+        // Past the last number there is no ID to give.
+        n.map_or(Some(self.id_start), |n| n.checked_add(self.id_step.max(1))).map_or(String::new(), |n| format!("{}{n}", self.id_prefix))
     }
 
     /// Effective leveling priority.
@@ -744,12 +745,24 @@ impl Project {
             t.level_delay = span(t.level_delay).max(0);
             (t.dmin, t.dmax) = (span(t.dmin).max(0), span(t.dmax).max(0));
             t.splits.retain(|&(a, g)| a > 0 && g > 0);
+            t.splits.sort_unstable();
+            t.splits.dedup_by_key(|x| x.0);
             t.splits.iter_mut().for_each(|x| *x = (span(x.0), span(x.1)));
             t.splits.truncate(100);
             t.preds.iter_mut().for_each(|l| l.lag = if l.pct { l.lag.clamp(-10_000, 10_000) } else { span(l.lag) });
             (t.qty, t.qty_done, t.fixed_cost) = (fin(t.qty).max(0.0), fin(t.qty_done).max(0.0), fin(t.fixed_cost));
             t.res.iter_mut().for_each(|a| a.units = fin(a.units).clamp(0.0, if work.contains(&a.res) { 1000.0 } else { 1e12 }));
+            // Sums of huge amounts overflow; a NaN or infinity would be saved as null and the file could not be opened.
+            t.bls.values_mut().for_each(|b| (b.cost, b.work) = (fin(b.cost), b.work.map(fin)));
+            t.expenses.iter_mut().for_each(|e| (e.planned, e.actual) = (fin(e.planned), fin(e.actual)));
+            t.steps.iter_mut().for_each(|s| s.weight = fin(s.weight));
         }
+        for s in &mut self.snapshots {
+            (s.pct, s.cost) = (fin(s.pct), fin(s.cost));
+            s.rows.iter_mut().for_each(|r| r.cost = fin(r.cost));
+        }
+        self.risks.iter_mut().for_each(|r| r.days = fin(r.days));
+        self.credit.iter_mut().flat_map(|r| &mut r.steps).for_each(|s| s.1 = fin(s.1));
         self.next_uid = self.next_uid.max(self.tasks.iter().map(|t| t.uid.saturating_add(1)).max().unwrap_or(1));
         let uids: std::collections::HashSet<u32> = self.tasks.iter().map(|t| t.uid).collect();
         let res: std::collections::HashSet<u32> = self.resources.iter().map(|r| r.uid).collect();
@@ -795,6 +808,9 @@ impl Project {
             prev = Some(s.level);
         }
         for r in &mut self.resources {
+            (r.max, r.rate, r.per_use, r.ovt) = (fin(r.max).clamp(0.0, 1e6), fin(r.rate), fin(r.per_use), fin(r.ovt));
+            r.tables.iter_mut().flatten().for_each(|x| (x.std, x.ovt, x.per_use) = (fin(x.std), fin(x.ovt), fin(x.per_use)));
+            r.avail.iter_mut().for_each(|a| a.max = fin(a.max).clamp(0.0, 1e6));
             if r.cal.as_ref().is_some_and(|c| !cals.contains(c)) {
                 r.cal = None;
             }

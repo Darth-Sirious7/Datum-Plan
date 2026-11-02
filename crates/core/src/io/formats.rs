@@ -96,7 +96,8 @@ pub fn mpx(c: &Calc) -> String {
     for (i, t) in p.tasks.iter().enumerate() {
         // "3", "3SS" or "3FS+1.5d": a lag needs the type; a percent lag becomes days of the predecessor.
         let preds: Vec<String> = t.preds.iter().filter_map(|l| {
-            let (k, j) = (id_of.get(&l.pred)?, p.idx(l.pred)?);
+            let k = id_of.get(&l.pred)?;
+            let j = k - 1;
             let lag = if l.pct { p.tasks[j].dur * l.lag / 100 } else { l.lag };
             Some(match (l.kind, lag) {
                 (LinkType::FS, 0) => k.to_string(),
@@ -153,9 +154,10 @@ pub fn pmxml(c: &Calc) -> String {
     // As in XER: a link to or from a summary applies to every activity under it; a percent lag becomes hours.
     let under = |i: usize| -> Vec<usize> { if s.summary[i] { p.subtree(i).filter(|&j| !s.summary[j]).collect() } else { vec![i] } };
     let mut n = 0;
+    let idx: std::collections::HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
     for (i, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
-            let Some(k) = p.idx(l.pred) else { continue };
+            let Some(&k) = idx.get(&l.pred) else { continue };
             let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
             let kind = match l.kind { LinkType::FS => "Finish to Start", LinkType::SS => "Start to Start", LinkType::FF => "Finish to Finish", LinkType::SF => "Start to Finish" };
             for b in under(i) { for a in under(k) {

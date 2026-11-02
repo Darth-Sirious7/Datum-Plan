@@ -17,6 +17,31 @@ pub enum Imported {
     Table(table::Table),
 }
 
+/// Tasks held by links to other plans, through their own links or a summary's above them.
+pub(crate) fn ext_held(p: &Project) -> Vec<bool> {
+    let mut stack: Vec<(u8, bool)> = vec![];
+    p.tasks.iter().map(|t| {
+        stack.retain(|x| x.0 < t.level);
+        let h = !t.ext.is_empty() || stack.last().is_some_and(|x| x.1);
+        stack.push((t.level, h));
+        h
+    }).collect()
+}
+
+/// The duration, constraint type and date a task is written with. A file cannot hold links to
+/// other plans, so a task they hold (`ext`, from [`ext_held`]) keeps its scheduled start as
+/// Start No Earlier Than (a milestone at the end of a day: Finish No Earlier Than), and a task that
+/// mirrors one in another plan keeps its scheduled length.
+pub(crate) fn held(p: &Project, s: &sched::Sched, i: usize, ext: bool) -> (i64, crate::model::Constraint, Option<NaiveDate>) {
+    use crate::model::Constraint::{ASAP, FNET, SNET};
+    let (t, c) = (&p.tasks[i], &s.cals[s.ci[i]]);
+    let dur = if s.mirror[i] { c.between(s.es[i], s.ef[i]) } else { t.dur };
+    match t.constraint {
+        ASAP | SNET if ext && t.act_start.is_none() && !s.summary[i] => (dur, if dur == 0 && c.next_start(s.es[i]) != s.es[i] { FNET } else { SNET }, Some(crate::cal::date_of(s.es[i]))),
+        k => (dur, k, t.cdate),
+    }
+}
+
 fn ext(path: &Path) -> String {
     path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
 }

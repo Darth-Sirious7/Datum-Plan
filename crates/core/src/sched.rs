@@ -239,6 +239,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 match t.constraint {
                     C::SNET => v = v.max(at(cd)),
                     C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
+                    // A milestone may sit anywhere on its day (at the end of it after a finish).
+                    C::MSO if sp == 0 => v = v.clamp(at(cd), c.end_of(cd).max(at(cd))),
                     C::MSO => v = at(cd),
                     C::MFO => v = c.sub(c.end_of(cd), sp),
                     _ => {}
@@ -316,6 +318,11 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         }
         if let Some(cd) = t.cdate {
             match t.constraint {
+                // Dates are whole days: a milestone starts "on" its day up to the end of it.
+                C::SNLT | C::MSO if sp == 0 => {
+                    let a = c.next_start(at(cd));
+                    v = if t.constraint == C::MSO { v.clamp(a, c.end_of(cd).max(a)) } else { v.min(c.end_of(cd).max(a)) };
+                }
                 C::SNLT => v = v.min(c.add(c.next_start(at(cd)), sp)),
                 C::FNLT => v = v.min(c.end_of(cd)),
                 C::MSO => v = c.add(c.next_start(at(cd)), sp),

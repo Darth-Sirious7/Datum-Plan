@@ -49,35 +49,44 @@ pub fn level(p: &mut Project, only: &[u32]) -> Result<usize, String> {
     }).collect();
     for _ in 0..5000 {
         let s = schedule(p)?;
-        let over = loads(p, &s).into_iter().find(|((d, k), (mins, _))| {
-            let cap = p.resources[*k].max_on(date_of(d * DAY)) * s.cals[s.rcal[*k]].day_minutes(date_of(d * DAY)).max(1) as f64;
-            *mins > cap + 0.5 && !stuck.contains(&(*d, *k))
-        });
-        let Some(((day, k), (_, tasks))) = over else { break };
-        let mut cands: Vec<usize> = tasks.iter().copied().filter(|&i| scope.contains(&i) && movable(p, &s, i)).collect();
-        cands.sort_by_key(|&i| rank[i]);
-        cands.dedup();
-        // The highest-ranked task keeps its place, and so do the next ones while the day has room;
-        // the rest move past this day, all in one go.
-        let cap = p.resources[k].max_on(date_of(day * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(day * DAY)).max(1) as f64;
-        let on_day = |i: usize| s.cals[s.ci[i]].between(s.es[i].max(day * DAY), s.ef[i].min((day + 1) * DAY)) as f64
-            * p.tasks[i].res.iter().filter(|a| p.res_idx(a.res) == Some(k)).map(|a| a.units).sum::<f64>();
-        let mut used: f64 = tasks.iter().copied().collect::<HashSet<_>>().into_iter().filter(|i| !cands.contains(i)).map(on_day).sum();
-        let mut delay = vec![];
-        for (n, &i) in cands.iter().enumerate() {
-            let c = &s.cals[s.ci[i]];
-            let add = c.between(s.es[i], c.next_start((day + 1) * DAY)).max(60);
-            if n == 0 || used + on_day(i) <= cap + 0.5 || (p.opts.level_within_slack && s.tf[i] < add) {
-                used += on_day(i);
+        let cap = |d: i64, k: usize| p.resources[k].max_on(date_of(d * DAY)) * s.cals[s.rcal[k]].day_minutes(date_of(d * DAY)).max(1) as f64;
+        let over: Vec<((i64, usize), Vec<usize>)> = loads(p, &s).into_iter().filter(|((d, k), (mins, _))| *mins > cap(*d, *k) + 0.5 && !stuck.contains(&(*d, *k))).map(|(x, (_, v))| (x, v)).collect();
+        // Days in order, every resource on a day in one pass (a task moved for one is gone for the
+        // rest); moves change only later days, so a pass ends after the first day with a move.
+        if over.is_empty() { break }
+        let (mut moved, mut done) = (HashSet::new(), None);
+        for ((day, k), tasks) in over {
+            if done.is_some_and(|d| d < day) { break }
+            let mut cands: Vec<usize> = tasks.iter().copied().filter(|&i| scope.contains(&i) && movable(p, &s, i) && !moved.contains(&i)).collect();
+            cands.sort_by_key(|&i| rank[i]);
+            cands.dedup();
+            // The highest-ranked task keeps its place, and so do the next ones while the day has room;
+            // the rest move past this day, all in one go.
+            let cap = cap(day, k);
+            let on_day = |i: usize| s.cals[s.ci[i]].between(s.es[i].max(day * DAY), s.ef[i].min((day + 1) * DAY)) as f64
+                * p.tasks[i].res.iter().filter(|a| p.res_idx(a.res) == Some(k)).map(|a| a.units).sum::<f64>();
+            let mut used: f64 = tasks.iter().copied().collect::<HashSet<_>>().into_iter().filter(|i| !cands.contains(i) && !moved.contains(i)).map(on_day).sum();
+            let mut delay = vec![];
+            for (n, &i) in cands.iter().enumerate() {
+                let c = &s.cals[s.ci[i]];
+                let add = c.between(s.es[i], c.next_start((day + 1) * DAY)).max(60);
+                if n == 0 || used + on_day(i) <= cap + 0.5 || (p.opts.level_within_slack && s.tf[i] < add) {
+                    used += on_day(i);
+                } else {
+                    delay.push((i, add));
+                }
+            }
+            if delay.is_empty() {
+                stuck.insert((day, k));
             } else {
-                delay.push((i, add));
+                done = Some(day);
+            }
+            moves += delay.len();
+            for (i, add) in delay {
+                p.tasks[i].level_delay += add;
+                moved.insert(i);
             }
         }
-        if delay.is_empty() {
-            stuck.insert((day, k));
-        }
-        moves += delay.len();
-        delay.into_iter().for_each(|(i, add)| p.tasks[i].level_delay += add);
     }
     Ok(moves)
 }

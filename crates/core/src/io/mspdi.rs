@@ -96,21 +96,22 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         o.push_str("</Exceptions></Calendar>");
     }
     o.push_str("</Calendars>\n<Tasks>");
-    let mut wbs: Vec<u32> = vec![];
+    let (mut wbs, held): (Vec<u32>, _) = (vec![], super::ext_held(p));
     for (i, t) in p.tasks.iter().enumerate() {
         let lv = t.level as usize;
         wbs.truncate(lv + 1);
         wbs.resize(lv + 1, 0);
         wbs[lv] += 1;
         let num = wbs.iter().map(u32::to_string).collect::<Vec<_>>().join(".");
-        let (sum, d) = (s.summary[i], if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { t.dur });
+        let (dn, cons, cdate) = super::held(p, s, i, held[i]);
+        let (sum, d) = (s.summary[i], if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { dn });
         let _ = write!(o, "<Task><UID>{}</UID><ID>{}</ID><Name>{}</Name><Active>{}</Active><Manual>{}</Manual><Type>0</Type><IsNull>0</IsNull><WBS>{num}</WBS><OutlineNumber>{num}</OutlineNumber>\
 <OutlineLevel>{}</OutlineLevel><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><DurationFormat>{}</DurationFormat><Milestone>{}</Milestone><Summary>{}</Summary>\
 <Critical>{}</Critical><PercentComplete>{}</PercentComplete><PhysicalPercentComplete>{}</PhysicalPercentComplete><EarnedValueMethod>{}</EarnedValueMethod>\
 <FixedCost>{}</FixedCost><FixedCostAccrual>{}</FixedCostAccrual><ConstraintType>{}</ConstraintType><CalendarUID>{}</CalendarUID><Cost>{:.2}</Cost>",
-            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && t.dur == 0) as u8, sum as u8,
-            (s.tf[i] <= 0) as u8, t.pct, t.phys, (t.pct_type == PctType::Physical) as u8, t.fixed_cost, match t.accrual { Accrual::Start => 1, Accrual::Prorated => 2, Accrual::End => 3 }, CONS.iter().position(|c| *c == t.constraint).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
-        if let Some(c) = t.cdate {
+            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && d == 0) as u8, sum as u8,
+            (s.tf[i] <= 0) as u8, t.pct, t.phys, (t.pct_type == PctType::Physical) as u8, t.fixed_cost, match t.accrual { Accrual::Start => 1, Accrual::Prorated => 2, Accrual::End => 3 }, CONS.iter().position(|c| *c == cons).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
+        if let Some(c) = cdate {
             let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
         }
         if t.ignore_rc {
@@ -313,9 +314,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     if p.resources.iter().any(|r| r.cal.is_some() || !r.exceptions.is_empty()) {
         p.opts.res_cals = true;
     }
+    let idx: std::collections::HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
     for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
         let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));
-        if let Some(t) = p.tasks.iter_mut().find(|t| t.uid == tu) {
+        if let Some(t) = idx.get(&tu).map(|&i| &mut p.tasks[i]) {
             t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 });
         }
     }

@@ -155,6 +155,47 @@ fn xer_keeps_links_to_summaries() {
     assert_eq!(b.finish, a.finish, "summary link dropped: finish {} vs {}", b.finish / DAY, a.finish / DAY);
 }
 
+// A milestone at the end of a day (a contract date held by Finish No Earlier Than) stays on its day,
+// and a deadline stays (in XER as a secondary constraint).
+#[test]
+fn xer_keeps_finish_milestone_on_its_day_and_deadlines() {
+    let mut p = plan(&[(5, ""), (0, "")]);
+    (p.tasks[1].constraint, p.tasks[1].cdate) = (Constraint::FNET, Some(d(2027, 3, 5)));
+    p.tasks[0].deadline = Some(d(2026, 11, 20));
+    let a = schedule(&p).unwrap();
+    for ext in ["xer", "xml"] {
+        let q = round_trip(&p, ext);
+        let b = schedule(&q).unwrap();
+        assert_eq!((b.es[1], b.ef[1]), (a.es[1], a.ef[1]), "{ext}: milestone moved from {} to {}", a.es[1], b.es[1]);
+        // A deadline (finish on or before) is kept, and with it the float it sets.
+        assert_eq!((q.tasks[0].deadline, b.tf[0]), (p.tasks[0].deadline, a.tf[0]), "{ext}: deadline lost");
+    }
+}
+
+// A task held by a task in another plan opens at the same dates (the file cannot hold the link).
+#[test]
+fn exports_keep_dates_held_by_other_plans() {
+    // A summary held by the other plan, two tasks under it, a task that mirrors one there and a milestone.
+    let mut p = plan(&[(0, ""), (3, ""), (2, "2"), (1, ""), (0, "")]);
+    (p.tasks[1].level, p.tasks[2].level) = (1, 1);
+    let f = at(d(2027, 2, 10)) + 17 * 60;
+    let x = |kind, start, finish| ExtLink { file: "other.dplan".into(), uid: 7, kind, lag: 0, plan: "Other".into(), code: String::new(), name: "X".into(), start, finish };
+    p.tasks[0].ext = vec![x(LinkType::FS, f - 5 * DAY, f)];
+    p.tasks[3].ext = vec![x(LinkType::SS, at(d(2027, 4, 5)) + 480, at(d(2027, 4, 16)) + 1020), x(LinkType::FF, at(d(2027, 4, 5)) + 480, at(d(2027, 4, 16)) + 1020)];
+    p.tasks[4].ext = vec![x(LinkType::FS, f - 5 * DAY, f)];
+    p.normalize();
+    let a = schedule(&p).unwrap();
+    assert!(a.es[1] > at(d(2027, 2, 10)) && a.es[4] == f, "the links hold the plan");
+    for ext in ["xer", "xml"] {
+        let q = round_trip(&p, ext);
+        let b = schedule(&q).unwrap();
+        for t in &p.tasks {
+            let (i, j) = (p.idx(t.uid).unwrap(), q.tasks.iter().position(|u| u.name == t.name).unwrap());
+            assert_eq!((b.es[j], b.ef[j]), (a.es[i], a.ef[i]), "{ext}: {} moved", t.name);
+        }
+    }
+}
+
 #[test]
 fn xer_keeps_percent_lags() {
     let mut p = plan(&[(10, ""), (2, "")]);
@@ -385,4 +426,30 @@ fn sheet_pictures_go_into_the_workbook() {
     std::fs::remove_file(&f).ok();
     let zip = String::from_utf8_lossy(&bytes);
     assert!(zip.contains("xl/media/image1.png"), "the picture is in the workbook");
+}
+
+// Writing and reading XER, PMXML and MPX take time in step with the plan's size, not its square
+// (tasks were found by a search through the whole plan for every link and assignment).
+#[test]
+fn exchange_time_grows_with_the_plan() {
+    let time = |n: usize| {
+        let mut p = Project::new("Big", d(2026, 11, 2));
+        p.resource("Crew");
+        for i in 0..n {
+            let mut t = p.new_task(&format!("T{i}"), (i % 50 != 0) as u8, if i % 50 == 0 { 0 } else { 480 });
+            if i % 50 > 1 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false }) }
+            t.res = vec![Assign { res: 1, units: 1.0, table: 0 }];
+            p.tasks.push(t);
+        }
+        let s = schedule(&p).unwrap();
+        let x = crate::io::xer::write(&p, &s, d(2026, 11, 1));
+        let c = Calc::new(&p, "%d-%b-%y", d(2026, 11, 1));
+        (0..2).map(|_| {
+            let t = std::time::Instant::now();
+            std::hint::black_box((crate::io::xer::write(&p, &s, d(2026, 11, 1)), crate::io::xer::read(&x).unwrap(), crate::io::formats::pmxml(&c), crate::io::formats::mpx(&c)));
+            t.elapsed().as_secs_f64()
+        }).fold(f64::MAX, f64::min)
+    };
+    let (a, b) = (time(2000), time(16_000));
+    assert!(b < a * 16.0, "8x the tasks took {:.1}x the time", b / a);
 }

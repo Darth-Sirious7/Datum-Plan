@@ -101,7 +101,7 @@ impl WorkCal {
                 }
                 w -= e - st;
             }
-            let Some(x) = next(d) else { return at(hi()) + DAY };
+            let Some(x) = next(d) else { return (at(hi()) + DAY).max(t) };
             (d, m) = (x, 0);
         }
     }
@@ -123,7 +123,7 @@ impl WorkCal {
                 }
                 w -= en - s;
             }
-            let Some(x) = prev(d) else { return at(lo()) };
+            let Some(x) = prev(d) else { return at(lo()).min(t) };
             (d, m) = (x, DAY);
         }
     }
@@ -165,7 +165,7 @@ impl WorkCal {
             if let Some(&(s, _)) = self.day(d).iter().find(|&&(_, e)| m < e) {
                 return at(d) + s.max(m);
             }
-            let Some(x) = next(d) else { return at(hi()) + DAY };
+            let Some(x) = next(d) else { return (at(hi()) + DAY).max(t) };
             (d, m) = (x, 0);
         }
     }
@@ -174,14 +174,14 @@ impl WorkCal {
     pub fn prev_end(&self, t: i64) -> i64 {
         let (mut d, mut m) = (date_of(t), t.rem_euclid(DAY));
         if m == 0 {
-            let Some(x) = prev(d) else { return at(lo()) };
+            let Some(x) = prev(d) else { return at(lo()).min(t) };
             (d, m) = (x, DAY);
         }
         loop {
             if let Some(&(_, e)) = self.day(d).iter().rev().find(|&&(s, _)| m > s) {
                 return at(d) + e.min(m);
             }
-            let Some(x) = prev(d) else { return at(lo()) };
+            let Some(x) = prev(d) else { return at(lo()).min(t) };
             (d, m) = (x, DAY);
         }
     }
