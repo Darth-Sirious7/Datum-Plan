@@ -479,6 +479,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ptools button:has-text('Picture'), .sheetbar button:has-text('Picture'), button:has-text('Picture ▾')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('(Sub-vendor)')"); await p.waitForTimeout(500);
   check("a library picture can be placed on a sheet cell", (await p.$$(".simg img")).length === 1);
+  await p.keyboard.press("Control+p"); await p.waitForTimeout(500);
+  check("a picture on a sheet prints with the sheet", (await p.$$(".pprev .ppage .psimg")).length === 1);
+  await p.click(".bs aside .back"); await p.waitForTimeout(300);
+  await p.click(".simg"); await p.waitForTimeout(100);
   await p.keyboard.press("Delete"); await p.waitForTimeout(300);
   check("Delete removes the selected picture from the sheet", (await p.$$(".simg")).length === 0);
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);

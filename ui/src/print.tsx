@@ -8,6 +8,7 @@ import { Row, Net, Usage, SheetOut, Grid, fmtDay, iso, dateDay, dayDate, invoke 
 import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
 import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS, RES_COLS, fmtB } from "./views";
 import { sheetK } from "./sheets";
+import { picData } from "./pictures";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
 import * as F from "./fmt";
 import { Pick, Check, Seg } from "./ui";
@@ -316,7 +317,7 @@ const geom = createMemo(() => {
   const k = ps.scale / 100, W = (pw - ps.margins[1] - ps.margins[3]) * MM / k, H = (ph - ps.margins[0] - ps.margins[2]) * MM / k;
   return { pw, ph, k, W, H, headH: headH(), footH: footH(), legH: ps.legend === "none" ? 0 : 58 };
 });
-type PT = { head: string[]; w: number[]; right: boolean[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { head: string[]; w: number[]; right: boolean[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -345,6 +346,7 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     const col = (c: number) => { let s = ""; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; };
     Object.assign(t, { head: ["", ...Array.from({ length: nc }, (_, c) => col(c))], w: [34, ...Array.from({ length: nc }, (_, c) => P().sheets[k].widths?.[c] ?? 96)], right: [true, ...Array.from({ length: nc }, () => false)],
       rows: Array.from({ length: nr }, (_, r) => ({ c: [String(r + 1), ...Array.from({ length: nc }, (_, c) => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...Array.from({ length: nc }, (_, c) => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
+    t.imgs = (P().sheets[k].images ?? []).flatMap(im => { const m = /^([A-Z]+)(\d+)$/.exec(im.cell), src = picData(im.pic); if (!m || !src) return []; const c = [...m[1]].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0), sc = ps.rowH / 22; return [{ src, r: +m[2] - 1, c, w: im.w * sc, h: im.h * sc }]; });
   }
   return { table: t };
 });
@@ -386,12 +388,15 @@ const ViewPage = (p: { pg: VPage; pages: number }) => {
           </svg>
         </Match>
         <Match when={p.pg.month !== undefined}><MonthPage month={p.pg.month!} W={G.W} H={room()} /></Match>
-        <Match when={p.pg.rows && d && "table" in d && d.table}>{(() => { const t = (d as { table: PT }).table; return (
+        <Match when={p.pg.rows && d && "table" in d && d.table}>{(() => { const t = (d as { table: PT }).table; return (<div class="ptwrap">
           <table class="ptable" style={{ "font-size": `${ps.font}px` }}>
             <colgroup><For each={p.pg.cols}>{c => <col style={{ width: `${t.w[c]}px` }} />}</For></colgroup>
             <thead><tr style={{ height: `${ps.rowH}px` }}><For each={p.pg.cols}>{c => <th classList={{ r: t.right[c] }}>{t.head[c]}</th>}</For></tr></thead>
             <tbody><For each={t.rows.slice(p.pg.rows![0], p.pg.rows![1])}>{r => <tr style={{ height: `${ps.rowH}px` }} classList={{ b: r.b }}><For each={p.pg.cols}>{c => <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r.st?.[c]) }}>{r.c[c]}</td>}</For></tr>}</For></tbody>
-          </table>); })()}</Match>
+          </table>
+          <For each={(d as { table: PT }).table.imgs?.filter(im => im.r >= p.pg.rows![0] && im.r < p.pg.rows![1] && p.pg.cols!.includes(im.c))}>{im => {
+            const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);
+            return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${(im.r - p.pg.rows![0] + 1) * ps.rowH}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For></div>); })()}</Match>
       </Switch>
     </Frame>
   );

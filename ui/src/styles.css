@@ -639,6 +639,8 @@ tr.behind td { background: var(--err-bg); }
 /* print: other views */
 .pwhat { margin: 0 0 10px; }
 .pempty { color: #F3F5F8; }
+.ptwrap { position: relative; }
+.psimg { position: absolute; object-fit: contain; }
 .ptable { border-collapse: collapse; table-layout: fixed; color: #1B2733; }
 .ptable th, .ptable td { border: 1px solid #D5DAE1; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
 .ptable th { background: #EAF0F8; font-weight: 600; }
