@@ -1,4 +1,4 @@
-// The details pane under the Gantt chart: Primavera-style tabs for the selected task.
+// The details pane under the Gantt chart: details tabs for the selected task.
 import { For, Show, createResource, JSX, Switch, Match } from "solid-js";
 import { TaskInfo, Rel } from "./api";
 import { call, curUid, tick, detailsTab, setDetailsTab, set, act, P, out, fields } from "./store";

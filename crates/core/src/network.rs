@@ -1,4 +1,4 @@
-//! Network Diagram layout (MS Project style): one box per task, left to right by logic,
+//! Network Diagram layout (network boxes): one box per task, left to right by logic,
 //! each task one column after its latest predecessor, rows ordered to keep links short.
 //! Optionally summary tasks get a box (over their first child), and "by WBS" puts each
 //! top-level phase in its own horizontal band.

@@ -1,10 +1,10 @@
 # Datum Plan: brainstorm and plan
 
-> **Update:** decisions made after this brainstorm (a Rust engine instead of porting Cairn, a custom updater, the release plan) are in [MEMORY.md](MEMORY.md). This file stays as the original feature map.
+> **Update:** decisions made after this brainstorm (a Rust engine instead of porting the earlier web planner's engine, a custom updater, the release plan) are in [MEMORY.md](MEMORY.md). This file stays as the original feature map.
 
 <img src="brand/datum-plan-icon.svg" width="96" align="right" alt="Draft Datum Plan icon">
 
-**Goal:** a desktop project scheduler with the features of Microsoft Project and Primavera P6 combined. You install it once from a GitHub Release `.exe`, and every later version installs itself from an **Update** button on the Home screen.
+**Goal:** a desktop project scheduler that covers everyday desktop planning and large enterprise schedules in one app. You install it once from a GitHub Release `.exe`, and every later version installs itself from an **Update** button on the Home screen.
 
 This document is for discussion. Nothing here is fixed until we agree on it.
 
@@ -14,7 +14,7 @@ This document is for discussion. Nothing here is fixed until we agree on it.
 
 | Repo | What we reuse | What we change |
 | --- | --- | --- |
-| **Cairn** (web planner, v0.8) | About 7,000 lines of tested TypeScript scheduling engine: calendars, FS/SS/FF/SF links with lags, constraints, critical path and float, task types, effort-driven work, leveling, baselines, earned value, timephased work, formulas, plus MSPDI XML, XER, MPX, XLSX and CSV import/export. The engine has no UI code, so it can move over as it is. | Cairn moved away from the MS Project look (a menu bar instead of the ribbon, plain-language names). Datum Plan goes the other way: a ribbon, standard P6/MSP terms, and a multi-project database. |
+| **Earlier web planner** (v0.8) | About 7,000 lines of tested TypeScript scheduling engine: calendars, FS/SS/FF/SF links with lags, constraints, critical path and float, task types, effort-driven work, leveling, baselines, earned value, timephased work, formulas, plus project XML, XER, MPX, XLSX and CSV import/export. The engine has no UI code, so it can move over as it is. | The web planner used a menu bar and plain-language names. Datum Plan uses a ribbon, standard scheduling terms, and a multi-project database. |
 | **CentriForge** (Compressor Suite) | The launcher layout (version, *What's new*, update panel), the release workflow that builds on `windows-latest` from a `v*` tag, and release notes taken from `CHANGELOG.md`. | CentriForge bundles Python with PyInstaller and Inno Setup, and the update downloads the whole installer. Tauri has a built-in signed updater, and the installer is about 10 MB instead of about 150 MB. |
 
 ---
@@ -26,14 +26,14 @@ This document is for discussion. Nothing here is fixed until we agree on it.
 ```
 ┌────────────────────────── Datum Plan.exe (Tauri 2) ──────────────────────────┐
 │  Frontend (WebView2): TypeScript (strict) + React + CSS                       │
-│   ├─ ui/        ribbon, backstage (File), views, dialogs, Home / update panel │
+│   ├─ ui/        ribbon, File page, views, dialogs, Home / update panel        │
 │   ├─ grid/      virtualised spreadsheet grid (100k rows)                      │
 │   ├─ gantt/     canvas Gantt renderer + timescale                             │
-│   └─ engine/    scheduling engine (ported from Cairn), runs in a Web Worker   │
+│   └─ engine/    scheduling engine (web planner port), runs in a Web Worker    │
 │                       ▲  typed IPC (tauri invoke, generated types)            │
 │  Backend (Rust)       ▼                                                       │
 │   ├─ db/        SQLite (rusqlite): projects, EPS, resources, codes, baselines │
-│   ├─ io/        file formats (XER, P6 XML, MSPDI XML, XLSX, later .mpp)       │
+│   ├─ io/        file formats (XER, PMXML, project XML, XLSX, later .mpp)      │
 │   ├─ updater    tauri-plugin-updater → GitHub Releases (signed)               │
 │   └─ fs, print/PDF, autosave, crash recovery, logging                         │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -41,10 +41,10 @@ This document is for discussion. Nothing here is fixed until we agree on it.
 
 **Main decisions (proposed):**
 
-1. **Where the engine runs.** Port Cairn's TypeScript engine and run it in a Web Worker so the UI stays responsive. Cairn's tests come with it. We would move the CPM pass to Rust only if profiling shows it is needed, for example above 50,000 activities. Cairn's tests would then check that the Rust engine gives the same results. This is the fastest route to a working 0.1 without giving up performance later.
-2. **Storage in the P6 style, files in the MSP style.** Use a local SQLite database that holds many projects (EPS tree, shared resource pool, global calendars and codes), as P6 does. Also add **File › Save As `.dpln`**: a single-project SQLite file you can email, as MSP does.
+1. **Where the engine runs.** Port the earlier web planner's TypeScript engine and run it in a Web Worker so the UI stays responsive. Its tests come with it. We would move the CPM pass to Rust only if profiling shows it is needed, for example above 50,000 activities. Those tests would then check that the Rust engine gives the same results. This is the fastest route to a working 0.1 without giving up performance later.
+2. **A multi-project database plus single-project files.** Use a local SQLite database that holds many projects (EPS tree, shared resource pool, global calendars and codes). Also add **File › Save As `.dpln`**: a single-project SQLite file you can email.
 3. **Strict TypeScript everywhere:** `strict`, `noUncheckedIndexedAccess`, ESLint, Vitest. Rust uses `clippy -D warnings`. CI runs all of these on every push.
-4. **Rendering.** The Gantt and grids use canvas and virtualisation, not DOM nodes for each row. Cairn's DOM rows slow down at about 5,000 tasks, and P6 users regularly open 20,000-activity schedules.
+4. **Rendering.** The Gantt and grids use canvas and virtualisation, not DOM nodes for each row. The web planner's DOM rows slow down at about 5,000 tasks, and large projects regularly reach 20,000 activities.
 
 ### The update flow (what you asked for)
 
@@ -58,9 +58,9 @@ This document is for discussion. Nothing here is fixed until we agree on it.
 
 ---
 
-## 3. Feature map: MS Project + Primavera P6
+## 3. Feature map: desktop planning + enterprise scheduling
 
-Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in MSP only, neither = in both.
+Legend: **0.1** = first release, then later versions. ★ = enterprise-scale feature, ◆ = everyday desktop-planning feature, neither = core to both.
 
 ### Enterprise structure
 - ★ EPS (Enterprise Project Structure) tree with many projects in one database
@@ -69,7 +69,7 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 - Project portfolios and filters across projects
 
 ### Planning
-- WBS with WBS codes; MSP-style outline indenting (0.1)
+- WBS with WBS codes; outline indenting (0.1)
 - Activities/tasks: task-dependent ★, resource-dependent ★, level of effort ★, WBS summary ★, start/finish milestones (0.1 basic types)
 - ◆ Manual and auto-scheduled tasks, recurring tasks, split tasks, inactive tasks
 - Durations: original, remaining, at-completion; duration types (fixed units, fixed work, fixed duration ±units/time)
@@ -84,7 +84,7 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 - ★ Longest path, ★ multiple float paths, ★ "critical = float ≤ x"
 - ★ Data date; ★ Retained Logic, Progress Override and Actual Dates options
 - ★ Open ends, out-of-sequence and constraint report (**Schedule Log**)
-- ★ **Check Schedule**, including DCMA 14-point
+- ★ **Schedule check**, including DCMA 14-point
 - Resource leveling (priority, delay only within float, split)
 - Schedule backwards from the finish date (◆)
 
@@ -93,11 +93,11 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 - Rates over time, overtime, cost per use, ★ expenses, ★ cost accounts, ★ funding sources
 - Resource curves and contours; assignments with units, work, cost
 - Resource usage and task usage tables (timephased), resource histogram/profile
-- ◆ Team Planner (drag work between people)
+- ◆ People planner (drag work between people)
 
 ### Progress and control
 - % complete types: ★ physical, duration, units; actual start/finish; remaining duration
-- ◆ Update Project / mark on track; ★ store period performance
+- ◆ Update progress to the status date / mark on track; ★ store period performance
 - Baselines: ◆ 11 baselines plus interim plans; ★ unlimited baselines, compare any
 - Earned value: PV, EV, AC, SPI, CPI, EAC, ETC, VAC, TCPI
 - Progress line, ★ progress spotlight, status date
@@ -106,7 +106,7 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 ### Views and layouts
 - Gantt chart with the table on the left and bars on the right (0.1)
 - Tracking Gantt / baseline comparison
-- Network diagram (MSP PERT boxes) and ★ activity network
+- Network diagram (PERT boxes) and ★ activity network
 - ◆ Timeline view, ◆ Calendar view, ◆ Task form / ★ bottom detail tabs
 - Resource sheet, resource usage, task usage, resource graph
 - ★ Layouts (saved column + bar + filter + group sets), ◆ views, tables, groups and filters
@@ -117,15 +117,15 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 ### Reports, print and exchange
 - Print and PDF with page setup, legends, headers and footers
 - Built-in reports: overview, critical tasks, late tasks, cost overview, cash flow, S-curve, EV, milestones
-- Import and export: **XER** (0.1 import), **P6 XML**, **MSPDI XML** (0.1 import), MPX, XLSX/CSV, ICS
+- Import and export: **XER** (0.1 import), **PMXML**, **project XML** (0.1 import), MPX, XLSX/CSV, ICS
 - **`.mpp` read**: see the open questions. No Rust or JS library reads it today. Options: bundle MPXJ (Java, adds about 40 MB), or a .NET sidecar.
-- Copy and paste to and from Excel in the grid
+- Copy and paste to and from spreadsheets in the grid
 
 ### Productivity
 - Undo and redo across everything (0.1)
-- Command search (Ctrl+K, from Cairn), Quick-add line (Ctrl+J, from Cairn)
+- Command search (Ctrl+K), Quick-add line (Ctrl+J), both proven in the web planner
 - ★ Global Change (bulk "if/then" edits), find and replace, fill down
-- Keyboard-first grid editing, MSP shortcuts (0.1)
+- Keyboard-first grid editing, familiar scheduling shortcuts (0.1)
 - Autosave and crash recovery (0.1)
 - Later: scripting/API, plugins, multi-user (server sync)
 
@@ -133,7 +133,7 @@ Legend: **0.1** = first release, then later versions. ★ = in P6 only, ◆ = in
 
 ## 4. UI concept
 
-Dark-blue theme. The layout follows MS Project, and the panels follow P6:
+Dark-blue theme. A ribbon over a grid-and-Gantt view, with detail tabs below:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -144,20 +144,20 @@ Dark-blue theme. The layout follows MS Project, and the panels follow P6:
 │ Proj │  ID  Name   Dur Start ... │ ▬▬▬▬▬ ◆       │  (optional side panel)  │
 │ tree │                           │    ▬▬▬▬▬▬     │                        │
 ├──────┴───────────────────────────┴────────────────┴────────────────────────┤
-│ Bottom details: General │ Status │ Resources │ Relationships │ Notes │ Steps│ ← P6-style tabs
+│ Bottom details: General │ Status │ Resources │ Relationships │ Notes │ Steps│ ← detail tabs
 ├───────────────────────────────────────────────────────────────────────────┤
 │ Status bar: data date · new tasks: auto · filter · zoom slider            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **File › Backstage**, as in MSP: New, Open, Save As, Import/Export, Print, Options, **About and Updates**.
+- **File** page (full window): New, Open, Save As, Import/Export, Print, Options, **About and Updates**.
 - **Home** tab as the start screen: recent projects, templates, *What's new*, **Check for updates**.
 - **Palette:** navy `#0B2A5B`, primary `#1F4E9A`, accent sky `#8FB8F2`, milestone/attention amber `#F2B233`, critical red `#E04F4F`. There will be a light theme too.
 - **Logo (draft above):** a calendar with binding rings, Gantt bars linked by arrows, and an amber milestone diamond. Feedback welcome.
 
-**MSP screenshots would help a lot:** the Gantt view, the ribbon tabs, Task Information, and Options. P6 screenshots of Activities with the bottom tabs and the Layout dialog would help too.
+**Notes on your own workflow would help a lot:** which views you use most (Gantt, task details, options, activity lists with detail tabs, saved layouts) and what you need from each.
 
-We copy *features and workflow*. We do not copy Microsoft's or Oracle's icons, names or logos, so the app has its own look and stays clear of trade-dress issues.
+Datum Plan is designed around scheduling *features and workflow*, with its own look, icons, names and logo.
 
 ---
 
@@ -165,13 +165,13 @@ We copy *features and workflow*. We do not copy Microsoft's or Oracle's icons, n
 
 | Version | Theme | Contents |
 | --- | --- | --- |
-| **0.1** | Shell + updater + core plan | Tauri 2 app, NSIS `.exe` on GitHub Releases, **Home screen with Check for updates + changelog + one-click update**, logo/theme, ribbon skeleton, one project per file (`.dpln`), WBS/task grid with inline edit, indent/outdent, FS/SS/FF/SF links, CPM with critical path, Gantt with zoom and link drawing, project calendar, undo/redo, autosave, import of MSPDI XML and XER |
+| **0.1** | Shell + updater + core plan | Tauri 2 app, NSIS `.exe` on GitHub Releases, **Home screen with Check for updates + changelog + one-click update**, logo/theme, ribbon skeleton, one project per file (`.dpln`), WBS/task grid with inline edit, indent/outdent, FS/SS/FF/SF links, CPM with critical path, Gantt with zoom and link drawing, project calendar, undo/redo, autosave, import of project XML and XER |
 | 0.2 | Resources and costs | Resource sheet, assignments, rates, usage views, histogram, leveling |
 | 0.3 | Progress | Baselines, data date, actuals, % complete types, tracking Gantt, earned value |
-| 0.4 | P6 enterprise | SQLite multi-project DB, EPS/OBS, activity codes, UDFs, layouts, global change |
+| 0.4 | Enterprise | SQLite multi-project DB, EPS/OBS, activity codes, UDFs, layouts, global change |
 | 0.5 | Analysis | Schedule log, Check Schedule / DCMA, longest path, multiple float paths, network diagram |
-| 0.6 | Output | Reports, print/PDF, export to XER / P6 XML / MSPDI / XLSX |
-| 0.7+ | Power features | Timeline, Team Planner, formulas, risks/issues, `.mpp` import, performance at 100k activities, multi-user |
+| 0.6 | Output | Reports, print/PDF, export to XER / PMXML / project XML / XLSX |
+| 0.7+ | Power features | Timeline, people planner, formulas, risks/issues, `.mpp` import, performance at 100k activities, multi-user |
 
 Each release gets a `CHANGELOG.md` entry, which the update dialog shows.
 
@@ -181,8 +181,8 @@ Each release gets a `CHANGELOG.md` entry, which the update dialog shows.
 
 1. **Name:** is **Datum Plan** (from the repo name) the final name? *Datum* means a fixed reference point, which suits a schedule baseline.
 2. **Platforms:** Windows only for now, or macOS and Linux builds as well? Tauri builds all three, but each one adds CI time and testing.
-3. **Look and terms:** a full MS Project–style ribbon, plus P6 terms (Activity, WBS, Data Date) where P6 has the concept. Is that the mix you want?
-4. **Cairn engine:** OK to port it in as the starting point, keeping MIT attribution? That saves weeks.
+3. **Look and terms:** a full ribbon, plus standard scheduling terms (Activity, WBS, Data Date). Is that the mix you want?
+4. **Web planner engine:** OK to port it in as the starting point, keeping MIT attribution? That saves weeks.
 5. **`.mpp`:** how important is opening `.mpp` files directly? It decides whether we ship a Java/.NET sidecar.
 6. **Code signing:** accept the SmartScreen prompt on the first install for now?
-7. **Screenshots:** please send MSP and P6 screenshots of the views you use most.
+7. **Your workflow:** please describe the views you use most.

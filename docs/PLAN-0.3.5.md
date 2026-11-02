@@ -6,8 +6,8 @@ Status: **answered and built as 0.3.5** (tabs are Task, Schedule and Progress; n
 1. The Project Setup panel takes a big area on the right. Move it to the left sidebar as the first icon ("Setup").
 2. The ribbon has a horizontal scrollbar. The Task tab is crowded: group captions are cut off ("CLIPBOARD", "SCHEDULE"), items are missing at the right end, and some icons look poor.
 3. The column heading menu has no Delete Column. "Hide Column" exists, but there is no way to unhide.
-4. The ribbon should be split into more tabs. It does not have to copy MS Project exactly.
-5. Printing shows only Task Name, Duration and a cut-off Start. MS Project prints every column of the table (Start, Finish, Predecessors…). The 0.3.4 limits must be done: page layout for the other views, xlsx formatting, and so on.
+4. The ribbon should be split into more tabs. It does not have to keep the old layout exactly.
+5. Printing shows only Task Name, Duration and a cut-off Start. Printing should include every column of the table (Start, Finish, Predecessors…). The 0.3.4 limits must be done: page layout for the other views, xlsx formatting, and so on.
 
 ## 2. Diagnosis
 - Print defaulted to "first 3 columns" and skipped the Task Mode column, so only Name, Duration and Start printed. The Start column is drawn under the chart's first weeks (the shading and lines overlap its text).
@@ -43,16 +43,16 @@ New tab order (names open to change):
 Heading right-click menu:
 - **Delete Column**: takes the column out of this table, with undo. For a formula or custom column it asks: "Remove from this table only" or "Delete the field and its values".
 - **Hide Column** keeps the column in the table, hidden. **Unhide Columns ▸** lists the hidden ones (also in View › Tables).
-- **Columns…** (new dialog, like P6): available fields on the left, table columns on the right, with Add, Remove, Hide, Up, Down, and width. The same dialog is used by printing.
+- **Columns…** (new dialog): available fields on the left, table columns on the right, with Add, Remove, Hide, Up, Down, and width. The same dialog is used by printing.
 
-### D. Printing: like MS Project, then better
-- **Prints every column of the table by default** (hidden columns stay out), then the chart. If the table is wider than the page, the columns continue on the next page, as in MS Project. The column-overlap bug is fixed.
+### D. Printing: complete, then better
+- **Prints every column of the table by default** (hidden columns stay out), then the chart. If the table is wider than the page, the columns continue on the next page. The column-overlap bug is fixed.
 - Page Setup › View: choose the columns to print (tick list, with order), row height and text size, "fit columns to page" (shrinks the text), wrap long task names, print notes on a last page, print blank pages yes or no.
 - **Page layout for other views:** Network Diagram, Calendar, Resource Sheet, Resource and Task Usage, Team Planner, Sheets tabs (cell ranges with print area and gridlines), and the reports (Dashboard, Progress, S-curves, Report Builder) with the same headers, footers, logos and page numbers.
 - **Print preview:** fit to width, page navigation and a page count while editing settings. The setup can be saved as named page setups per view.
 
 ### E. Also from the 0.3.4 limits
-- Excel export keeps cell formatting (bold, colours, fill, alignment, size) for tasks and sheets.
+- Excel (.xlsx) export keeps cell formatting (bold, colours, fill, alignment, size) for tasks and sheets.
 - One shared grid for Sheets and the task sheet. The fill handle continues series (dates +1 day/week, numbers, IDs). Paste Special (values only, formats only). Freeze panes in Sheets.
 - Update `docs/MEMORY.md` and add UI tests for each item: no horizontal ribbon scroll at 1280/1600/1920 px, column delete and unhide, every column printed, each view printable.
 
@@ -67,5 +67,5 @@ About 1,200 lines changed (ribbon and icons about 300, print about 400, columns 
 1. **Tabs:** OK with the new **Home** and **Progress** tabs as in the table above? Any names you prefer?
 2. **Setup:** a page in the work area (recommended), or a narrow panel that slides out from the sidebar?
 3. **Deleting a formula/custom column:** ask each time (recommended), or always remove from the table only?
-4. **Printing:** besides all columns, which MS Project print features do you use most (notes, totals, blank pages, specific views)? Which other views must print first?
+4. **Printing:** besides all columns, which print features do you use most (notes, totals, blank pages, specific views)? Which other views must print first?
 5. **Split:** 0.3.5 = your blockers (Setup, columns, ribbon, print columns), 0.3.6 = other views' printing + shared grid + xlsx formatting? Or everything in 0.3.5?

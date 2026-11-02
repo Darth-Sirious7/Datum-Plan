@@ -1,4 +1,4 @@
-// The task sheet, built like Excel: one scroller with a sticky header (so columns always line
+// The task sheet, built like a spreadsheet: one scroller with a sticky header (so columns always line
 // up), frozen ID and name columns, range selection, fill handle, clipboard ranges, a formula bar,
 // AutoFilter buttons and inline header rename.
 import { For, Show, createSignal, createMemo, createEffect, onMount, onCleanup, untrack, on, JSX } from "solid-js";
@@ -158,14 +158,14 @@ export const Grid = (p: { width?: number }) => {
     };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
-  /** Fills the rows below the range down to row `to`: series as in Excel (1, 2, 3; Phase 1, 2; dates), Ctrl copies. */
+  /** Fills the rows below the range down to row `to`: series (1, 2, 3; Phase 1, 2; dates), Ctrl copies. */
   const fill = async (g: Range, to: number, copy = false) => {
     const out: [number, string, string][] = [];
     for (let c = g.c0; c <= g.c1; c++) {
       const col = grid().cols[c];
       if (!col?.edit) continue;
       const src = Array.from({ length: g.r1 - g.r0 + 1 }, (_, i) => rows()[g.r0 + i]?.cells[c] ?? "");
-      // Durations, links and resources copy (as MS Project does); numbers, text, dates and IDs continue a series.
+      // Durations, links and resources copy; numbers, text, dates and IDs continue a series.
       const ser = ["Num", "Int", "Cost", "Pct", "Text", "Date", "Fin"].includes(col.kind) && !["preds", "succs", "res"].includes(col.key);
       for (let r = g.r1 + 1; r <= to; r++) { const target = rows()[r]; if (target && target.uid > 0) out.push([target.uid, col.key, series(src, r - g.r1, copy || !ser)]); }
     }
@@ -198,7 +198,7 @@ export const Grid = (p: { width?: number }) => {
     box.focus();
   };
 
-  // ---------- clipboard: ranges as tab-separated text (works with Excel) ----------
+  // ---------- clipboard: ranges as tab-separated text (works with spreadsheet programs) ----------
   let lastCopy = { text: "", rows: false };
   const rangeText = () => {
     const g = norm(ranges()[ranges().length - 1] ?? { r0: cur().row, c0: cur().col, r1: cur().row, c1: cur().col });

@@ -50,7 +50,7 @@ export const C = {
   scrollTo: () => { const r = curRow(); if (r) document.dispatchEvent(new CustomEvent("gantt-scroll", { detail: r.bar.s })); },
   view: (v: View) => {
     setBackstage(null);
-    // The Tracking Gantt shows the Tracking table, as in MS Project; leaving it brings the Entry table back.
+    // The Tracking Gantt shows the Tracking table; leaving it brings the Entry table back.
     if (v === "tracking" && table() !== "Tracking") useTable("Tracking");
     else if (v !== "tracking" && table() === "Tracking" && ["gantt", "timeline"].includes(v)) useTable("Entry");
     setView(v);

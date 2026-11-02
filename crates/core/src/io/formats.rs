@@ -1,4 +1,4 @@
-//! Export-only formats: JSON, HTML, iCalendar, MPX and Primavera PMXML.
+//! Export-only formats: JSON, HTML, iCalendar, MPX and PMXML.
 use super::xml::esc;
 use crate::cal::{date_of, DAY};
 use crate::fields::Calc;
@@ -117,7 +117,7 @@ pub fn mpx(c: &Calc) -> String {
 
 fn pdt(t: i64) -> String { format!("{}T{:02}:{:02}:00", date_of(t), t.rem_euclid(DAY) / 60, t.rem_euclid(60)) }
 
-/// Primavera PMXML (APIBusinessObjects): WBS, activities, relationships and resources.
+/// PMXML (APIBusinessObjects): WBS, activities, relationships and resources.
 pub fn pmxml(c: &Calc) -> String {
     let (p, s) = (c.p, &c.s);
     let mut o = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<APIBusinessObjects xmlns=\"http://xmlns.oracle.com/Primavera/P6/V19.12/API/BusinessObjects\">\n");

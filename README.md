@@ -154,3 +154,5 @@ Found a bug or have an idea? [Open an issue](https://github.com/Edgar-Mendonca/D
 ## Licence
 
 MIT © 2026 Edgar Mendonca. Third-party notices are in [NOTICE](NOTICE).
+
+Product and file-format names are trademarks of their owners and are used only to describe file compatibility.

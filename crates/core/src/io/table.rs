@@ -299,7 +299,7 @@ pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     crate::doc::write_atomic(path, out.as_bytes())
 }
 
-/// Excel workbook: the table with real numbers and dates, formula columns as live Excel formulas,
+/// Excel workbook: the table with real numbers and dates, formula columns as live workbook formulas,
 /// the plan's sheet tabs, and a Plan sheet those tabs can read.
 /// Applies a cell style (`b;i;u;s;c:#hex;f:#hex;z:12;a:c;n:Font`, see the UI's fmt.ts) to an Excel format.
 fn styled(mut f: rust_xlsxwriter::Format, st: &str) -> rust_xlsxwriter::Format {
@@ -337,7 +337,7 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
     let date_fmt = Format::new().set_num_format("dd-mmm-yy");
     let days_fmt = Format::new().set_num_format("0.0# \"d\"");
     let money_fmt = Format::new().set_num_format(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\""));
-    // One typed cell: dates as Excel dates, durations in days, money as numbers.
+    // One typed cell: dates as workbook dates, durations in days, money as numbers.
     let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool, st: &str| -> Result<(), String> {
         let kind = c.kind(key);
         let v = c.val(i, key);

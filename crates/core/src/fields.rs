@@ -123,7 +123,7 @@ pub struct Calc<'a> {
     pub succs: Vec<Vec<String>>,
     defs: HashMap<String, (CustomDef, Option<Ex>)>,
     names: HashMap<String, String>,
-    /// Results of Excel-style formula columns, per field key and task.
+    /// Results of spreadsheet-style formula columns, per field key and task.
     xl: HashMap<String, Vec<F>>,
     /// Formula field results per (field, task), so fields reading fields are worked out once;
     /// `None` while one is being worked out, which catches circular formulas.
@@ -206,7 +206,7 @@ impl<'a> Calc<'a> {
         let mut c = Calc { p, s, l, ev: Ev::default(), error, fmt: fmt.into(), today, pct, wbs, id_of, succs, defs, names, xl: HashMap::new(), memo: RefCell::default() };
         c.ev = c.earned_value();
         let excel: Vec<(String, String)> = p.fields.iter().filter(|d| crate::sheet::is_excel(&d.formula) && !d.key.starts_with('r')).map(|d| (d.key.clone(), d.formula.clone())).collect();
-        // Again when VBA formulas exist, so a formula column can read one that reads another formula column.
+        // Again when classic formulas exist, so a formula column can read one that reads another formula column.
         let vba = p.fields.iter().any(|d| !d.formula.trim().is_empty() && !crate::sheet::is_excel(&d.formula));
         for _ in 0..if excel.is_empty() { 0 } else if vba { 2 } else { 1 } {
             c.xl = crate::sheet::task_formulas(&c, &excel);
@@ -644,7 +644,7 @@ pub fn res_text(c: &Calc, k: usize, key: &str) -> String {
     }
 }
 
-/// A resource custom field: its formula's result (VBA style, reading this resource's fields) or the stored value.
+/// A resource custom field: its formula's result (classic formula syntax, reading this resource's fields) or the stored value.
 fn res_custom(c: &Calc, k: usize, key: &str) -> F {
     if let Some((_, Some(ex))) = c.defs.get(key) {
         // Same guard as task formulas; resource rows are memoised under an "r:" key.

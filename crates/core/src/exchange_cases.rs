@@ -277,7 +277,7 @@ fn xls_and_ods_with_far_apart_cells_are_refused() {
     std::fs::remove_dir_all(dir).ok();
 }
 
-// P6 writes working periods as (s|08:00|f|12:00) or (f|12:00|s|08:00).
+// XER files write working periods as (s|08:00|f|12:00) or (f|12:00|s|08:00).
 #[test]
 fn xer_calendar_hours_in_either_order() {
     let data = "(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((0||0(f|12:00|s|08:00)())(0||1(f|17:00|s|13:00)())))(0||3()())(0||4()())(0||5()())(0||6()())(0||7()())))(0||Exceptions()())))";

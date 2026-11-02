@@ -5,13 +5,13 @@
 
 | | |
 | --- | --- |
-| **Product** | Datum Plan: a Windows desktop scheduler combining MS Project (look, ease of use) and Primavera P6 (power features) |
+| **Product** | Datum Plan: a Windows desktop scheduler with an easy ribbon layout (task sheet and Gantt chart) and advanced scheduling features |
 | **Current version** | **0.4.4** (released 2026-10-29). Earlier: 0.1.0 … 0.4.3 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
-| **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; Excel formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
+| **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; spreadsheet formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
 | **Installer** | NSIS `.exe`, per-user install. 1.7 MB (0.1.0), 1.8 MB (0.1.1), 2.4 MB (0.2.0); UI bundle 200 kB JS (61 kB gzip) in 0.3.0 |
-| **Reference repos** | `Edgar-Mendonca/Cairn` (the earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
+| **Reference repos** | `Edgar-Mendonca/Cairn` (the user's earlier web planner: feature and template reference) · `Compressor-Engineering-Suite` (the Home/update pattern) |
 
 ---
 
@@ -24,7 +24,7 @@ flowchart LR
     Rib[ribbon.tsx: tabs, dropdowns, QAT, Tell Me]
     Grid[grid.tsx: virtual rows, inline edit,<br/>header menus, column drag/resize]
     Gantt[gantt.tsx: canvas Gantt + timeline]
-    Det[details.tsx: P6 tabs]
+    Det[details.tsx: detail tabs]
     Views[views.tsx: network, calendar, usage, resources,<br/>graph, team, risks, checks, portfolio]
     Rep[reports.tsx: dashboard, report gallery, charts]
     Dlg[dialogs.tsx: information, calendars, custom fields,<br/>filters, groups, sorts, baselines, import, compare]
@@ -42,8 +42,8 @@ flowchart LR
     Fields[fields.rs: Calc · ~450 fields · EV · custom fields<br/>formulas · indicators · filter tests]
     Query[query.rs: filter · group · sort · outline → Grid + bars]
     Rep2[report.rs · check.rs · network.rs<br/>usage · curves · compare · DCMA · layout]
-    Form[formula.rs: MSP formula language]
-    Sheet[sheet.rs: GridCraft Excel engine:<br/>formula columns · sheet tabs · Plan sheet]
+    Form[formula.rs: classic formula language]
+    Sheet[sheet.rs: GridCraft spreadsheet engine:<br/>formula columns · sheet tabs · Plan sheet]
     Links[links.rs: links between plans:<br/>states · refresh · update_all]
     Load[load.rs: timephased work and cost]
     IO[io/: mspdi · xer · table · formats pmxml/mpx/ics/html/json]
@@ -85,12 +85,12 @@ flowchart LR
 | `crates/core/src/sched.rs` | CPM → `Sched` (es/ef/ls/lf/tf/ff, edges with driving flags, longest path, float paths, calendars incl. a 24-hour one). `critical()` follows the options. |
 | `crates/core/src/level.rs` | Serial leveling with a fixed rank; `clear`. |
 | `crates/core/src/load.rs` | Work/cost per task, assignment and day (rate tables, accruals, actuals); `buckets(day/week/month/quarter)`. |
-| `crates/core/src/formula.rs` | MS Project formula parser and evaluator (34 functions). |
+| `crates/core/src/formula.rs` | Classic formula parser and evaluator ([Field], IIf) (34 functions). |
 | `crates/core/src/fields.rs` | Field registry (`task_fields`, `resource_fields`), `Calc` (one scheduled plan + loads + EV), `val/text/format/icon`, filter `test`, `money`. |
 | `crates/core/src/query.rs` | `Query` → `Grid` (cols, rows with cells, icons, bar geometry), built-in filters, `Summary`. |
 | `crates/core/src/report.rs` | Usage grids, cost/EV curves, compare; reporting periods (`period_ends`), weighted progress S-curves (`scurve`: planned from baseline, actual linear from actual start to today's %, forecast), `period_report` (this vs previous period, WBS, lists, hours). |
-| `crates/core/src/sheet.rs` | GridCraft bridge: value conversion (dates ↔ Excel serials, durations in days), `[Field]` translation, `task_formulas` (all Excel formula columns in one in-memory workbook, one row per task), `book`/`sheet_view` (Plan sheet with table `Tasks` + Resources sheet with table `Resources` + project names, then user tabs; GridCraft numfmt display with date/% inference; spilled cells), `functions`, `shift`/`adjust`/`rename` (formula reference rewriting). |
-| `crates/core/src/check.rs` | DCMA 14 + P6 checks with limits. |
+| `crates/core/src/sheet.rs` | GridCraft bridge: value conversion (dates ↔ spreadsheet date serials, durations in days), `[Field]` translation, `task_formulas` (all spreadsheet formula columns in one in-memory workbook, one row per task), `book`/`sheet_view` (Plan sheet with table `Tasks` + Resources sheet with table `Resources` + project names, then user tabs; GridCraft numfmt display with date/% inference; spilled cells), `functions`, `shift`/`adjust`/`rename` (formula reference rewriting). |
+| `crates/core/src/check.rs` | DCMA 14 + extra schedule checks with limits. |
 | `crates/core/src/network.rs` | Network Diagram layout (columns by logic, rows by predecessor position). |
 | `crates/core/src/parse.rs` | Durations (also elapsed), dates, predecessors (also % lags), resources, quick add. |
 | `crates/core/src/doc.rs` | Ops (see the enum: edits, Level, Split, Interim, UpdateProject, Snapshot, ProjectSet, FieldDef, CodeDef, Risk, TaskList, ResJson, Ui, Baseline n, …), undo/redo, `.dplan`. |
@@ -119,17 +119,17 @@ flowchart LR
 | `ui/src/cmds.ts` | Command functions `C` and the `ALL_CMDS` list for Tell Me. |
 | `ui/src/ui.tsx` | Icon, Menu (with submenus), Dialog (optional `help` key puts a ? in its header), Tabs, form helpers. |
 | `ui/src/help.tsx` | "?" help: the `HELP` table (`{ t, what, how?, tip? }` per topic), `<Help k>` (the small ? button, `.help`), `helpCard(k)` (the card dialog, `.helpcard`). Ribbon groups take `h=` on `G`, pages `help=` on `Page`/`Tools`. Help › What Is This Tool? lists every topic. |
-| `ui/src/grid.tsx` | Excel-like task sheet: one scroller with sticky header and frozen ID/name, ranges (`ranges` signal), fill handle, TSV clipboard via copy/paste events, `Cells` op for range edits, AutoFilter menus, header rename (`Title` op), `FormulaBar`. |
+| `ui/src/grid.tsx` | Spreadsheet-style task sheet: one scroller with sticky header and frozen ID/name, ranges (`ranges` signal), fill handle, TSV clipboard via copy/paste events, `Cells` op for range edits, AutoFilter menus, header rename (`Title` op), `FormulaBar`. |
 | `ui/src/dashboards.tsx` | Custom dashboards: `DashTabs`, `CustomDashboard` (12-column tile grid, edit mode, drag reorder, size menu), tile views (number, ring, chart, table, countries, text), `editTile` dialog, `TEMPLATES`; formulas evaluated in one `dash_eval` call; stored in `ui.dashboards`. |
 | `ui/src/charts.tsx` | Chart.js wrapper used by every chart: modern style (smooth lines, faded fill, rounded bars, light grid), status pill, hover line, resize with box and for print, empty-data text, PNG save. |
-| `ui/src/sheets.tsx` | Sheet tabs, Excel-like: point-and-click references with coloured boxes, suggestions + argument hints, AutoSum, fill/paste moving formulas (`formula_shift`), insert/delete rows/cols (`SheetInsert`), number formats, column widths, error tips, flag cells. |
+| `ui/src/sheets.tsx` | Sheet tabs, spreadsheet-style: point-and-click references with coloured boxes, suggestions + argument hints, AutoSum, fill/paste moving formulas (`formula_shift`), insert/delete rows/cols (`SheetInsert`), number formats, column widths, error tips, flag cells. |
 | `ui/src/formulas.ts` | Pure formula-text helpers for the editor: `refs`, `canPoint`, `suggest`, `callAt`/`sigArgs`, `cycleAnchor` (F4), `ERRORS`. |
 | `ui/src/sheetdlg.tsx` | Insert Function (search, categories) and Plan Data (live FILTER/SORT/CHOOSECOLS list of Tasks or Resources). |
 | `ui/src/flags.tsx` | Country flags (flag-icons SVGs, MIT, lazy assets): `countryCode` (code/name/alias), `Flag`, `FlagText`, `CountryList`. |
 | `ui/src/print.tsx` | File › Print (every view; `pkind()` = gantt / net / cal / table / flow; `Frame` draws paper + header/footer/legend; `vdata`/`vpages`/`ViewPage` for network tiles, calendar months and tables; `FlowDoc` prints report pages in a table whose thead/tfoot repeat, with page numbers from `@page` margin boxes): `PageSetup` (saved in `project.ui.page`), `layout()` makes one strip (table columns + chart) and cuts it into page windows (across then down), `Strip` draws a window, `Sheet` draws one page as SVG (table + Gantt + legend) with header/footer codes and logos; `printNow` renders `#printroot` and sets `@page` size, then `window.print()`. `PAPERS`. |
 | `ui/src/roadmap.tsx` | File › Roadmap: the `ROADMAP` list (keep it in step with the roadmap table and "Pending and next" in this file). |
 | `ui/src/selection.ts` | The grid engine's selection, shared by the task sheet and Sheets: `createSel` (ranges, active cell, pick/drag/rows/cols/all/each), `aggregate` (Sum/Average/Count). |
-| `ui/src/cells.ts` | Shared by both grids: `parseTsv`/`toTsv`/`transpose`, `series` (Excel fill rules), `clip` (last copy: values + styles for Paste Special). |
+| `ui/src/cells.ts` | Shared by both grids: `parseTsv`/`toTsv`/`transpose`, `series` (spreadsheet fill rules), `clip` (last copy: values + styles for Paste Special). |
 | `ui/src/fmt.ts` | Text formatting: style strings `b;i;u;s;c:#hex;f:#hex;z:12;a:c`, `css()`, the focused grid registers a `Target` (get/set selected cells), toggle/setProp/clear, Format Painter. |
 | `ui/src/tools.tsx` | Update Progress page, Relationship Diagram (SVG), Report Builder (sections, `TEMPLATES`, saved in `ui.reports`). |
 | `tests_ui/run.cjs` | Playwright UI tests against the built UI with a mocked shell and `dump` fixture (alignment, ranges, menus, ribbon, sidebar, every view). Runs in CI. |
@@ -177,7 +177,7 @@ flowchart LR
 8. **Release:** bump both Cargo.toml files, write the CHANGELOG (it becomes the in-app "What's new"), update this file (version, roadmap, files, decisions, session log, limits), commit, push, run `release.yml` (workflow_dispatch), then watch CI + Release and confirm the installer.
 9. **Report to the user** in plain language: what changed, what was checked, what is not done, and anything to check on Windows.
 
-Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print), 0.4.3 (publisher "Datum"), 0.4.4 (the guide, English and Chinese).
+Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling), 0.3.1 (spreadsheet grid, formulas, periods), 0.3.2 (builder, power tools), 0.3.3 (hotfix), 0.3.4 (print + formatting), 0.3.5 (ribbon tabs, Setup page, columns), 0.3.6 (print every view, network, timeline zoom), 0.3.7 (tracking, templates, whiteboard network, grid engine), 0.3.8 (print links, date picker), 0.3.9 (? help beside the tools), 0.3.10 (Roadmap), 0.3.11 (hardening quick wins), 0.3.12 (trust in the dates), 0.4.0 (schedule risk, trades, levelling preview, import report), 0.4.1 (progress history), 0.4.2 (hardening, CLI + MCP, print), 0.4.3 (publisher "Datum"), 0.4.4 (the guide, English and Chinese).
 
 ---
 
@@ -186,52 +186,52 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | Date | Decision | Why |
 | --- | --- | --- |
 | 2026-10-24 | Name **Datum Plan**, file extension `.dplan` | The user chose it. |
-| 2026-10-24 | **Rust engine** in `crates/core`; Cairn is only a reference | The user wants everything in Rust for a small, robust app. |
+| 2026-10-24 | **Rust engine** in `crates/core`; the earlier web planner is only a reference | The user wants everything in Rust for a small, robust app. |
 | 2026-10-24 | UI in plain TypeScript with no framework, split into 7 script files joined by tsc | Small bundle; modules without a bundler. |
 | 2026-10-24 | Custom updater (GitHub API + SHA-256 + NSIS `/S`); per-user install | Needs no signing secrets; silent updates. |
 | 2026-10-24 | Windows only; no `.mpp` (closed format) | The user's choice. Exchange formats are dplan, XML, XER, XLSX and CSV. |
-| 0.1.1 | Light theme, new logo, Cairn-style sidebar, general templates | The user's feedback on 0.1.0. |
-| 0.2.0 | **Minute-precision engine with real calendars** (replacing whole days) | Needed for hours, shifts, holidays and P6/MSP exchange. Old files migrate (day × 480). |
+| 0.1.1 | Light theme, new logo, icon sidebar, general templates | The user's feedback on 0.1.0. |
+| 0.2.0 | **Minute-precision engine with real calendars** (replacing whole days) | Needed for hours, shifts, holidays and XER/project XML exchange. Old files migrate (day × 480). |
 | 0.2.0 | Several roadmap steps shipped as one release (0.1.2–0.1.4, calendars, constraints, logic, exchange, resources, baselines/progress) | The user asked for all of it in 0.2. |
-| 0.2.0 | Links on summaries apply to every leaf under them; links to one's own summary are dropped | Simple and close to MSP. P6 has no summary links anyway. |
-| 0.2.0 | Status date semantics: progress up to the end of that day; remaining work starts the next day | MSP-like status date. XER `last_recalc_date` maps to status = data date − 1. |
-| 0.2.0 | Work-resource units: `50%`, `0.5` or `50`; material: quantity; cost: amount | Matches MSP habits. |
+| 0.2.0 | Links on summaries apply to every leaf under them; links to one's own summary are dropped | Simple and predictable; XER has no summary links anyway. |
+| 0.2.0 | Status date semantics: progress up to the end of that day; remaining work starts the next day | Conventional status date. XER `last_recalc_date` maps to status = data date − 1. |
+| 0.2.0 | Work-resource units: `50%`, `0.5` or `50`; material: quantity; cost: amount | Matches common scheduling habits. |
 | 0.2.0 | Predecessor IDs typed with new rows (quick add, paste) mean the IDs shown before the insert | What the user sees on screen. |
 | 0.2.0 | XML reader written by hand instead of quick-xml | The quick-xml API changes a lot between versions; MSPDI only needs elements and text. |
 | 0.2.0 | Recovery copy in AppData, not autosave over the user's file | Safe: never overwrites a file without asking. |
-| 0.3 plan | **SolidJS + Vite** for the UI (not Astro) | Small reactive components for MSP-level dialogs, ribbon and report designer. Astro targets content sites. |
+| 0.3 plan | **SolidJS + Vite** for the UI (not Astro) | Small reactive components for full dialogs, ribbon and report designer. Astro targets content sites. |
 | 0.3 plan | **Local-first:** `.dplan` files plus a workspace file; no server, no cloud, no telemetry (the only network call is the update check) | Open source, everything stays on the user's computer. |
 | 0.3 plan | Betas through an opt-in updater channel; slipped items go to 0.3.1 | The user wants to check the big release step by step. |
-| 0.3 plan | **Datum scheduling style** (PLAN-0.3 §3.P): fixed duration, single Progress field, retained logic, slack ≤ 0 critical with a longest-path switch, auto actuals, an Explain panel, calculated cells marked | The user wants something easier than both MSP and P6. |
-| 0.3 plan | **Project Setup** panel (skippable, docked right) as step one of every new plan; all ISO currencies; logo and company branding; Activity IDs A1000+10; MSP-style network; MSP density; English only; beta backups | The user's answers, 2026-10-24. |
-| 0.3 plan | `docs/reference/MSP-P6-feature-reference.md` (from the user) is the behaviour spec; its C2 scenarios become tests and a checklist | A shared, written definition of done. |
+| 0.3 plan | **Datum scheduling style** (PLAN-0.3 §3.P): fixed duration, single Progress field, retained logic, slack ≤ 0 critical with a longest-path switch, auto actuals, an Explain panel, calculated cells marked | The user wants something easier than the usual desktop schedulers. |
+| 0.3 plan | **Project Setup** panel (skippable, docked right) as step one of every new plan; all ISO currencies; logo and company branding; Activity IDs A1000+10; box-style network; compact density; English only; beta backups | The user's answers, 2026-10-24. |
+| 0.3 plan | A feature reference from the user (kept outside the repo) was the behaviour spec; its C2 scenarios became tests and a checklist | A shared, written definition of done. |
 | 0.3.0 | Shipped as one release (no betas) because the user asked to "build and release 0.3" | Betas stay available through the opt-in channel for later versions. |
 | 0.3.0 | The engine owns fields, filters, groups and sorts (`Calc` + `query`); the window asks for rows per view | One place for values, exports use the same text; 20k tasks query in ~50 ms. |
 | 0.3.0 | Print/PDF through the WebView print dialog ("Save as PDF") with print CSS, instead of a PDF library | No extra dependency; works for every view and report. |
 | 0.3.0 | Templates still use the Project Setup panel (setup_done = false) | Setup is step one of every new plan, as agreed. |
-| 0.3.1 | Keep the MS Project ribbon and layout; adopt only CentriForge's styling (IBM Plex, palette, square controls, mono labels) | The user's answer: improve the current UI, don't replace the command bar. |
+| 0.3.1 | Keep the ribbon and layout; adopt only CentriForge's styling (IBM Plex, palette, square controls, mono labels) | The user's answer: improve the current UI, don't replace the command bar. |
 | 0.3.1 | Light / Dark / Auto theme via CSS tokens on `:root[data-theme]`; canvas colours read the tokens | The user asked for all three. |
-| 0.3.1 | Formulas are per column (MS Project style) in Excel syntax with `[Field]` names, evaluated by GridCraft; cell references only in sheet tabs | The user's answer. GridCraft gives ~400 Excel functions without writing them. |
+| 0.3.1 | Formulas are per column (custom-field style) in spreadsheet syntax with `[Field]` names, evaluated by GridCraft; cell references only in sheet tabs | The user's answer. GridCraft gives ~400 spreadsheet functions without writing them. |
 | 0.3.1 | GridCraft as a pinned git dependency (calc, model, core), not a fork | Small surface (one module), easy upgrades, attribution in NOTICE. |
 | 0.3.1 | Grid stays DOM (virtual rows) with a single scroller and sticky header, not canvas | Fixes the alignment bug at the root; real inputs for editing. |
 | 0.3.1 | Reporting periods per plan (week end day, month close day, weighting) chosen by the user | The user's answer: it varies by project. |
-| 0.3.1 | Charts with Chart.js in a Prism style; PNG save on every chart | The user asked for elegant, hoverable charts like Prism/plotly; Chart.js is small. |
+| 0.3.1 | Charts with Chart.js in a clean scientific style; PNG save on every chart | The user asked for elegant, hoverable charts like scientific plotting tools; Chart.js is small. |
 | 0.3.1 | Period notes and photos stored inside the .dplan (photos downscaled to 1400 px JPEG) | Portable single file; the user left it to us. |
-| 0.3.2 | Big ribbon buttons with both a command and a menu are MS Project split buttons; contextual tabs carry their group label above the tab | The user's screenshots of 0.3.1. |
+| 0.3.2 | Big ribbon buttons with both a command and a menu are split buttons; contextual tabs carry their group label above the tab | The user's screenshots of 0.3.1. |
 | 0.3.2 | Report Builder reports and conditional-format rules live in `project.ui` (no format change) | Saved with the plan, no migration. |
-| 0.3.2 | Recurring tasks are a summary with SNET-constrained occurrences | Same as MS Project; occurrences stay ordinary tasks. |
+| 0.3.2 | Recurring tasks are a summary with SNET-constrained occurrences | The usual approach; occurrences stay ordinary tasks. |
 | 0.3.3 | Effects that mirror outside selection into the grid use `on(sel, …)` with `untrack`, never track `cur`/`ranges` | Tracking `cur` made the effect run before the sel sync and snap the row back (the 0.3.3 bug). |
 | 0.3.3 | Task sheet and Sheets tabs should share one grid component (selection, clipboard, fill, formula bar); GridCraft stays the formula engine underneath; scheduling stays in `crates/core` | The user asked to use the Sheets grid for scheduling. Task rows are not free cells (they carry types, links, outline, validation), so the shared part is the UI grid, not the data model. |
 | 0.3.9 | **? help beside the tools in every Datum app**: a small ? beside each ribbon group, page, panel and main dialog opens a card (what it is for, how to use it) from one `HELP` table in `ui/src/help.tsx`; Help › What Is This Tool? lists them all. No separate teaching mode | The user's words: "at some of the tools, we can add a small question mark icon… we should do it in all of our applications." Built first in Datum Atlas 0.1.1; same code and styles in every app. |
 | 0.4.4 | The guide is a PDF per language, downloaded on demand (not in the installer): `update::guide(lang)` fetches `DatumPlan-Guide-{lang}.pdf` from this version's release (else latest), requires a matching line in that release's SHA256SUMS.txt and a `%PDF` header, caps 60 MB, saves to Downloads ("Datum Plan Guide.pdf" / "Datum Plan 使用指南.pdf") with `write_atomic`, opens it | The user: keep the installer small; inside the app, one click. Same trust rules as updates. |
-| 0.5.0 | Sheets read the plan through GridCraft tables and names (`Tasks[Finish]`, `Resources[Country]`, `ProjectFinish`, `SPI`), not copied values; the Plan sheet keeps its first 18 columns (A–R) so `Plan!M:M` formulas still work; percentages stay 0–100 like the task sheet | The user built Excel dashboards by copying MSP values by hand. Names are readable and survive column changes; old files keep working. |
-| 0.5.0 | Excel habits come from GridCraft, not re-implemented: `shift_relative` for fill/paste, `adjust` for insert/delete rows/cols, `rename_sheet`/`delete_sheet`, `numfmt` for formats, `functions::all()` for suggestions | The user: use GridCraft's engine. Small bridge in `sheet.rs`. |
+| 0.5.0 | Sheets read the plan through GridCraft tables and names (`Tasks[Finish]`, `Resources[Country]`, `ProjectFinish`, `SPI`), not copied values; the Plan sheet keeps its first 18 columns (A–R) so `Plan!M:M` formulas still work; percentages stay 0–100 like the task sheet | The user built spreadsheet dashboards by copying schedule values by hand. Names are readable and survive column changes; old files keep working. |
+| 0.5.0 | Spreadsheet habits come from GridCraft, not re-implemented: `shift_relative` for fill/paste, `adjust` for insert/delete rows/cols, `rename_sheet`/`delete_sheet`, `numfmt` for formats, `functions::all()` for suggestions | The user: use GridCraft's engine. Small bridge in `sheet.rs`. |
 | 0.5.0 | Flags are a cell format ("flag") and a resource `country` field, drawn from flag-icons SVGs bundled as separate lazy files (not emoji) | Windows does not draw flag emoji. Files load only when shown; 271 SVGs ≈ 2.7 MB. |
 | 0.5.0 | Custom dashboards are 0.5.3 (0.5.1 and 0.5.2 became fix and chart releases), built on the 0.5.0 sheets | Sheets first so dashboard tiles can read sheet ranges and plan names. |
 | 0.5.3 | Custom dashboards live in `ui.dashboards` (JSON tiles), beside the built-in one, not in the Report Builder | The builder makes long reports (sections down the page); a dashboard is one board of tiles. Both reuse the same charts and tables. |
 | 0.5.3 | Tiles read the plan through formulas (`sheet::eval`: one extra workbook sheet per formula; a plain `=Sheet!A1:C9` keeps that sheet's formats, flags included) | One way to get any figure, the same as Sheets; no special data model per tile. |
-| 0.5.2 | Charts stay on Chart.js (not Plotly), restyled like the Chart.js samples: Tailwind-like palette replaces Okabe-Ito, no black axes, `cubicInterpolationMode: monotone` (no overshoot on S-curves), per-period lines straight; every chart registers in `live` and resizes on beforeprint/afterprint and with a ResizeObserver; the canvas is absolutely positioned so it never sizes its box | The user found the old Prism-style charts unattractive and saw charts cropped (printed canvases kept their screen width). Chart.js is small (~200 KB) and prints well; Plotly (~3.5 MB) suits Datum Plot. |
-| 0.5.4 | Resource calendars are a project option, off by default (`opts.res_cals`), plus a per-task `ignore_rc`; with it on, a task's candidate calendars are one per work resource with units > 0 (intersected with the task calendar when it has one) and the one giving the latest finish wins (`pick` in sched.rs, `ci` is a `Cell` during the forward pass); a person's calendar is their base calendar plus `Resource.exceptions` | The user wanted it "as another part" that changes nothing already built. Latest-finish-wins is how both MSP (assignments on their own calendars) and P6 (resource-dependent activities) end a task; one calendar per task keeps float and the backward pass simple. |
+| 0.5.2 | Charts stay on Chart.js (not Plotly), restyled like the Chart.js samples: Tailwind-like palette replaces Okabe-Ito, no black axes, `cubicInterpolationMode: monotone` (no overshoot on S-curves), per-period lines straight; every chart registers in `live` and resizes on beforeprint/afterprint and with a ResizeObserver; the canvas is absolutely positioned so it never sizes its box | The user found the old charts unattractive and saw charts cropped (printed canvases kept their screen width). Chart.js is small (~200 KB) and prints well; Plotly (~3.5 MB) suits Datum Plot. |
+| 0.5.4 | Resource calendars are a project option, off by default (`opts.res_cals`), plus a per-task `ignore_rc`; with it on, a task's candidate calendars are one per work resource with units > 0 (intersected with the task calendar when it has one) and the one giving the latest finish wins (`pick` in sched.rs, `ci` is a `Cell` during the forward pass); a person's calendar is their base calendar plus `Resource.exceptions` | The user wanted it "as another part" that changes nothing already built. Latest-finish-wins is the usual rule for tasks driven by resource calendars (assignments on their own calendars, resource-dependent activities); one calendar per task keeps float and the backward pass simple. |
 | 0.5.5 | Links between plans are external predecessors on the task (`Task.ext`: file, uid, type, lag, plus the last known plan/code/name/start/finish), scheduled like a link from fixed dates; they change only on Update Links, never silently when another plan changes | Each team keeps its own file and stays in control ("if I have the control of linking or not linking"); a plan opened alone still schedules the same. Same idea as linked external activities elsewhere, kept simple. |
 | 0.5.5 | Tabs live in the shell (`App { doc, others, cur }`): the shown plan is always `doc`, so every existing command works unchanged; `switch_tab` swaps | No change to the ~80 commands; one plan at a time in the engine. |
 | 0.5.5 | Update All iterates passes over all open plans (and files of plans not open) until no date moves, at most 4×plans+4 passes, else an error (a loop) | Plans may link both ways (main → subplan → main); order-free and simple. |
@@ -243,7 +243,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.5.8 | Adding a subplan saves the master (and a subplan's note of its master) only when that plan had no other unsaved changes (`save_if_clean`) | Otherwise a forgotten save loses the project list; other edits are never saved unasked. |
 | 0.5.9 | The combined view is built by the shell after the master's own grid (`combined` in main.rs): each subplan's grid with the same columns and its project row as the subplan row; its tasks get `uid` 0 and `sub`/`suid`, links cleared, so nothing edits them and arrows never join the wrong tasks. Closed subplan files are cached by modified time (`App.files`). Expanded subplans are a window setting (`openSubs`), not saved | Read-only keeps one place to change each task (its own plan) and needs no cross-plan edits in the engine. |
 | 0.5.10 | Save as PDF uses WebView2's PrintToPdf (`src-tauri/src/pdf.rs`, Windows only; `webview2-com` 0.39 as Tauri uses) with the page size, zero margins (Gantt pages hold their own margins) and no header/footer; elsewhere the print dialog. The page setup (`@page`, `html.printing`) is removed on `afterprint`, never on a timer | The user's PDFs had the browser's date/title/address and blank half-pages: WebView2 reads the page setup after `window.print()` returns, when the old code had already removed it. Direct PDF also makes the file exact and dialog-free. |
-| 0.5.10 | Header & footer default to a simple form (pictures, title, subtitle, tick boxes) and print nothing the user did not choose; code boxes stay under Advanced; old page setups with their own text keep the code boxes | The user: "it should be very simple… not like MS Project"; professional prints show no program name. |
+| 0.5.10 | Header & footer default to a simple form (pictures, title, subtitle, tick boxes) and print nothing the user did not choose; code boxes stay under Advanced; old page setups with their own text keep the code boxes | The user: "it should be very simple" (not a dense code-box editor); professional prints show no program name. |
 | 0.5.10 | Class names in `styles.css` are prefixed by their part (plan tabs `plantab`, print `p…`) | The plan tabs reused `ptab` and broke the print panel; third class clash after `fill`/`edit` (0.5.3) and `top` (0.5.1). |
 | 0.5.11 | Header pictures are a list per place (`pics: [Pic[],Pic[],Pic[]]`, each `{v, h}`); old `imgs`/`imgH` migrate in `load()`; the header height follows the tallest picture | The user wants one to three logos per side, each adjustable; one shared height could not fit a wide and a square logo together. |
 | 0.5.11 | The print legend is built from what the rows show (no fixed list) | The fixed legend missed baselines, deadlines, subplans and critical milestones. |
@@ -257,7 +257,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.5.13 | The tutorial is built by the engine from `today` (start five weeks back, status last Friday), so it always opens mid-way through the work | A fixed-date example would open finished or not started; the in-progress state is what shows tracking, S-curves and earned value. |
 | 0.5.14 | Plan tabs sit between the ribbon and the timeline and always show, even for one plan | The user: tabs belong with the plans they switch, and a visible ＋ lets you open the next plan and link to it straight away. |
 | 0.5.15 | No Python in Plan; charts stay Chart.js (sharper), and publication-quality graphs go to Datum Plot through a one-way .dplot copy | Python would add 80–150 MB, a second runtime and slower static charts for no new computation; Plot already has matplotlib. The user asked that nothing in Plot ever changes the plan. |
-| 2026-11-01 | Public text (CHANGELOG, README, site.json, guide, help and every string in the window) never names or compares with another product; a product name appears only as a file type the user imports or exports (Excel .xlsx, project XML, XER, PMXML) | FAMILY §13; the hub found comparisons left in the 0.1–0.3 CHANGELOG. |
+| 2026-11-01 | Public text (CHANGELOG, README, site.json, guide, help and every string in the window) never names or compares with another product; a product name appears only as a file type the user imports or exports (Excel (.xlsx) files, project XML, XER, PMXML) | FAMILY §13; the hub found comparisons left in the 0.1–0.3 CHANGELOG. |
 | 0.4.4 | Guide text in Markdown in the repo; the Chinese guide keeps English UI names in bold with the Chinese meaning beside them; screenshots stay in English with numbered orange markers | The app is English-only; readers must find the buttons. Easy to keep up to date each release (CLAUDE.md step 3). |
 | 0.4.3 | Windows publisher is "Datum" (`bundle.publisher`; the copyright stays "© 2026 Edgar Mendonca"). `src-tauri/windows/hooks.nsh` (NSIS_HOOK_PREINSTALL) reads the old `Software\Edgar Mendonca\Datum Plan` install-folder key, installs there if it differs, and deletes the old key | Family rule (FAMILY §9 in the hub). Tauri's NSIS remembers the folder under `Software\<publisher>\<product>`; the uninstall entry and the default folder use only the product name, so default installs update in place. |
 | 0.4.2 | Release builds unwind (not abort); `guard()` in the shell turns a panic in apply/open/import/risk/level preview into an error message; a panic hook appends to `crash.log` in the app data folder | Abort closed the app on any panic and made the poisoned-lock recovery useless. |
@@ -288,20 +288,20 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.3.11 | Hardening gates in CI: `cargo deny`, Windows + macOS `cargo test`, hardening tests in `cargo test` | Match the rigour of other open-source schedulers before adding features. |
 | 0.3.11 | Without a status date, progress reports (Dashboard, period reports, S-curves) measure at max(today, latest recorded progress) (`Calc::progress_date`/`progress_at`), and the window says so (`Summary.measured_at`). Earned value and the fields still use the status date or today (`status_at`) | A plan updated ahead of time showed 0 % done. |
 | 0.3.11 | The window's state lock recovers from a poisoned mutex (`St::lock`) | One panicking command used to lock every later command out. |
-| 0.3.8 | The Datum apps share one design and workflow in [FAMILY.md](FAMILY.md); each app only changes its accent and logo glyph | The user is building a family of tools (next: Datum Plot = Prism + OriginPro) that must look and ship the same. |
-| 0.3.7 | Templates carry `people`/`assign`/`costs`; Work is titled "Man-hours" | New users see loading, cost and man-hours immediately (the user's Cairn did this). |
+| 0.3.8 | The Datum apps share one design and workflow in [FAMILY.md](FAMILY.md); each app only changes its accent and logo glyph | The user is building a family of tools (next: Datum Plot, for scientific graphing and curve fitting) that must look and ship the same. |
+| 0.3.7 | Templates carry `people`/`assign`/`costs`; Work is titled "Man-hours" | New users see loading, cost and man-hours immediately (the user's earlier web planner did this). |
 | 0.3.7 | One grid *engine* (selection, clipboard, fill, formatting, keys) with two renderers (task outline vs A1 sheet) | The views differ in what a row is; sharing the behaviour removes the duplication without forcing one layout on both. |
 | 0.3.7 | Network: `layout_with(rows, sums, wbs)`; bands returned with the layout | WBS banding and summary boxes come from the engine, so screen and print agree. |
 | 0.3.6 | Other views print through one `Frame`; reports print as flowing documents (thead/tfoot repeat the header/footer, `@page @bottom-center` numbers pages) | Exact pages where the layout is ours (Gantt, network, calendar, tables); flowing pages where it is HTML. |
-| 0.3.6 | Fill series follow Excel (numbers, text+number, dates by step; Ctrl copies) but durations, links and resources copy as in MS Project | Matches what users of both tools expect. |
+| 0.3.6 | Fill series follow spreadsheet rules (numbers, text+number, dates by step; Ctrl copies) but durations, links and resources copy as scheduling users expect | Matches what users of spreadsheets and schedulers expect. |
 | 0.3.6 | `open_url` only opens github.com/Edgar-Mendonca/Datum-Plan links | The window cannot be used to open arbitrary URLs. |
 | 0.3.5 | Ribbon tabs: Task, Schedule, Progress (user rejected "Home"); the ribbon shrinks in steps (`data-fit` 0–3) and never scrolls | User feedback: crowded Task tab and a sideways scrollbar. |
 | 0.3.5 | Hidden columns stay in the table with a negative width (`Project.columns` is now `i32`); `cols()` = shown, `allCols()` = all | Hide/unhide without losing the position; files stay compatible. |
-| 0.3.5 | Print lays the table and chart out as one strip; pages are windows on it; ID + name repeat; column edges snap | Every column prints, like MS Project, with no overlap. |
+| 0.3.5 | Print lays the table and chart out as one strip; pages are windows on it; ID + name repeat; column edges snap | Every column prints, with no overlap. |
 | 0.3.4 | Printing lays out pages in the UI (SVG) and uses the WebView print dialog (Save as PDF), not a Rust PDF writer | Vector output, exact page sizes via `@page`, no new dependency; works the same on every view we lay out. |
 | 0.3.4 | Cell formatting reuses the task's existing `style` JSON field (column key → style string); sheets get `SheetData.style` | No file-format change; old files load unchanged. |
 | 0.3.3 | Every user-reported bug gets a UI test that fails on the broken build before the fix ships | Two clicks in a row were never tested; the 0.3.2 suite missed it. |
-| 0.3.1 | No Python; a separate future app "Datum Plot" (Prism/Origin-like) may use Python | The user's answer. |
+| 0.3.1 | No Python; a separate future app "Datum Plot" (scientific graphing) may use Python | The user's answer. |
 
 ---
 
@@ -314,8 +314,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | **0.1.0** | Shell + updater + core | Installer, Home, updater, ribbon, grid, summaries, links, CPM, Gantt, undo, `.dplan` | ✅ |
 | **0.1.1** | Look, views, reports | Light theme, logo, sidebar, templates, drag bars, Calendar, Dashboard, weekly/monthly report | ✅ |
 | **0.2.0** | The big one | Grid power (any column, clipboard, fill, move, find/replace, menus), Gantt power (timeline, progress drag, details pane, link editing), Ctrl+K, Ctrl+J, Options, recovery, minute calendars + exceptions + task calendars, all constraints + deadlines, manual/inactive tasks, summary links, status date + actuals + Mark on Track, baselines + variance, resources + costs + workload, import/export XML/XER/XLSX/CSV | ✅ |
-| **0.3.0** | MSP look + P6 power (one big release) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: MSP ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, P6 activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (P6 XML, MPX, ICS, HTML, JSON) | ✅ (see 0.3.1 for what slipped) |
-| 0.3.1 | Foundation ([PLAN-0.3.1.md](PLAN-0.3.1.md)) | Excel-like grid, GridCraft formula columns, sheet tabs, reporting periods, period progress reports with notes/photos, Prism-style S-curves and dashboard, CentriForge styling, light/dark/auto | ✅ |
+| **0.3.0** | Ribbon layout + advanced scheduling (one big release) | Everything planned for 0.2.1 → 0.5.2, network diagram included. Full scope and beta milestones in **[PLAN-0.3.md](PLAN-0.3.md)**: ribbon with dropdowns and Format tabs, about 450 fields + custom fields/formulas/lookups/indicators, Field Settings, Information dialogs, tables, filters, groups and views, formatting, task types, leveling, activity types, longest path, usage views, Team Planner, Network Diagram, 11 baselines, Update Project, earned value, costs, report gallery and designer, page setup/PDF, DCMA check, compare, risks, EPS workspace, new formats (PMXML, MPX, ICS, HTML, JSON) | ✅ (see 0.3.1 for what slipped) |
+| 0.3.1 | Foundation ([PLAN-0.3.1.md](PLAN-0.3.1.md)) | Spreadsheet-style grid, GridCraft formula columns, sheet tabs, reporting periods, period progress reports with notes/photos, clean scientific-style S-curves and dashboard, CentriForge styling, light/dark/auto | ✅ |
 | 0.3.2 | Builder & power | Report builder and templates, Update Progress workflow, xlsx export with formulas, recurring tasks, relationship diagram, global change, EPS tree, conditional formatting, Playwright UI tests in CI | ✅ |
 | 0.3.3 | Hotfix | Grid row selection stuck after the first click | ✅ |
 | 0.3.4 | Print & format | Print page with Page Setup (ranges, paper, scaling, margins, header/footer codes, logos, legend, columns), vector pages; Font/Alignment formatting for task sheet and Sheets; Options page rebuilt | ✅ |
@@ -330,7 +330,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.4.0 | Risk & resources | Schedule Risk (Monte Carlo: P50/P80/P90, cost, criticality, drivers, risk delays, optimistic/pessimistic durations), workload by trade (Group) in hours or people, levelling preview, import report + XER activity types | ✅ |
 | 0.4.1 | Progress history | Actual S-curve through the stored periods, Manpower by trade (planned / done / forecast), earned schedule, rules of credit + installed quantities, look-ahead with constraint log | ✅ |
 | 0.4.4 | Guide | Datum Plan Guide in English and Simplified Chinese (PDF, ~30 pages, numbered screenshots); Help › Guide + File tile download, verify, save and open; first-start hint | ✅ |
-| 0.5.0 | Sheets like Excel | Point-and-click formulas, suggestions, AutoSum, Insert Function, fill/paste with formulas, insert/delete rows/cols, Excel number formats, plan data by name (Tasks/Resources tables, project names), Plan Data live lists, country flags, resource Country | ✅ |
+| 0.5.0 | Full spreadsheet sheets | Point-and-click formulas, suggestions, AutoSum, Insert Function, fill/paste with formulas, insert/delete rows/cols, spreadsheet number formats, plan data by name (Tasks/Resources tables, project names), Plan Data live lists, country flags, resource Country | ✅ |
 | 0.5.1 | Fixes | Gantt/sheet scroll echo (felt stuck); Tell Me backdrop was opaque (class `top` collided with the title bar) | ✅ |
 | 0.5.2 | Charts | New Chart.js style (monotone smooth lines, gradient fill, rounded bars, light grid, point-style legend, dark tooltip, status pill); charts resize with their box and before printing (no cropping); equal heights per row; empty-data message | ✅ |
 | 0.5.3 | Custom dashboards | Several per plan (tabs beside Project), templates; tiles: number (formula, format, green/red rule), progress ring, chart (plan chart or sheet range/formula: columns, stacked, bars, line, area, doughnut, pie), table (plan list or range/formula, flag columns), countries, text; drag to reorder, sizes; print | ✅ |
@@ -352,7 +352,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 | 0.6.1 | Hardening | 100k-activity performance, code signing, signed updater (deferred by the user until near stable; steps in Decisions, 2026-11-01), crash reports, dark theme | ⬜ |
 | 1.0.0 | Stable | — | ⬜ |
 
-### Features that go beyond MSP and P6
+### Features that go beyond the usual scheduler
 - Weekly/monthly progress reports ✅
 - Dashboard with S-curve and baseline curve ✅
 - Command search ✅ and quick-add sentences ✅
@@ -360,39 +360,39 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Project Setup panel, DCMA check with drill-down, risk register, snapshots with trend ✅ (0.3.0)
 - Later: schedule health score, one-click report pack, what-if comparison
 
-### Gap analysis (MSP, P6 and Cairn vs Datum Plan)
-| Area | MS Project | Primavera P6 | Cairn 0.8 | Datum Plan |
-| --- | --- | --- | --- | --- |
-| Grid, outline, links, CPM | ✓ | ✓ | ✓ | ✓ 0.1 |
-| Interactive Gantt, timeline | ✓ | partial | ✓ | ✓ 0.2 |
-| Column picker | ✓ | ✓ | ✓ | ✓ 0.2 (custom fields and formulas in 0.3) |
-| Calendars (hours, exceptions, many) | ✓ | ✓ | ✓ | ✓ 0.2 (resource calendars in 0.3; they drive task dates in 0.5.4) |
-| Constraints, deadlines, manual, inactive | ✓ | ✓ | ✓ | ✓ 0.2 |
-| Task types, effort-driven, recurring, split | ✓ | duration types | ✓ | ✓ 0.3 (recurring in 0.3.1) |
-| File exchange (XLSX, CSV, XML, XER) | ✓ | ✓ | ✓ | ✓ 0.2 |
-| Resources, costs, workload | ✓ | ✓ | ✓ | ✓ 0.2 (leveling in 0.3, rates over time in 0.3) |
-| Baseline, actuals, status date | ✓ | ✓ | ✓ | ✓ 0.2 (11 baselines and earned value in 0.3) |
-| EPS, activity codes, multi-project | master projects | ✓ | — | ✓ 0.3 codes + portfolio folder |
-| Filters, groups, layouts, global change | ✓ | ✓ | ✓ | ✓ 0.3 (global change 0.3.1) |
-| Schedule check, longest path, float paths | — | ✓ | partial | ✓ 0.3 |
-| Network diagram | ✓ | ✓ | ✓ | ✓ 0.3 |
-| Dashboards and periodic reports | basic | basic | 16 reports | ✓ 0.3 (10 reports + dashboard) |
+### Capabilities and releases
+| Area | Datum Plan |
+| --- | --- |
+| Grid, outline, links, CPM | ✓ 0.1 |
+| Interactive Gantt, timeline | ✓ 0.2 |
+| Column picker | ✓ 0.2 (custom fields and formulas in 0.3) |
+| Calendars (hours, exceptions, many) | ✓ 0.2 (resource calendars in 0.3; they drive task dates in 0.5.4) |
+| Constraints, deadlines, manual, inactive | ✓ 0.2 |
+| Task types, effort-driven, recurring, split | ✓ 0.3 (recurring in 0.3.1) |
+| File exchange (XLSX, CSV, XML, XER) | ✓ 0.2 |
+| Resources, costs, workload | ✓ 0.2 (leveling in 0.3, rates over time in 0.3) |
+| Baseline, actuals, status date | ✓ 0.2 (11 baselines and earned value in 0.3) |
+| EPS, activity codes, multi-project | ✓ 0.3 codes + portfolio folder |
+| Filters, groups, layouts, global change | ✓ 0.3 (global change 0.3.1) |
+| Schedule check, longest path, float paths | ✓ 0.3 |
+| Network diagram | ✓ 0.3 |
+| Dashboards and periodic reports | ✓ 0.3 (10 reports + dashboard) |
 
 ---
 
 ## 4. Session log
 
 ### 2026-10-24: Session 1 (brainstorm + 0.1.0)
-- Read Cairn and CentriForge. Wrote the brainstorm and a draft logo.
-- The user approved the name, Windows only, no `.mpp`, Rust/Tauri 2, and small releases. They sent MS Project screenshots.
+- Read the user's earlier web planner and CentriForge. Wrote the brainstorm and a draft logo.
+- The user approved the name, Windows only, no `.mpp`, Rust/Tauri 2, and small releases. They sent screenshots of the desktop scheduler they use.
 - Built and released 0.1.0: Rust core, Tauri shell, custom updater, TypeScript UI, CI and release workflows.
 
 ### 2026-10-24: Session 2 (0.1.1)
-- Feedback: too dark, logo too heavy, no domain sample, Gantt not interactive, wanted a Cairn sidebar and periodic reporting.
+- Feedback: too dark, logo too heavy, no domain sample, Gantt not interactive, wanted an icon sidebar like their earlier web planner and periodic reporting.
 - Released 0.1.1: light theme, new logo, sidebar, templates, drag bars, Calendar, Dashboard, Reports. Rewrote the roadmap.
 
 ### 2026-10-24: Session 3 (0.2.0)
-- The user asked for 0.1.2, 0.1.3, 0.1.4 and the "0.2 onwards" items (calendars, constraints, exchange, resources) all in 0.2. They shared a "P6 planning basics" chart (EPS/WBS/activities/calendars/relationships/F9/critical path/resource loading/baseline/update progress).
+- The user asked for 0.1.2, 0.1.3, 0.1.4 and the "0.2 onwards" items (calendars, constraints, exchange, resources) all in 0.2. They shared a "planning basics" chart (EPS/WBS/activities/calendars/relationships/F9/critical path/resource loading/baseline/update progress).
 - Rewrote the engine on minutes with real calendars. Added constraints, deadlines, ALAP, manual and inactive tasks, summary links, status date and actuals, resources and costs, workload, and baselines.
 - Added IO: MSPDI, XER, XLSX/CSV, all with round-trip tests.
 - Split the UI into 7 files. Added the column picker, clipboard, fill, move, find/replace, context menus, timeline strip, progress drag, details pane, Resource Sheet, Workload, Change Working Time, Options, recovery, Ctrl+K and Ctrl+J.
@@ -409,32 +409,32 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 
 ### 2026-10-24: Session 4 (0.3 brainstorm)
 - Feedback on 0.2.0:
-  - the UI does not feel like MSP/P6
+  - the UI does not feel like a full desktop scheduler
   - too few fields, and no custom fields, formulas or Field Settings
   - weak information dialogs and reporting
   - ribbon buttons such as "Gantt Chart" should be dropdowns
-  - wants MSP's timeline and more save formats
-- Shared MSP screenshots: the column header menu, the Custom Fields dialog, the Task ribbon and the timeline.
+  - wants a timeline band above the Gantt and more save formats
+- Shared screenshots of another scheduler: the column header menu, the Custom Fields dialog, the Task ribbon and the timeline.
 - Agreed that 0.2.1 → 0.5.2 become a single 0.3 release. Wrote [PLAN-0.3.md](PLAN-0.3.md) (audit, principles, feature catalogue A–O, architecture changes, beta milestones, open decisions). Waiting for the user's review and decisions before building.
-- The user answered all questions and supplied `docs/reference/MSP-P6-feature-reference.md`. Plan updated with the Datum scheduling style, the Project Setup workflow, currency, branding, capacity and behaviour rules (§3.P–T).
+- The user answered all questions and supplied a feature reference (kept outside the repo). Plan updated with the Datum scheduling style, the Project Setup workflow, currency, branding, capacity and behaviour rules (§3.P–T).
 
 ---
 
 ### 2026-10-24: Session 5 (0.3.0)
 - The user said "build and release 0.3". Built it as one release.
-- Engine: model format 3; scheduler upgrades (elapsed, % lags, splits, LOE/WBS summary, retained logic/progress override, schedule from finish, longest path, float paths, lag calendars); leveling; task types; formula language; field registry with EV; query API; usage/curves/compare; DCMA + P6 checks; network layout; new export formats. Benchmark: 20k tasks schedule 36 ms, calc 44 ms, grid 49 ms (release).
+- Engine: model format 3; scheduler upgrades (elapsed, % lags, splits, LOE/WBS summary, retained logic/progress override, schedule from finish, longest path, float paths, lag calendars); leveling; task types; formula language; field registry with EV; query API; usage/curves/compare; DCMA + extra schedule checks; network layout; new export formats. Benchmark: 20k tasks schedule 36 ms, calc 44 ms, grid 49 ms (release).
 - Shell: new commands, beta channel, backups of older plans, logo picker, file saving for pictures and HTML.
-- UI: rewritten in SolidJS + Vite (10 TSX files). Ribbon with dropdowns, Tell Me, grid with header menus, Gantt + timeline, P6 details tabs, all views, reports, dialogs, Project Setup panel.
+- UI: rewritten in SolidJS + Vite (10 TSX files). Ribbon with dropdowns, Tell Me, grid with header menus, Gantt + timeline, activity details tabs, all views, reports, dialogs, Project Setup panel.
 - Tested in the real app under Xvfb: templates, Project Setup, inline edits rescheduling, context menu, Task Information, baseline + progress, Tracking Gantt, weekly report, Network Diagram, Calendar, Task Usage, Checks, Dashboard. Bugs fixed: a global `svg` size rule hid the network diagram; Enter in a dialog's first select did not press OK; select text clipped in WebKitGTK; keys only worked with focus inside the app div.
 - UI test harness: `cargo run -p datum-core --example dump > fix.json`, then a Playwright script that serves `ui/dist` with a mocked `window.__TAURI__` (kept in the session scratchpad; rebuild it from this note if needed).
 
 ### 2026-10-24: Session 6 (0.3.1 brainstorm)
 - The user reviewed 0.3.0: buggy, misaligned cells, no range selection, no obvious formulas (e.g. % complete − baseline %), weak reporting (wants dashboard → charts → tables → notes, week vs previous week with variance), UI not up to CentriForge's standard.
-- References given: `storytold/gridcraft` (pure Rust Excel engine, MIT/Apache; cloned read-only), `Edgar-Mendonca/Compressor-Engineering-Suite` (design to copy: IBM Plex, square, mono labels, Launcher/Workspace), Cairn. The user suggested Python libraries.
+- References given: `storytold/gridcraft` (pure Rust spreadsheet engine, MIT/Apache; cloned read-only), `Edgar-Mendonca/Compressor-Engineering-Suite` (design to copy: IBM Plex, square, mono labels, Launcher/Workspace), the user's earlier web planner. The user suggested Python libraries.
 - Wrote [PLAN-0.3.1.md](PLAN-0.3.1.md): diagnosis, Gridcraft crates as pinned dependencies, canvas spreadsheet grid, CentriForge shell and modules, period reporting, Python recommendation (none in 0.3.x), release steps 0.3.1–0.3.3, 10 questions. Waiting for answers and the user's bug write-up.
 
 ### 2026-10-24: Session 6, continued (0.3.1)
-- Answers: keep the ribbon (style only), light/dark/auto, Excel formulas per column with field names, sheet tabs OK, no Python (future app Datum Plot), user-chosen periods, all kinds of S-curves (elegant, hoverable, printable), notes/photos our call, build it all as 0.3.1. Also: rename headings by double-click, rename tasks from the right-click menu, multi-cell selection like Excel. Screenshot showed misaligned headings.
+- Answers: keep the ribbon (style only), light/dark/auto, spreadsheet formulas per column with field names, sheet tabs OK, no Python (future app Datum Plot), user-chosen periods, all kinds of S-curves (elegant, hoverable, printable), notes/photos our call, build it all as 0.3.1. Also: rename headings by double-click, rename tasks from the right-click menu, multi-cell selection as in a spreadsheet. Screenshot showed misaligned headings.
 - Engine: `sheet.rs` (GridCraft), `Cells`/`Title`/`Sheet`/`SheetCells`/`Note` ops, model `titles`, `sheets`, `periods`, `notes`; fields Baseline % Complete and % Complete Variance; periods, S-curves and period reports in `report.rs`; 19 tests.
 - UI: grid rewrite, formula bar, Formula Column dialog, Sheets view, `charts.tsx`, Dashboard/Progress/S-Curves pages, period settings, theme switch, CentriForge styling.
 - Bugs found while testing: context-menu items never ran (document mousedown closed the menu before click; Solid's delegated stopPropagation does not stop native listeners); a selection-sync effect reset ranges to the old column (fixed with `batch` + `untrack`); cost/hours S-curves showed duration-weighted values for plans without costs (now hidden, `SCurve.weight`).
@@ -451,13 +451,13 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - User asked why not use the Sheets (GridCraft) grid for the schedule too. Answer: GridCraft is a calculation engine, not a UI grid; the Sheets view and the task sheet are both our own DOM grids. Plan: one shared grid component for both (0.4.x), keeping the scheduler's task rows. See decision log.
 
 ### 2026-10-24: Session 6, continued (0.3.4)
-- User asked to merge 0.3.4 and 0.3.5 and fix: printing (incomplete pages, no page control, no date range, no headers/footers/logos/page numbers), the jumbled Options page (stray `<span />` after each `<h4>` shifted the label/control grid), and missing Excel text formatting.
+- User asked to merge 0.3.4 and 0.3.5 and fix: printing (incomplete pages, no page control, no date range, no headers/footers/logos/page numbers), the jumbled Options page (stray `<span />` after each `<h4>` shifted the label/control grid), and missing spreadsheet-style text formatting.
 - Built `print.tsx`, `fmt.ts`, `Style`/`SheetStyle` ops, new Options fields (openLast, startView, manualDefault, weekEnd, monthEnd, paper, landscape). Engine test 21. UI tests: Options alignment, Ctrl+B, print preview and print pages with `@page` size.
 - Checked in the real app: formatting in task sheet and Sheets, Print page preview (fit to 1 page wide), Options.
 - Not done from the planned 0.3.4 (one grid): moved to 0.3.5.
 
 ### 2026-10-24: Session 6, continued (0.3.5 feedback)
-- User feedback on 0.3.4 (5 screenshots): Project Setup panel too big, move to the sidebar as first icon; ribbon scrolls sideways and the Task tab is crowded (captions cut, poor icons), split into more tabs (need not copy MSP); no Delete Column and no way to unhide; print shows only Name, Duration and a cut-off Start, wants all columns like MSP and the 0.3.4 limits done.
+- User feedback on 0.3.4 (5 screenshots): Project Setup panel too big, move to the sidebar as first icon; ribbon scrolls sideways and the Task tab is crowded (captions cut, poor icons), split into more tabs (need not follow any other program); no Delete Column and no way to unhide; print shows only Name, Duration and a cut-off Start, wants all columns and the 0.3.4 limits done.
 - Diagnosis and proposal in [PLAN-0.3.5.md](PLAN-0.3.5.md); questions sent; build after the answers.
 
 ### 2026-10-24: Session 6, continued (0.3.5)
@@ -466,7 +466,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Built: ribbon tabs and fitting, Setup view, `DeleteField` op, hide/unhide/delete and Columns dialog, print strip layout with column chooser, text size, row height, fit columns, wrap names, notes pages. 22 engine tests; UI tests for nested menus, hide/unhide, printed columns, ribbon fit at 1280/1600 px, Setup page.
 
 ### 2026-10-24: Session 6, continued (0.3.6 feedback)
-- User feedback on 0.3.5 (4 screenshots): wrong fill icon and no font family; empty space on the Task tab; "Check again" gives no feedback; wants a GitHub link; wants MS Project's timeline zoom box; the Network Diagram lacks a legend and print layout; do all of 0.3.6 (every view printable, the rest of the 0.3.4 limits).
+- User feedback on 0.3.5 (4 screenshots): wrong fill icon and no font family; empty space on the Task tab; "Check again" gives no feedback; wants a GitHub link; wants a timeline zoom box; the Network Diagram lacks a legend and print layout; do all of 0.3.6 (every view printable, the rest of the 0.3.4 limits).
 - Plan and questions in [PLAN-0.3.6.md](PLAN-0.3.6.md).
 
 ### 2026-10-24: Session 6, continued (0.3.6)
@@ -475,7 +475,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Not done: the task sheet and Sheets are still two components (they now share `cells.ts` and `fmt.ts`); full icon redraw; network layout by WBS. Moved to 0.3.7.
 
 ### 2026-10-24: Session 6, continued (0.3.7)
-- User: Gantt and Tracking looked identical; wanted Cairn's whiteboard network look and cards; man-hours with 8-hour shifts and resources in the templates; finish the 0.3.7 carry-overs.
+- User: Gantt and Tracking looked identical; wanted the whiteboard network look of their earlier web planner and cards; man-hours with 8-hour shifts and resources in the templates; finish the 0.3.7 carry-overs.
 - Built: Tracking Gantt (view switches table, baseline grey bars, solid done part, % labels, banner + Set Baseline), templates with people/assignments/costs and Man-hours title, `network::layout_with` (summaries, WBS bands) + whiteboard cards, icon redraw, `selection.ts` shared by both grids (Sheets: multi-range, row/column selection, aggregates). 25 engine tests; UI tests for Tracking, WBS network, whiteboard.
 
 ### 2026-10-24: Session 6, continued (0.3.8)
@@ -483,7 +483,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Built: link paths in `print.tsx` `Strip` (same elbow rules as the canvas), `DateBtn` (ui.tsx, uses `showPicker()` on a hidden `<input type=date>`) on the active date cell in the grid (`.gdate`) and on date fields in the details pane (`.dfield`). UI tests for both. Added "How we work" to this file.
 
 ### 2026-10-24: Session 6, end (family)
-- User is starting Datum Plot (GraphPad Prism + OriginPro) in a new repo and chat, with the same style and workflow. Wrote `docs/FAMILY.md` (stack, colours with accents per app, type, logo rules, layout, components, icons, charts, printing, updates and releases, docs, workflow, new-app checklist) and a draft `docs/brand/datum-plot-icon.svg` (teal).
+- User is starting Datum Plot (scientific graphing and curve fitting) in a new repo and chat, with the same style and workflow. Wrote `docs/FAMILY.md` (stack, colours with accents per app, type, logo rules, layout, components, icons, charts, printing, updates and releases, docs, workflow, new-app checklist) and a draft `docs/brand/datum-plot-icon.svg` (teal).
 
 ### 2026-10-24: Session 6, end (README)
 - README rewritten as an independent product (no comparisons with other tools), with new screenshots (Gantt, Tracking, Network, Dashboard) taken from 0.3.8; old images removed. "Pending and next" written below, including 4 bugs found while taking the screenshots.
@@ -502,7 +502,7 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 ---
 
 ### 2026-10-27: Session 8, end (open-source comparison)
-- User asked for a quick comparison with ProjectCraft (github.com/UCS-Care-Group/projectcraft, Rust + egui, 0.0.1 pre-alpha, MS Project parity). Verdict: Datum Plan leads on features and polish; ProjectCraft leads on rigour (about 550 tests, date parity fixtures, CI gates, a command line). Wrote the "Hardening plan" in §5; nothing built yet.
+- User asked for a quick review of another open-source Rust scheduler (Rust + egui, 0.0.1 pre-alpha). Verdict: Datum Plan leads on features and polish; the other leads on rigour (about 550 tests, date parity fixtures, CI gates, a command line). Wrote the "Hardening plan" in §5; nothing built yet.
 
 ### 2026-10-27: Session 9 (0.3.11, hardening quick wins)
 - User: build 0.3.11 with the two bugs and the hardening quick wins; record everything here, in the CHANGELOG and in the DATUM hub memory.
@@ -545,16 +545,16 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - Release check: the release has both PDFs and their SHA256SUMS lines; in the real app (Xvfb) Help › Guide › 中文 downloaded the v0.4.4 file, verified it, saved `~/Downloads/Datum Plan 使用指南.pdf` (identical to the release file) and opened it. On this Linux box Tauri's `download_dir()` failed (no XDG dirs), so after the release `update::guide` gained fallbacks (~/Downloads made if needed, Documents, temp); Windows always has Downloads, so 0.4.4 is unaffected. **Ship this fallback in the next release's CHANGELOG.**
 - Not checked: a native Chinese reader has not reviewed the Chinese text.
 
-### 2026-10-30: Session 17 (0.5.0, sheets like Excel)
-- User: Sheets were unusable ("can't even SUM"); they build client dashboards in Excel by copying MPP values; wants GridCraft's engine used, and country flags for vendors. Asked for gaps vs other tools first (web search: update compare with logic change log, ghost bars, health trend, milestone trend, delay analysis, scenarios); agreed to start with sheets + dashboards.
-- Diagnosis: the engine already calculated SUM; the window lacked Excel habits (clicking cells while typing committed the edit, no suggestions, fill/paste dropped formulas, dates as serials, plan data only as `Plan!M:M`).
+### 2026-10-30: Session 17 (0.5.0, full spreadsheet sheets)
+- User: Sheets were unusable ("can't even SUM"); they build client dashboards in a spreadsheet by copying schedule values; wants GridCraft's engine used, and country flags for vendors. Asked for gaps vs other tools first (web search: update compare with logic change log, ghost bars, health trend, milestone trend, delay analysis, scenarios); agreed to start with sheets + dashboards.
+- Diagnosis: the engine already calculated SUM; the window lacked spreadsheet habits (clicking cells while typing committed the edit, no suggestions, fill/paste dropped formulas, dates as serials, plan data only as `Plan!M:M`).
 - Built: `sheet.rs` tables/names/numfmt/spills/shift/adjust/rename; `Op::SheetInsert`, sheet rename/delete rewrite formulas and names stay unique; commands `sheet_catalog`, `formula_shift`; ops catalogue gains Sheet/SheetCells/SheetInsert; Excel export adds Tasks/Resources tables and names. UI: `sheets.tsx` rewritten, `formulas.ts`, `sheetdlg.tsx`, `flags.tsx`, resource Country column, `sheets` help topic. Real-app check (Xvfb) found and fixed: fast typing lost the second key; search in Insert Function kept the old pick.
 - Tests: engine test `sheets_read_the_plan_by_name_and_behave_like_excel`; 9 new UI checks (flags, suggestions, Tab, pointing, Enter closes brackets, column suggestions, Plan Data, Insert Row, Country column). Guide: Sheets chapter rewritten (en + zh), shots `sheets`, `sheet-formula`; `scripts/guide.cjs` keeps code spans literal.
 - Shipped the guide Downloads fallback (from session 16) in this release.
 - Then 0.5.1 (same day, user report): scrolling the schedule stuck — grid and chart echoed each other's scrollTop through `chart-scroll`/`grid-scroll`, the late echo pulled the other pane back; now a pane moved by the other does not re-send (`echo` flag in grid.tsx and gantt.tsx). Tell Me showed a blank window: its overlay had class `top`, which also styles the title bar with an opaque background; renamed `.ov.high`. UI test added for the dimmed backdrop. Noticed (not fixed): timeline labels can overlap when milestones are close.
 - Then 0.5.2: the user asked which chart library (Chart.js) and said the charts looked poor and were sometimes cropped. Restyled `charts.tsx` (all chart views share it), fixed cropping (resize with box and for print, two per row in print), equal heights, empty-data text; Manpower forecast straight. An S-curve forecast jump in the user's plan was a data issue in their file (user: ignore); an engine change for it was reverted. Guide pictures and PDFs rebuilt.
 - Then 0.5.3 (user: build dashboards): `sheet::eval` + `dash_eval`, `PlannedPercent`; `dashboards.tsx`; ChartBox gains doughnut/pie, `size="fill"` and `bare`. Found in the harness and the real app: class names `fill` and `edit` (and generic `w3`/`h1`) collided with existing grid classes (tile sizes now `dw*`/`dh*`, edit mode `arranging`); tile formula fields lost focus after one key (fields rebuilt on each input; now a component); `VSTACK` with an empty `FILTER` padded `#N/A` (wrapped in `IFNA`). Harness: the mock keeps `Ui` changes and answers `dash_eval` from `dash_map` in the fixture. Guide: new section with shots `dashboards`, `dashboard-tile` (en + zh).
-- Next: 0.5.x schedule quality (health trend, ghost bars, logic change log, milestone trend), then scenarios and delay analysis (open questions: which tiles first, Excel charts in export or PDF only, how many dashboards per plan — defaults chosen: several per plan, PDF print).
+- Next: 0.5.x schedule quality (health trend, ghost bars, logic change log, milestone trend), then scenarios and delay analysis (open questions: which tiles first, charts in the .xlsx export or PDF only, how many dashboards per plan — defaults chosen: several per plan, PDF print).
 
 ### 2026-10-31: Session 18 (0.5.4 resource calendars, 0.5.5 plan tabs and links)
 - User (after a comparison with other scheduling tools and a public open-source clone): resource calendars only "partial"; wanted them to drive task dates "as another part" that changes nothing existing; and links between plans in tabs (a main schedule with subschedules, with control over linking), with a detailed example. Asked for 0.5.4 and 0.5.5 together.
@@ -567,18 +567,19 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (MSP look + P6 power), 0.3.1 (Excel 
 - 0.5.8: model `SubPlan`, `Project.subplans`/`master`, `Op::Subplans`/`Op::Master`, normalize (each file once, no level jumps); shell `place`/`regroup`, `TabInfo.role/group/level/project`, `new_subplan`, `add_subplan`, `remove_subplan`, `open_subplans`, `close_tabs`, `subplan_rows`, `save_if_clean`; UI `subplans` panel, `newSubplan`, `openAll`, `afterOpen`, `closeProject`, grouped tabs, Open master chip, help `subplans`; the window's browser context menu is off outside text fields. Engine test extended (example is one project; hierarchy normalised); 6 UI checks. Real app: example tabs grouped green; New Subplan "Civil design" under Engineering saved the master and sat after Engineering (»); Close Project closed all five; opening Engineering alone showed Open master, which opened Main and offered to open the other three, then grouped all in order. Guide: "A project: the master and its subplans" with shot `subplans`.
 - 0.5.9: `GRow.sub`/`suid`, kind "subplan"; shell `query(q, subs)` + `combined` + `read_cached`; UI `showSubs`/`openSubs`/`toggleSub` (store), subplan rows in grid (◇, toggle, read-only, double-click goes to the task) and Gantt (purple summary bar, muted children, no drag), `subRowMenu`, Format › Show/Hide › Subplans. 3 UI checks (fixture `query_subs`). Real app: the master listed Engineering, Procurement, Construction with 110/220/308 days; expanding Engineering showed its 19 rows greyed; double-clicking Civil drawings IFC opened Engineering at A1110. Guide: "The combined view" with shot `combined`.
 - Then 0.5.10 (user: header boxes squashed, "Datum Plan / tauri.localhost / date" on the PDF, blank pages printing the master with subplans, View tab scrolls sideways). Found: the `ptab` class clash (0.5.5) squashed the whole Page Setup panel; the print window read `@page` after it was removed (portrait sheets, split pages, browser header/footer). Built: `pdf.rs` + `save_pdf` (Windows PrintToPdf), `startJob`/`afterprint`, `savePdf`/`printNow`, simple Header & footer (`Head`/`Foot`, `pic`, `footParts`, migration in `load`), subplan print modes (`subGrid`), subplan bars in print. Checked: `cargo clippy --target x86_64-pc-windows-gnu -D warnings` (mingw installed), Chromium prints the pages to PDF in the UI tests (one A4 landscape sheet per page, also at 200 %), 8 new UI checks. The user's own project files are private: used only in the session scratchpad, never named or kept in the repo; changes to them go to the user as a separate download.
-- Then 0.5.11 (user: one, two or three logos per side, adjustable, on every page; the centre logo covered the title; the legend incomplete; expanded subplans printed collapsed; "a thorough check of formulas, links and progress"). Built: `PageSetup.pics` (per place a list of `{v, h}`), `titleSize`, `headH` from the tallest picture, `.ppics` row with the title under the centre pictures, picture editor (+ Picture/Company logo, size slider, ←/→ across places, ×), dynamic `GanttLegend` (only what shows), baseline and deadline in print bars, Subplans select moved to Settings. Engine audit (10 confirmed bugs, each with a test): VBA-like `datediff`/`dateadd`, Finish custom fields from formulas at 17:00, milestones-only %, curve earned = BCWP (physical %), earned schedule within a day, LOE ends at `prev_end`, SS/SF from summary uses opening leaves, actuals on a day off kept, ext links on summaries reach their leaves, mirror rows (`sched::mirrored`) take `between(start, finish)`, `update_all` pass limit from ext-link count. Not fixed (likely, unconfirmed): baseline work is derived from current work; `pick` puts a task on the last finisher's calendar; ext lag ignores the lag-calendar option; remaining duration counts past split gaps.
-- Then 0.5.12 (user: S-curve to lead the dashboard, cards only with data or as chosen; "a very thorough check of every engine, formulas, links, security"). Built: `ProjectDashboard` with `.charts.wide` (S-curve) + `.charts.flow` (flex rows, no gaps), `CARDS` with a has-data test each and `ui.dashcards` overrides (Cards ▾). Audit by four parallel reviewers, each bug proven by a test (new test files `formula_cases.rs`, `sched_cases.rs`, `exchange_cases.rs`, plus `hardening::hostile_import_files_are_refused_not_crashing`); 148 engine tests. Fixed: formula self-reference crash + exponential re-evaluation (`Calc.memo`), nesting/length limits, `""` literal, VBA DateDiff ww/h/q, Sgn, InStr, Round, Mod; finish rollups; G–K date columns only on Plan; summary float ignoring finished kids; ext-link lag calendar, split remaining work, retained logic with ext preds, first-person start, pre-1970 ext dates; linear `parent` (sched, network); one-pass levelling; `update_all` returns missing links and keys by full path (shell too); baseline work stored (`Baseline.work`); S-curve to the baseline finish; `progress_at` for EV/curve/planned %; rounded summary %; risks on milestones/summaries; XER links from summaries, % lags, rates, cost resources, calendar hours by label, damaged calendars; MSPDI fixed cost, elapsed, physical %; security: UNC paths only on the master's server (`sub_path`), xlsx read cell by cell, XML depth 64, escaped HTML title, strict update URLs, recovery written before old extras are removed. Left open: PMXML export still drops summary links and writes % lags as hours; MPX export drops lags; resource custom-field formulas do not run; `Tasks[Col]` inside a task formula gives #NAME?; .xls/.ods import still reads the whole box; signed updates (0.6.1).
-- Then 0.5.13 (user: fix every open item; "a guided tutorial example that uses everything, with a pop-up on each view saying how it was filled"). Built: `crates/core/src/tutorial.rs` (`tutorial(today)`: office fit-out started 5 weeks before today, status last Friday, every feature used, `ui.tour` = one note per sidebar view; test `the_tutorial_uses_every_view_and_schedules`), shell `tutorial_example` (new unsaved tab), `ui/src/tour.tsx` (`TourCard` bottom right, Back/Next through SIDE, × with `datum.tourOff` in localStorage), Help › Tutorial and Tutorial Notes, Home tile, plans menu; `dump tutorial` fixture and the guide's `tutorial.png`. Fixed: assignment units capped at 1000 on load for cost/material (now only for work resources). Open items closed by a reviewer in a copy (12 tests): PMXML summary links and % lags, MPX lags/IDs/units/rate fields, XER physical %, resource VBA formulas, `Tasks[Col]`/`Resources[Col]` in formula columns, .xls/.ods size pre-check (10 M cells; `cfb`, `quick-xml`, `zip` direct deps, already in the lock), MC hit rate, Max()/Min() empty, dates in text in the plan format, sheet insert bounds, dashboard tiles follow sheet rename/insert/delete, FF/SF/finish constraints on the picked calendar. Still open: Excel-style resource formulas; signed updates (0.6.1; needs a signing key stored as a repository secret).
+- Then 0.5.11 (user: one, two or three logos per side, adjustable, on every page; the centre logo covered the title; the legend incomplete; expanded subplans printed collapsed; "a thorough check of formulas, links and progress"). Built: `PageSetup.pics` (per place a list of `{v, h}`), `titleSize`, `headH` from the tallest picture, `.ppics` row with the title under the centre pictures, picture editor (+ Picture/Company logo, size slider, ←/→ across places, ×), dynamic `GanttLegend` (only what shows), baseline and deadline in print bars, Subplans select moved to Settings. Engine audit (10 confirmed bugs, each with a test): classic `datediff`/`dateadd`, Finish custom fields from formulas at 17:00, milestones-only %, curve earned = BCWP (physical %), earned schedule within a day, LOE ends at `prev_end`, SS/SF from summary uses opening leaves, actuals on a day off kept, ext links on summaries reach their leaves, mirror rows (`sched::mirrored`) take `between(start, finish)`, `update_all` pass limit from ext-link count. Not fixed (likely, unconfirmed): baseline work is derived from current work; `pick` puts a task on the last finisher's calendar; ext lag ignores the lag-calendar option; remaining duration counts past split gaps.
+- Then 0.5.12 (user: S-curve to lead the dashboard, cards only with data or as chosen; "a very thorough check of every engine, formulas, links, security"). Built: `ProjectDashboard` with `.charts.wide` (S-curve) + `.charts.flow` (flex rows, no gaps), `CARDS` with a has-data test each and `ui.dashcards` overrides (Cards ▾). Audit by four parallel reviewers, each bug proven by a test (new test files `formula_cases.rs`, `sched_cases.rs`, `exchange_cases.rs`, plus `hardening::hostile_import_files_are_refused_not_crashing`); 148 engine tests. Fixed: formula self-reference crash + exponential re-evaluation (`Calc.memo`), nesting/length limits, `""` literal, classic DateDiff ww/h/q, Sgn, InStr, Round, Mod; finish rollups; G–K date columns only on Plan; summary float ignoring finished kids; ext-link lag calendar, split remaining work, retained logic with ext preds, first-person start, pre-1970 ext dates; linear `parent` (sched, network); one-pass levelling; `update_all` returns missing links and keys by full path (shell too); baseline work stored (`Baseline.work`); S-curve to the baseline finish; `progress_at` for EV/curve/planned %; rounded summary %; risks on milestones/summaries; XER links from summaries, % lags, rates, cost resources, calendar hours by label, damaged calendars; MSPDI fixed cost, elapsed, physical %; security: UNC paths only on the master's server (`sub_path`), xlsx read cell by cell, XML depth 64, escaped HTML title, strict update URLs, recovery written before old extras are removed. Left open: PMXML export still drops summary links and writes % lags as hours; MPX export drops lags; resource custom-field formulas do not run; `Tasks[Col]` inside a task formula gives #NAME?; .xls/.ods import still reads the whole box; signed updates (0.6.1).
+- Then 0.5.13 (user: fix every open item; "a guided tutorial example that uses everything, with a pop-up on each view saying how it was filled"). Built: `crates/core/src/tutorial.rs` (`tutorial(today)`: office fit-out started 5 weeks before today, status last Friday, every feature used, `ui.tour` = one note per sidebar view; test `the_tutorial_uses_every_view_and_schedules`), shell `tutorial_example` (new unsaved tab), `ui/src/tour.tsx` (`TourCard` bottom right, Back/Next through SIDE, × with `datum.tourOff` in localStorage), Help › Tutorial and Tutorial Notes, Home tile, plans menu; `dump tutorial` fixture and the guide's `tutorial.png`. Fixed: assignment units capped at 1000 on load for cost/material (now only for work resources). Open items closed by a reviewer in a copy (12 tests): PMXML summary links and % lags, MPX lags/IDs/units/rate fields, XER physical %, resource classic formulas, `Tasks[Col]`/`Resources[Col]` in formula columns, .xls/.ods size pre-check (10 M cells; `cfb`, `quick-xml`, `zip` direct deps, already in the lock), MC hit rate, Max()/Min() empty, dates in text in the plan format, sheet insert bounds, dashboard tiles follow sheet rename/insert/delete, FF/SF/finish constraints on the picked calendar. Still open: spreadsheet-syntax resource formulas; signed updates (0.6.1; needs a signing key stored as a repository secret).
 - Then 0.5.14 (user screenshots: plan tabs belong between the ribbon and the timeline; a tab even for one plan, to add another and link at once; ribbon captions clipped). Moved `<PlanTabs/>` from the title header to `main.tsx` after `<Ribbon/>`, dropped `.solo`, ＋ menu gets **Blank plan** (`new_plan` with no template), `.ribbon` `min-height` instead of a fixed height. UI tests: tabs between ribbon and content, captions inside the ribbon; the Insert Column test no longer counts menus by `nth-of-type`.
 - Then 0.5.15 (user: more professional graphs; asked about bundling Python/matplotlib). Analysis given: Python would add 80–150 MB, a second runtime and static, slower charts for no new computation, so no Python in Plan; instead sharper Chart.js charts plus a one-way hand-off to Datum Plot (which has matplotlib). Built: `charts.tsx` `devicePixelRatio` ≥ 2 (3 while printing), `ends` plugin (last value at each line's end), status label with its date, x-axis line and dashed y grid, **Datum Plot** button (`toPlot` → shell `open_in_plot`); `crates/core/src/io/dplot.rs` (`ChartData` → Plot format-1 JSON: XY table with X = days from the first date and ISO row titles when `days` are given, else a grouped table drawn as bars; Info notes say it is a copy); shell writes `Documents\Datum Plan\To Datum Plot\<plan> - <chart>.dplot`, checks the `.dplot` association in HKCU/HKLM (`reg query`, no window) and opens it with `explorer`, else says where the file is. Verified with Plot's own loader (`Doc::open`) and its matplotlib graph engine (XY lines and grouped bars render). `days` passed on every time chart. UI tests: the button sends series, colours and dates; canvases draw at 2×.
-- FAMILY §13 cleanup (from the hub's check; ships with the next release, no functional change): reworded every product name used as a comparison or a style in CHANGELOG (0.1.0–0.5.13), README, `docs/site.json`, the guide (en, zh), help text, Getting Started, the glossary, export menus and names, two import messages, the MCP op description and the tutorial note. Kept product names only where they name a file type the user imports or exports (Excel .xlsx, project XML, XER, PMXML) and the XML namespace PMXML needs. The built-in table "P6 Activities" is now "Activities". Code comments and this memory still mention the products (internal, not public text).
+- FAMILY §13 cleanup (from the hub's check; ships with the next release, no functional change): reworded every product name used as a comparison or a style in CHANGELOG (0.1.0–0.5.13), README, `docs/site.json`, the guide (en, zh), help text, Getting Started, the glossary, export menus and names, two import messages, the MCP op description and the tutorial note. Kept product names only where they name a file type the user imports or exports (Excel (.xlsx) files, project XML, XER, PMXML) and the XML namespace PMXML needs. The built-in activities table was renamed "Activities". Code comments may still mention them; this memory follows the rule too (it is public).
+- Public repo cleanup (the hub's FAMILY §13 list): deleted the product feature reference from docs/reference; reworded BRAINSTORM, the PLAN files, this memory, CLAUDE.md, the Atlas brief and about 70 code comments so they describe Datum Plan's own design; docs/FAMILY.md is now a pointer to the hub's FAMILY.md; README and NOTICE carry the trademark note. File-format names stay only where they name files the app reads or writes. Old wording remains in git history (not rewritten). No functional change; ships with the next release.
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 
 ## 5. Known limits and next steps
 
-### Hardening plan (from the ProjectCraft comparison, 2026-10-27; not started)
+### Hardening plan (from the review of another Rust scheduler, 2026-10-27; not started)
 
 Goal: match their rigour while keeping our lead on features. Quick wins done in 0.3.11; items 6–9 in 0.3.12; 10–12 are 0.4.2.
 
@@ -592,7 +593,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 **Trust in the dates (days each)**
 6. ✅ (0.3.12: 47 tests, 47 hand-worked cases; keep adding a case per rule touched) More engine tests: aim for 300+. One file per area (calendars, constraints, link types, lags in %, levelling, progress override, retained logic, from-finish, elapsed). 
 7. ✅ (0.3.12, own generator instead of `proptest`) Property tests (`proptest`): random plans never panic, early start ≤ late start, float ≥ 0 off the critical path, schedule is the same twice.
-8. ✅ (0.3.12, hand-made files; real exports still wanted) Parity fixtures: sample MSP XML and XER files with the dates MS Project / P6 give them; a test checks we give the same dates. Show "Checked against N sample plans" in the README.
+8. ✅ (0.3.12, hand-made files; real exports still wanted) Parity fixtures: sample project XML (MSPDI) and XER files with the dates their source tools give them; a test checks we give the same dates. Show "Checked against N sample plans" in the README.
 9. ✅ (0.3.12; the import report moves to 0.4.0) Hostile-file tests for XML, XER, MPX, xlsx import: damaged, huge, odd values; the import report lists what was changed or dropped.
 
 **Reach (a week each)**
@@ -601,7 +602,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 12. ✅ (0.4.2, rounded to minor units per task, f64 kept) Exact money: store costs in minor units (integers), not floats.
 13. ✅ (0.3.11, no separate threat model yet) Docs they have that we lack: SECURITY.md, CONTRIBUTING.md, a threat model (files hold people's names; the only network call is the updater).
 
-**Keep (where we lead):** the window (ribbon, sidebar, 18 views), tracking and EVM, reports and print, formulas and Sheets, XER and P6 power features, in-app updates, the Datum family.
+**Keep (where we lead):** the window (ribbon, sidebar, 18 views), tracking and EVM, reports and print, formulas and Sheets, XER and advanced scheduling features, in-app updates, the Datum family.
 
 ### Pending and next (written at the end of 0.3.8)
 
@@ -614,7 +615,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 **Not yet checked on a real Windows PC or against real files:**
 - Print to PDF in WebView2 for every view (flowing report pages, page numbers from `@page` margin boxes).
 - XER, PMXML and MPX against files from other tools; custom fields and codes are not yet written to XER/XML.
-- The clipboard with real Excel; the Aptos font.
+- The clipboard with a real spreadsheet program; the Aptos font.
 
 **Features still to build (roadmap):**
 - ✅ 0.4.0 Risk and resources (schedule risk, trades, levelling preview, import report). Left for later: manpower planned vs actual (0.4.1), a shared resource pool across plans (0.6).
@@ -631,7 +632,7 @@ Goal: match their rigour while keeping our lead on features. Quick wins done in 
 - Manpower "Done" is earned hours from progress, not hours booked (no timesheets).
 - Actual progress is modelled linearly between stored periods (snapshots); without snapshots, linearly from the actual start to today.
 - Windows SmartScreen warns on the first install (unsigned). Updates after that are silent.
-- XER/PMXML/MPX exports are checked against our own readers only; needs real P6 and MS Project tests. Custom fields and codes are not yet written to XER/MSPDI.
+- XER/PMXML/MPX exports are checked against our own readers only; needs tests against files from other tools. Custom fields and codes are not yet written to XER/MSPDI.
 - The grid fetches all visible rows per change (about 8 MB JSON at 20k tasks); fine to ~20k, 100k needs row windows (0.6.1).
 - Not built yet: the reference's C2 scenario tests. The task sheet and Sheets share one engine but keep two renderers. Report pages print as flowing HTML (no per-page preview).
 - Fill handle and paste were checked by code review and in the harness, not with a real clipboard in the app.

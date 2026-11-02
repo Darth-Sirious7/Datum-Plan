@@ -72,7 +72,7 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .pcts { display: flex; gap: 1px; align-self: flex-start; }
 .pcts .rb { padding: 2px 3px; font-size: 10px; flex-direction: column; gap: 0; height: auto; }
 
-/* Work area and Cairn-style sidebar */
+/* Work area and sidebar */
 .work { flex: 1; display: flex; min-height: 0; position: relative; }
 .side { width: 66px; flex: none; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding-top: 4px; overflow-y: auto; }
 .side button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 10.5px; color: var(--text2); border-left: 3px solid transparent; }
@@ -366,7 +366,7 @@ tr.link:hover td { background: var(--pale); }
   .panel, .kpi { break-inside: avoid; }
 }
 
-/* ---------- 0.3.1: Excel-style grid ---------- */
+/* ---------- 0.3.1: spreadsheet-style grid ---------- */
 .grid { display: flex; flex-direction: column; min-width: 120px; flex: none; min-height: 0; }
 .gscroll { flex: 1; overflow: auto; position: relative; outline: none; background: var(--bg2); }
 .gsheet { position: relative; }
@@ -400,7 +400,7 @@ tr.link:hover td { background: var(--pale); }
 .fbar input { flex: 1; border: 0 !important; height: 100%; padding: 0 8px !important; font: 12.5px var(--mono); background: transparent !important; outline: none !important; }
 .fbar .agg { padding: 0 12px; font: 11px var(--mono); color: var(--muted); white-space: nowrap; border-left: 1px solid var(--line); line-height: 27px; }
 
-/* ---------- 0.3.1: CentriForge polish on the MS Project layout ---------- */
+/* ---------- 0.3.1: polish on the ribbon layout ---------- */
 body, .app { background: var(--bg); color: var(--text); }
 .top, .ribbon, .status, .side { background: var(--panel); }
 .ribbon .grp .cap { font: 500 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
@@ -727,7 +727,7 @@ a.link { color: var(--blue); cursor: pointer; text-decoration: underline; }
 .guidecard b { font-size: 16px; }
 .guidecard span { color: var(--muted); font-size: 12px; }
 
-/* Sheets (0.5.0): Excel tools, reference boxes, formula hints, flags */
+/* Sheets (0.5.0): spreadsheet tools, reference boxes, formula hints, flags */
 .sheettools { padding: 5px 10px; border-bottom: 1px solid var(--line); gap: 4px; flex-wrap: wrap; }
 .sheettools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 .sheettools .caret { padding: 0 5px; margin-left: -4px; }

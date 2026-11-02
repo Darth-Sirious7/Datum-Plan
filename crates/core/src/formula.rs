@@ -1,5 +1,5 @@
-//! Custom field formulas in MS Project syntax: `IIf([Finish] > [Baseline Finish], "Late", "On time")`.
-//! Durations are minutes, dates are instants (minutes); dates subtract to days like VBA.
+//! Custom field formulas in the classic custom-field syntax: `IIf([Finish] > [Baseline Finish], "Late", "On time")`.
+//! Durations are minutes, dates are instants (minutes); dates subtract to days.
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,7 +24,7 @@ impl F {
     pub fn truth(&self) -> bool {
         match self { F::Bool(b) => *b, F::Str(s) => matches!(s.to_lowercase().as_str(), "yes" | "true"), F::Null => false, x => x.num() != 0.0 }
     }
-    /// As text in `&` and string functions: numbers in full, like VBA's CStr (the grid shows 2 decimals).
+    /// As text in `&` and string functions: numbers in full, as the classic CStr does (the grid shows 2 decimals).
     fn text(&self) -> String {
         match self { F::Num(n) if n.is_finite() => format!("{}", (n * 1e12).round() / 1e12), x => x.to_string() }
     }
@@ -45,7 +45,7 @@ pub trait Ctx {
     fn now(&self) -> i64;
     fn work_between(&self, a: i64, b: i64) -> i64;
     fn work_add(&self, a: i64, m: i64) -> i64;
-    /// The date format dates take as text; VBA's short date unless the plan sets one.
+    /// The date format dates take as text; the classic short date unless the plan sets one.
     fn date_fmt(&self) -> &str { "%-m/%-d/%Y" }
 }
 
@@ -110,7 +110,7 @@ impl P<'_> {
                 Ok(Ex::Field(name))
             }
             b'"' => {
-                // "" inside a string is one quote, as in VBA.
+                // "" inside a string is one quote.
                 let mut out = vec![];
                 self.i += 1;
                 loop {
@@ -225,7 +225,7 @@ fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 "*" => F::Num(x.num() * y.num()),
                 "/" => { if y.num() == 0.0 { return Err("division by zero".into()) } F::Num(x.num() / y.num()) }
                 "\\" | "mod" => {
-                    // Like VBA, both sides are first rounded to whole numbers (halves to even).
+                    // Both sides are first rounded to whole numbers (halves to even).
                     let (x, y) = (x.num().round_ties_even(), y.num().round_ties_even());
                     if y == 0.0 { return Err("division by zero".into()) }
                     F::Num(if op == "mod" { x % y } else { (x / y).trunc() })
@@ -294,7 +294,7 @@ fn eval_in(e: &Ex, c: &dyn Ctx) -> Result<F, String> {
                 "projdateadd" => F::Date(c.work_add(date(0)?, n(1)? as i64)),
                 "projdatesub" => F::Date(c.work_add(date(0)?, -(n(1)? as i64))),
                 "datediff" => {
-                    // Like VBA: days, months and years count the calendar boundaries crossed, not lengths of time.
+                    // Classic DateDiff: days, months and years count the calendar boundaries crossed, not lengths of time.
                     use chrono::Datelike;
                     let (u, x, y) = (s(0)?.to_lowercase(), date(1)?, date(2)?);
                     let (dx, dy) = (crate::cal::date_of(x), crate::cal::date_of(y));

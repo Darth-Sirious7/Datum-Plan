@@ -553,7 +553,7 @@ fn sheets_read_the_plan_by_name_and_behave_like_excel() {
     assert_eq!(at("A3"), "06-Nov-26", "a date name shows as a date");
     assert_eq!(at("A4"), at("A3"), "lookups of plan dates show as dates");
     assert_eq!(at("A6"), "0", "date arithmetic stays a number");
-    assert_eq!(at("A7"), "1,234.50", "Excel number formats");
+    assert_eq!(at("A7"), "1,234.50", "spreadsheet number formats");
     assert_eq!(at("A8"), "0%", "plan percentages (0–100) get a % sign");
     assert_eq!((at("A10"), at("A11")), ("2".to_string(), "3".to_string()), "spilled results are shown");
     assert_eq!(v.cells.iter().find(|x| x.0 == "A10").map(|x| x.1.as_str()), Some(""), "a spilled cell has no input of its own");

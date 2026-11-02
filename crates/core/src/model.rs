@@ -26,15 +26,15 @@ pub enum Unit { M, H, #[default] D, W, Mo }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResKind { #[default] Work, Material, Cost }
 
-/// What stays fixed when work, units or duration change (MSP task types).
+/// What stays fixed when work, units or duration change (task types).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskType { #[default] FixedDuration, FixedUnits, FixedWork }
 
-/// Primavera activity types.
+/// Activity types: task, resource dependent, level of effort, milestones, WBS summary.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActType { #[default] Task, ResourceDep, Loe, StartMs, FinishMs, WbsSummary }
 
-/// How % complete is measured (P6 percent complete types).
+/// How % complete is measured (percent complete types).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PctType { #[default] Duration, Units, Physical }
 
@@ -164,7 +164,7 @@ pub struct Task {
     pub act_type: ActType,
     #[serde(skip_serializing_if = "is_dur_pct")]
     pub pct_type: PctType,
-    /// Physical % complete (P6), used for earned value when the type is Physical.
+    /// Physical % complete, used for earned value when the type is Physical.
     #[serde(skip_serializing_if = "is_zero_u8")]
     pub phys: u8,
     /// Elapsed duration: runs around the clock, ignoring calendars.
@@ -225,7 +225,7 @@ pub struct Task {
     pub style: Value,
     #[serde(skip_serializing_if = "is_false")]
     pub timeline: bool,
-    /// Activity ID (P6) or any short code.
+    /// Activity ID (as in XER files) or any short code.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub code: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -430,7 +430,7 @@ pub struct CustomDef {
 #[serde(default)]
 pub struct CodeValue { pub value: String, pub desc: String, pub color: String }
 
-/// An activity code (P6): a classification with a list of values.
+/// An activity code: a classification with a list of values.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CodeDef { pub name: String, pub scope: String, pub values: Vec<CodeValue> }
@@ -481,7 +481,7 @@ pub struct Photo { pub data: String, pub caption: String }
 #[serde(default)]
 pub struct PeriodNote { pub kind: String, pub end: Option<NaiveDate>, pub summary: String, pub progress: String, pub issues: String, pub actions: String, pub look_ahead: String, pub photos: Vec<Photo> }
 
-/// A frozen copy of the plan at a reporting date (P6 "store period performance").
+/// A frozen copy of the plan at a reporting date (stored period performance).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Snapshot { pub date: Option<NaiveDate>, pub label: String, pub comment: String, pub finish: i64, pub pct: f64, pub cost: f64, pub rows: Vec<SnapRow> }

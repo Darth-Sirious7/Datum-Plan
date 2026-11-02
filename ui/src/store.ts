@@ -21,7 +21,7 @@ export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");
 
-// ---------- tables (column sets), as in MS Project ----------
+// ---------- tables (column sets) ----------
 type Cols = [string, number][];
 const N: [string, number] = ["name", 260];
 export const TABLES: Record<string, Cols> = {

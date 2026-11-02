@@ -1,5 +1,5 @@
 // Spreadsheet tabs inside the plan (dashboards, quantities, estimates, vendor lists). They work like
-// Excel: type = and click cells to build a formula, functions are suggested as you type, the fill
+// a spreadsheet: type = and click cells to build a formula, functions are suggested as you type, the fill
 // handle and paste carry formulas along, and the plan is read live by name: Tasks[Finish],
 // Resources[Country], ProjectFinish. The GridCraft engine (in crates/core) calculates everything.
 import { For, Show, batch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
@@ -15,9 +15,9 @@ import { Help } from "./help";
 const RH = 22, CW = 96, HW = 46;
 const COLORS = ["#2F6FDE", "#D64545", "#7A4FD8", "#1F9D55", "#C77700", "#C2185B"];
 const parseA1 = (s: string): [number, number] => { const m = s.match(/^([A-Z]+)(\d+)$/)!; let c = 0; for (const ch of m[1]) c = c * 26 + ch.charCodeAt(0) - 64; return [+m[2] - 1, c - 1]; };
-/** Excel closes the brackets left open when Enter is pressed. */
+/** Brackets left open are closed when Enter is pressed. */
 const closeParens = (t: string) => { const b = blankStrings(t); return t + ")".repeat(Math.max(0, (b.match(/\(/g)?.length ?? 0) - (b.match(/\)/g)?.length ?? 0))); };
-/** Number formats offered on the toolbar and the cell menu: label and format (Excel code or our short name). */
+/** Number formats offered on the toolbar and the cell menu: label and format (spreadsheet format code or our short name). */
 export const FORMATS: [string, string][] = [["General", ""], ["Number (1,234.50)", "#,##0.00"], ["Whole number (1,235)", "#,##0"], ["Percent of 1 (0.28 → 28%)", "0%"], ["Percent of 100 (28 → 28%)", '0"%"'],
   ["Currency", "money"], ["Date", "date"], ["Long date (30 October 2026)", "d mmmm yyyy"], ["Month (Oct-26)", "mmm-yy"], ["Text", "@"], ["Country with flag", "flag"]];
 /** One more or one fewer decimal in a format code. */
@@ -172,7 +172,7 @@ export const Sheets = () => {
     return clip.text;
   };
   const onCopy = (e: ClipboardEvent, cut = false) => { if (edit() !== null) return; e.preventDefault(); e.clipboardData?.setData("text/plain", copy(cut)); };
-  /** What a paste puts at the cursor: copies made in Sheets bring their formulas (moved by the distance, as in Excel); anything else pastes as text. */
+  /** What a paste puts at the cursor: copies made in Sheets bring their formulas (moved by the distance); anything else pastes as text. */
   const pasted = async (text: string, tr = false): Promise<[string, string][]> => {
     const [r0, c0] = cur();
     if (text && text === sclip.text) {
@@ -200,7 +200,7 @@ export const Sheets = () => {
   };
   const onPaste = async (e: ClipboardEvent) => { if (edit() !== null) return; e.preventDefault(); put(await pasted((e.clipboardData?.getData("text/plain") ?? "").replace(/\r/g, ""))); };
   /** Fills from the selection's first rows down (or first columns right): numbers and dates continue
-   *  their series, formulas move their references as in Excel; Ctrl copies. */
+   *  their series, formulas move their references; Ctrl copies. */
   const fillRange = async (r1: number, c1: number, copyOnly = false) => {
     const [a, b, c, d] = range(), out: [string, string][] = [], moves: [string, number, number][] = [], at: string[] = [];
     const one = (src: string[], k2: number, srcAt: (i: number) => [number, number], to: [number, number]) => {
@@ -223,7 +223,7 @@ export const Sheets = () => {
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
 
-  // ---------- Excel commands ----------
+  // ---------- spreadsheet commands ----------
   /** AutoSum (Alt+=): one cell gets =SUM of the numbers above it (or to its left); a range gets totals under each column. */
   const autoSum = (fn: string) => {
     const g = S.last(), num = (r: number, c: number) => !!cells().get(a1(r, c))?.[3];
@@ -233,7 +233,7 @@ export const Sheets = () => {
       while (t >= 0 && num(t, c)) t--;
       while (l >= 0 && num(r, l)) l--;
       const ref = t < r - 1 ? `${a1(t + 1, c)}:${a1(r - 1, c)}` : l < c - 1 ? `${a1(r, l + 1)}:${a1(r, c - 1)}` : "";
-      // As in Excel the proposed range stays "live": clicking or dragging other cells replaces it.
+      // The proposed range stays "live": clicking or dragging other cells replaces it.
       startEdit(`=${fn}(${ref})`);
       setCaret(fn.length + 2 + ref.length);
       setPoint(ref ? { start: fn.length + 2, end: fn.length + 2 + ref.length } : null);

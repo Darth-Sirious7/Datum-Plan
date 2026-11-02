@@ -10,7 +10,7 @@ At the end of every session that changes anything, update `docs/MEMORY.md`:
 User preferences:
 - Rust and Tauri 2, small and efficient code, Windows first.
 - Ship in small numbered releases (0.1.0, 0.1.1, …). Every release appears in the in-app updater.
-- A light theme with blue accents (since 0.1.1), MS Project layout, P6 power features, Cairn-style sidebar.
+- A light theme with blue accents (since 0.1.1), a ribbon layout with the task sheet and Gantt chart side by side, advanced scheduling features (activity codes, steps, longest path, earned value, risk), and an icon sidebar for the views.
 - Keep code compact and match the surrounding style. Engine logic belongs in `crates/core` (pure Rust, unit-tested), not in the UI.
 - The UI is SolidJS + Vite in `ui/src/*.tsx` (built to `ui/dist`). State lives in `ui/src/store.ts`; the engine computes all values, the window only shows them.
 

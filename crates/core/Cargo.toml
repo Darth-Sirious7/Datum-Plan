@@ -15,7 +15,7 @@ chrono.workspace = true
 rust_xlsxwriter = { version = "0.101.0", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
-# Excel formula engine (MIT OR Apache-2.0, https://github.com/storytold/gridcraft), pinned.
+# Spreadsheet formula engine (MIT OR Apache-2.0, https://github.com/storytold/gridcraft), pinned.
 gridcraft-calc = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
 gridcraft-model = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }
 gridcraft-core = { git = "https://github.com/storytold/gridcraft", rev = "10bec74810c55c73fda2f08393ad45238eb783b5" }

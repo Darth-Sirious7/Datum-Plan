@@ -3,10 +3,12 @@ Copyright (c) 2026 Edgar Mendonca. MIT licence.
 
 This product includes software from GridCraft (https://github.com/storytold/gridcraft),
 Copyright (c) 2026 ArtCraft Team and the GridCraft contributors, used under the MIT licence:
-the formula parser, the Excel function library and the calculation engine (crates
+the formula parser, the spreadsheet function library and the calculation engine (crates
 gridcraft-core, gridcraft-formula, gridcraft-functions, gridcraft-numfmt, gridcraft-model,
 gridcraft-calc).
 
 It also bundles Chart.js (MIT, https://www.chartjs.org), SolidJS (MIT), the IBM Plex
 fonts (SIL Open Font Licence 1.1) and the country flags of flag-icons (MIT,
 https://github.com/lipis/flag-icons, Copyright (c) 2013 Panayiotis Lipiridis).
+
+Product and file-format names are trademarks of their owners and are used only to describe file compatibility.

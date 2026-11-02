@@ -1,4 +1,4 @@
-//! Excel formulas through the Gridcraft engine: formula columns on tasks (`=[% Complete]-[Baseline
+//! Spreadsheet formulas through the Gridcraft engine: formula columns on tasks (`=[% Complete]-[Baseline
 //! % Complete]`) and the plan's spreadsheet tabs, which can also read a "Plan" sheet of all tasks.
 use crate::cal::DAY;
 use crate::fields::{money, Calc, Kind};
@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// 1970-01-01 as an Excel date serial.
 const EPOCH: f64 = 25569.0;
 
-/// Our value as an Excel value: dates become serials, durations become days.
+/// Our value as a spreadsheet value: dates become serials, durations become days.
 pub fn to_value(v: &F, kind: Kind, day_min: i64) -> Value {
     match v {
         F::Null => Value::Empty,
@@ -25,7 +25,7 @@ pub fn to_value(v: &F, kind: Kind, day_min: i64) -> Value {
     }
 }
 
-/// An Excel result in the field's kind.
+/// A spreadsheet result in the field's kind.
 pub fn from_value(v: &Value, kind: Kind, day_min: i64) -> F {
     let num = || match v { Value::Number(n) => Some(*n), Value::Bool(b) => Some(*b as u8 as f64), _ => None };
     match (v, kind) {
@@ -82,7 +82,7 @@ pub fn translate(src: &str, mut col: impl FnMut(&str) -> Option<String>) -> Resu
     Ok(out)
 }
 
-/// Checks an Excel-style formula: its fields exist and it parses.
+/// Checks a spreadsheet-style formula: its fields exist and it parses.
 pub fn check(src: &str, known: impl Fn(&str) -> bool) -> Result<(), String> {
     let t = translate(src, |n| known(n).then(|| "A1".into()))?;
     match Formula::new(&t).expr {
@@ -95,7 +95,7 @@ pub fn is_excel(formula: &str) -> bool {
     formula.trim_start().starts_with('=')
 }
 
-/// Evaluates every Excel formula column for every task. Formula columns may read each other.
+/// Evaluates every spreadsheet formula column for every task. Formula columns may read each other.
 pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec<F>> {
     let p = c.p;
     let n = p.tasks.len();
@@ -254,7 +254,7 @@ fn code_of(fmt: &str, c: &Calc) -> String {
 }
 
 /// Whether a formula gives a date: a date function at the top, or a lookup or MIN/MAX over plan
-/// dates. (Excel guesses the same way.)
+/// dates.
 fn gives_date(input: &str) -> bool {
     let Ok(e) = gridcraft_formula::parse(input.trim_start_matches('=')) else { return false };
     let up = input.to_uppercase();

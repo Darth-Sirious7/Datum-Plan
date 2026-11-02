@@ -267,7 +267,7 @@ fn resource_calendars_drive_task_dates() {
     assert_eq!(w.rows[0].cap[0], 24.0);
 }
 
-/// A plan with resource calendars keeps its dates through MS Project XML and P6 XER.
+/// A plan with resource calendars keeps its dates through project XML and XER.
 #[test]
 fn resource_calendars_survive_exchange_files() {
     let mut p = build(&["5d||res=Ahmed", "1d|1|", "3d||res=Bina; ignore_rc=Yes"], plain);

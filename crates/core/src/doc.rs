@@ -78,7 +78,7 @@ pub enum Op {
     /// Sets the master a subplan belongs to (its file; empty for none).
     Master { file: String },
     /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
-    /// at `at` (0-based); formulas on every tab follow, as in Excel.
+    /// at `at` (0-based); formulas on every tab follow, as in a spreadsheet.
     SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
     /// Adds, replaces (`old`) or (rule None) removes a rule of credit.
     Credit { old: Option<String>, rule: Option<CreditRule> },

@@ -312,7 +312,7 @@ export const Gantt = () => {
   );
 };
 
-/** The MS Project timeline: the whole project with the tasks marked Display on Timeline. */
+/** The timeline bar: the whole project with the tasks marked Display on Timeline. */
 export const Timeline = () => {
   let cv!: HTMLCanvasElement;
   const [w, setW] = createSignal(800);

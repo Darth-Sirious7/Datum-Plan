@@ -1,4 +1,4 @@
-//! Microsoft Project XML (MSPDI): the exchange format MS Project, ProjectLibre and others save.
+//! Project XML (MSPDI): the XML exchange format many scheduling programs save.
 use super::xml::{esc, parse, Node};
 use crate::cal::{at, date_of, DAY};
 use crate::model::*;
@@ -309,7 +309,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             ..Default::default()
         });
     }
-    // Microsoft Project always schedules on resource calendars: keep that when people have their own.
+    // Project XML files always schedule on resource calendars: keep that when people have their own.
     if p.resources.iter().any(|r| r.cal.is_some() || !r.exceptions.is_empty()) {
         p.opts.res_cals = true;
     }

@@ -10,9 +10,9 @@ Status: **brief for a new app**. Written at the end of Datum Plan 0.3.8, from ev
 - compare candidates;
 - document the decision.
 
-The reference for scope is Ansys Granta Selector / EduPack, the established tool for Ashby-method selection. Atlas must cover the same core workflow, and be **easier, faster, better-looking and more open**:
+The scope is the full Ashby-method selection workflow. Atlas aims to be **easy, fast, good-looking and open**:
 - your own data, with references for every value;
-- Excel-style formulas;
+- spreadsheet-style formulas;
 - publication-quality charts;
 - a smaller, faster app.
 
@@ -53,7 +53,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
 ## 3. Features
 
 ### 3.1 Browse and search
-- A tree of families and classes, plus a table of records with chosen property columns. It uses the shared grid engine (`selection.ts`, `cells.ts`, `fmt.ts` from Datum Plan): sort, filter, select ranges, copy to Excel.
+- A tree of families and classes, plus a table of records with chosen property columns. It uses the shared grid engine (`selection.ts`, `cells.ts`, `fmt.ts` from Datum Plan): sort, filter, select ranges, copy to spreadsheets.
 - Search by name, synonym, standard designation (EN, UNS, ASTM, ISO, JIS) and keywords.
 - A **datasheet** per material:
   - grouped properties (General, Mechanical, Thermal, Electrical, Optical, Durability, Processing, Eco);
@@ -74,7 +74,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
   - the value at the line shown.
 - Hover shows a tooltip with the ranges; click opens the datasheet; selections highlight across all charts, with failed materials greyed.
 - Zoom, pan, fit, logarithmic gridlines, and well-formatted tick labels (10², 10³).
-- Style presets: Prism-like publication, Classic (family colours), Monochrome print.
+- Style presets: Publication (journal style), Classic (family colours), Monochrome print.
 - Export SVG, PNG (300/600 dpi) and PDF; copy to clipboard.
 
 ### 3.3 Selection projects
@@ -102,9 +102,9 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
   - manufacturer datasheets (cite them);
   - textbook-level typical ranges, rewritten as our own compilation.
 
-  **Never copy Granta/CES or other proprietary databases.**
-- **User databases:** add your own materials and properties. Import from Excel/CSV with a mapping step (as in Datum Plan's import), and export the same.
-- **Derived properties** via formulas (the GridCraft Excel engine): specific stiffness, thermal diffusivity, indices, cost per volume.
+  **Never copy proprietary or commercial databases.**
+- **User databases:** add your own materials and properties. Import from Excel (.xlsx)/CSV files with a mapping step (as in Datum Plan's import), and export the same.
+- **Derived properties** via formulas (the GridCraft formula engine): specific stiffness, thermal diffusivity, indices, cost per volume.
 - **Units:** SI by default, with a metric/imperial switch; per-property unit choice; ranges converted exactly.
 - Uncertainty: low/high ranges, and an optional "typical" value. Missing values are shown as gaps, never as zero.
 
@@ -137,7 +137,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
 | Window | SolidJS + Vite + strict TS (`ui/src`), the family CSS tokens with the **Violet** accent |
 | Charts | Our own SVG chart engine (reuse Datum Plot's plotting code if it exists; otherwise build `ui/src/chart/`); Chart.js only for simple bar/radar charts |
 | Formulas | GridCraft crates (pinned git dependency, as in Datum Plan) for expressions and derived properties |
-| Excel I/O | `calamine` (read) and `rust_xlsxwriter` (write), as in Datum Plan |
+| Excel (.xlsx) I/O | `calamine` (read) and `rust_xlsxwriter` (write), as in Datum Plan |
 | Storage | The built-in database is a compressed JSON (or `bincode`) bundle embedded in the binary; user databases and projects are JSON files (`.datlas`, `.datdb`) |
 | Tests | Rust unit tests (units, ranges, index maths, hulls, selection); Playwright UI tests (`tests_ui/run.cjs`) |
 | Release | `release.yml` (workflow_dispatch), NSIS installer + SHA256SUMS, in-app updater (`update.rs`, `REPO = Edgar-Mendonca/Datum-Atlas`) |
@@ -157,7 +157,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
 - it adds 30–60 MB to every install and update and slows the start;
 - it means a second runtime to package and sign.
 
-Everything Atlas needs (log charts, hulls, statistics, Excel) is available in Rust and SVG, and is faster. If you later want custom analysis, add an **optional "Python scripts" add-on** that runs your own Python against an exported dataset, outside the app.
+Everything Atlas needs (log charts, hulls, statistics, .xlsx files) is available in Rust and SVG, and is faster. If you later want custom analysis, add an **optional "Python scripts" add-on** that runs your own Python against an exported dataset, outside the app.
 
 ## 6. Data model (outline)
 

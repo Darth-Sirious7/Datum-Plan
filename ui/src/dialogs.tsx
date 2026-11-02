@@ -1,4 +1,4 @@
-// Dialogs: information, settings and editors, MS Project style.
+// Dialogs: information, settings and editors.
 import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke, LevelPreview, fmtAt } from "./api";
@@ -27,7 +27,7 @@ export const taskInfo = (uid: number, start = "general") => openDialog(() => {
   );
 });
 
-/** Every field of a task (MS Project Inspect / Task Form with all fields). */
+/** Every field of a task (an inspector / task form with all fields). */
 export const inspect = (uid?: number) => uid && openDialog(() => {
   const [info] = useInfo(() => uid);
   const [find, setFind] = createSignal("");
@@ -512,7 +512,7 @@ export const pasteSpecial = () => {
   });
 };
 
-/** A one-page guide for people who know MS Project or Excel. */
+/** A one-page guide for people coming from other scheduling or spreadsheet programs. */
 // ---------- the guide (PDF, English or Chinese) ----------
 /** Help › Guide: downloads the guide for this version from GitHub, checks it, saves it in Downloads and opens it. */
 export const guide = () => openDialog(() => {
@@ -601,7 +601,7 @@ export const confirmClose = (then: () => void) => openDialog(() => {
 });
 export { produce, opts, grid, query };
 
-// ---------- formula columns (Excel style, by column) ----------
+// ---------- formula columns (spreadsheet style, by column) ----------
 const TYPES: [string, string][] = [["number", "Number"], ["text", "Text"], ["date", "Date"], ["duration", "Duration"], ["cost", "Cost"], ["flag", "Yes/No"]];
 const FUNCS: [string, string][] = [
   ["IF(test, then, else)", "IF(, , )"], ["IFS(test1, v1, test2, v2)", "IFS(, , , )"], ["AND / OR / NOT", "AND(, )"], ["ROUND(x, digits)", "ROUND(, 0)"], ["MIN / MAX", "MAX(, )"], ["ABS(x)", "ABS()"],
@@ -639,7 +639,7 @@ export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() 
             <textarea class="formula" ref={box} value={f()} onInput={e => { setF(e.currentTarget.value); setErr(""); }} placeholder="=[% Complete]-[Baseline % Complete]" />
             <div class="ptools"><For each={["+", "-", "*", "/", "&", "=", "<>", ">", "<", "(", ")"]}>{o => <button class="btn sm" onClick={() => insert(o)}>{o}</button>}</For></div>
             <Show when={err()}><div class="late">{err()}</div></Show>
-            <p class="muted">Spreadsheet formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are Excel dates; durations are in days.</p>
+            <p class="muted">Spreadsheet formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are spreadsheet dates; durations are in days.</p>
           </div></Row>
           <Row label="Functions"><select onChange={e => { insert(e.currentTarget.value); e.currentTarget.value = ""; }}><option value="">Insert function…</option><For each={FUNCS}>{x => <option value={x[1]}>{x[0]}</option>}</For></select></Row>
         </div>

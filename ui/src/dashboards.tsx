@@ -1,5 +1,5 @@
 // Custom dashboards: boards of tiles the user lays out, several per plan, saved with the plan
-// (ui.dashboards). Tiles read the plan live: numbers and rings from Excel formulas (=SPI,
+// (ui.dashboards). Tiles read the plan live: numbers and rings from spreadsheet formulas (=SPI,
 // =COUNTIF(Tasks[Late],TRUE)), the plan's charts and lists, charts and tables from sheet ranges or
 // formulas, and country flags. The engine works out every formula in one call (dash_eval).
 import { For, Show, Switch, Match, createMemo, createResource, createSignal, JSX } from "solid-js";

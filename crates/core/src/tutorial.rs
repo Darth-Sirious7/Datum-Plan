@@ -69,7 +69,7 @@ pub fn tutorial(today: NaiveDate) -> Project {
     doc.p.tasks[n].level = 0;
     run(&mut doc, Op::Recurring { at: n + 1, name: "Weekly site meeting".into(), dur: "2h".into(), every: "week".into(), interval: 1, count: 8, start: iso(day(4)) });
     for (k, t) in doc.p.tasks[n + 1..].iter_mut().enumerate() { t.level = if k == 0 { 1 } else { 2 } }
-    // Custom fields: one VBA-style and one Excel-style formula, both as columns.
+    // Custom fields: one classic-syntax and one spreadsheet-style formula, both as columns.
     let def = |key: &str, alias: &str, formula: &str| Op::FieldDef { def: CustomDef { key: key.into(), alias: alias.into(), formula: formula.into(), ..CustomDef::default() } };
     run(&mut doc, def("number1", "Days left", "[Duration]*(100-[% Complete])/100"));
     run(&mut doc, def("text1", "Health", r#"=IF(AND([% Complete]<100,[Total Float]<1),"Watch","OK")"#));

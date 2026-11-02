@@ -11,7 +11,7 @@ export const Page = (p: { title: string; help?: string; tools?: JSX.Element; chi
   <section class="page"><div class="ptools"><h1>{p.title}{p.help && <Help k={p.help} />}</h1><span class="grow" />{p.tools}</div>{p.children}</section>
 );
 
-// ---------- Network Diagram (MS Project / P6 style boxes) ----------
+// ---------- Network Diagram (one box per task) ----------
 /** Box sizes for the three box layouts. */
 export const NET_BOX: Record<string, { W: number; H: number }> = { compact: { W: 160, H: 50 }, standard: { W: 214, H: 72 }, detailed: { W: 230, H: 104 } };
 const NET_COLS = ["code", "name", "dur", "start", "finish", "pct", "tf", "res"];
@@ -349,7 +349,7 @@ export const Risks = () => {
   );
 };
 
-// ---------- Check Schedule (DCMA 14 and P6 checks) ----------
+// ---------- Check Schedule (DCMA 14 and further checks) ----------
 export const Checks = () => {
   const [lim, setLim] = createSignal({ pct: 5, high_float: 44, high_dur: 44, long_lag: 20, index: 0.95 });
   const [list] = createResource(() => [tick(), lim()], () => call<Check[]>("checks", { limits: lim() }));

@@ -1,4 +1,4 @@
-//! Primavera P6 XER: tab-separated tables (%T table, %F fields, %R rows). Summary tasks become WBS
+//! XER: tab-separated tables (%T table, %F fields, %R rows). Summary tasks become WBS
 //! nodes, other tasks become activities.
 use crate::cal::{at, date_of, DAY};
 use crate::model::*;
@@ -24,7 +24,7 @@ fn excel_day(d: NaiveDate) -> i64 {
     (d - NaiveDate::from_ymd_opt(1899, 12, 30).unwrap()).num_days()
 }
 
-/// P6 calendar data: nested "(0||name(args)(children))" nodes.
+/// XER calendar data: nested "(0||name(args)(children))" nodes.
 fn clndr_data(c: &Calendar) -> String {
     let hours = |h: &Hours| h.iter().enumerate().map(|(k, (s, e))| format!("(0||{k}(s|{:02}:{:02}|f|{:02}:{:02})())", s / 60, s % 60, (e / 60) % 24, e % 60)).collect::<String>();
     let days: String = (0..7).map(|k| format!("(0||{}()({}))", (k + 1) % 7 + 1, hours(&c.week[k]))).collect();
@@ -43,7 +43,7 @@ fn clndr_data(c: &Calendar) -> String {
 
 struct PNode { name: String, args: String, kids: Vec<PNode> }
 
-/// One node of P6's calendar text; `depth` stops damaged text from nesting without end.
+/// One node of the XER calendar text; `depth` stops damaged text from nesting without end.
 fn pnode(s: &[u8], i: &mut usize, depth: u8) -> Option<PNode> {
     let ws = |i: &mut usize| while *i < s.len() && (s[*i] as char).is_whitespace() || (*i < s.len() && s[*i] == 0x7f) { *i += 1 };
     ws(i);

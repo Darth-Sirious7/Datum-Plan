@@ -1,4 +1,4 @@
-// File › Print: MS Project-style print settings with a live page preview. Pages are laid out
+// File › Print: print settings on the left, a live page preview on the right. Pages are laid out
 // here (table + vector Gantt per page, headers, footers, logos, legend, page numbers) and printed
 // with the WebView's print dialog, where "Save as PDF" makes a PDF.
 import { For, Show, Switch, Match, JSX, createMemo, createSignal, createResource, onCleanup, lazy } from "solid-js";
@@ -118,8 +118,8 @@ const Foot = (p: { n: number; pages: number; h?: number; flow?: boolean }) => {
 const flowPageNo = () => (ps.hf === "simple" ? ps.fPage : ps.footer.some(t => /&\[Pages?\]/.test(t)));
 
 type Page = { rows: [number, number]; x: [number, number]; n: number; notes?: [string, string, string][] };
-/** The table and the chart form one long strip; pages are windows on it (across, then down), like
- *  MS Project. Columns are never cut at a page edge; the ID and Task Name can repeat on every page. */
+/** The table and the chart form one long strip; pages are windows on it (across, then
+ *  down). Columns are never cut at a page edge; the ID and Task Name can repeat on every page. */
 /** A master printed with its subplans collapsed, expanded or left out (otherwise as on screen). */
 const subMode = () => (out()?.project.subplans?.length && ps.subs !== "shown" ? ps.subs : null);
 const [subGrid] = createResource(() => { const m = subMode(); return m ? [m, tick(), JSON.stringify(query())] as const : null; },

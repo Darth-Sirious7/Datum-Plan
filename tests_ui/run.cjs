@@ -320,7 +320,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".bs aside .back"); await p.waitForTimeout(150);
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
 
-  // 0.5.0: Sheets work like Excel: flags, suggestions, clicking cells into a formula, Plan Data, inserting rows.
+  // 0.5.0: Sheets: flags, suggestions, clicking cells into a formula, Plan Data, inserting rows.
   const lastApply = () => p.evaluate(() => JSON.stringify(window.__calls.filter(c => c[0] === "apply").pop()));
   await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(400);
   const sc = (r, c) => p.evaluate(([r, c]) => { const el = document.querySelectorAll(".sheetgrid .gbody .row")[r].children[c + 1].getBoundingClientRect(); return { x: el.left + el.width / 2, y: el.top + el.height / 2 }; }, [r, c]);
