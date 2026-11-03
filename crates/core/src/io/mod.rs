@@ -1,4 +1,5 @@
 //! File exchange: project XML, XER and PMXML, Excel (.xlsx), CSV, MPX, JSON, HTML and iCalendar.
+pub mod sheetbook;
 pub mod formats;
 pub mod mspdi;
 pub mod dplot;

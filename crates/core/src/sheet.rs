@@ -268,6 +268,12 @@ fn gives_date(input: &str) -> bool {
     }
 }
 
+/// A cell that holds a date without a number format of its own: typed in the plan's date format, or a
+/// formula on such cells.
+pub fn is_dated(input: &str, s: &SheetData, fmt: &str) -> bool {
+    if input.starts_with('=') { on_a_date(input, s, fmt) || gives_date(input) } else { typed_date(input, fmt).is_some() }
+}
+
 /// `=A1+7`, `=B2-1`, `=MAX(A1:A9)` where those cells hold dates: the result is a date too.
 fn on_a_date(input: &str, s: &SheetData, fmt: &str) -> bool {
     let up = input.trim().to_uppercase();

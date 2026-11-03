@@ -80,6 +80,9 @@ pub enum Op {
     /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
     /// at `at` (0-based); formulas on every tab follow, as in a spreadsheet.
     SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
+    /// Adds sheet tabs brought in from a workbook, with the pictures they use (ids within the import,
+    /// renumbered here) and each tab's frozen rows and columns; names that are taken get " (2)".
+    AddSheets { sheets: Vec<SheetData>, pictures: Vec<Picture>, freeze: Vec<(String, u32, u32)> },
     /// Moves a spreadsheet tab from position `from` to `to`.
     SheetMove { from: usize, to: usize },
     /// Adds, replaces (`old`) or (rule None) removes a rule of credit.
@@ -1067,6 +1070,38 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 }
             }
         },
+        Op::AddSheets { mut sheets, pictures, freeze } => {
+            if p.sheets.len() + sheets.len() > 200 { return Err("A plan can have at most 200 sheets.".into()) }
+            let mut next = p.pictures.iter().map(|x| x.id).max().unwrap_or(0);
+            let mut ids = std::collections::HashMap::new();
+            for mut x in pictures.into_iter().filter(|x| x.data.starts_with("data:image/") && x.data.len() <= MAX_PICTURE_LEN) {
+                if p.pictures.len() >= MAX_PICTURES { break }
+                next += 1;
+                ids.insert(x.id, next);
+                x.id = next;
+                p.pictures.push(x);
+            }
+            let mut renamed = std::collections::HashMap::new();
+            for s in &mut sheets {
+                let base: String = s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(28).collect::<String>().trim().to_string();
+                let base = if base.is_empty() { "Sheet".to_string() } else { base };
+                let taken = |n: &str, p: &Project| p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(n)) || ["plan", "resources"].contains(&n.to_lowercase().as_str());
+                let mut name = base.clone();
+                let mut k = 2;
+                while taken(&name, p) { name = format!("{base} ({k})"); k += 1; }
+                renamed.insert(s.name.clone(), name.clone());
+                s.name = name;
+                s.images.retain_mut(|im| ids.get(&im.pic).map(|n| im.pic = *n).is_some());
+                p.sheets.push(std::mem::take(s));
+            }
+            if !freeze.is_empty() {
+                if !p.ui.is_object() { p.ui = serde_json::json!({}); }
+                let fz = p.ui.as_object_mut().unwrap().entry("freeze").or_insert_with(|| serde_json::json!({}));
+                if !fz.is_object() { *fz = serde_json::json!({}); }
+                for (n, r, c) in freeze { if let Some(n) = renamed.get(&n) { fz[n.as_str()] = serde_json::json!([r.min(1000), c.min(100)]); } }
+            }
+            p.normalize();
+        }
         Op::SheetMove { from, to } => {
             if from >= p.sheets.len() || to >= p.sheets.len() { return Err("That sheet does not exist.".into()) }
             let s = p.sheets.remove(from);

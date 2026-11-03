@@ -383,6 +383,22 @@ A picture on a sheet shows a small button at its top right when selected: **Plac
 
 Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+End]] to the last used cell, [[Page Up]] and [[Page Down]] by a screen, [[Ctrl+Enter]] puts what you typed in every selected cell, and [[Ctrl+D]] on one cell copies the cell above. Dates follow the plan's date format (Options), so 05/01/2026 is 5 January when the plan writes the day first; a formula on a date shows a date.
 
+### Sheets and Excel workbooks
+
+- **Bring a workbook in:** Sheet Tools › Cells › **Excel Workbook…** (or **Bring in an Excel workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:
+  - values, formulas and number formats;
+  - fonts, fills, borders and alignment;
+  - merged cells, column widths and row heights;
+  - frozen panes, the tab colour, the page setup and the pictures.
+
+  Tab names already in use get " (2)". One Undo takes the whole import back.
+- **Share the sheets:** Sheet Tools › Page › **Save as Excel** writes the sheets as a workbook, with:
+  - real numbers and dates, formulas with their last results, and number formats;
+  - styles, merged cells, sizes, pictures, frozen panes, tab colours and each sheet's page setup.
+
+  Formulas that read the plan (Tasks[Finish], ProjectFinish) keep working: the plan's data goes on hidden sheets in the same workbook. **File › Export › Excel workbook** writes the task table as well.
+- **Country flags** show in Excel as the country's name. A hidden "DatumPlan" sheet remembers which cells are flags (and which pictures are placed in cells), so the workbook opens in Datum Plan with its flags again.
+
 ### Write formulas
 
 ![Typing a formula: the cell editor and the suggested columns of the Tasks table.](img/sheet-formula.png)

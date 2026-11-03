@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.20 — 2026-11-03
+
+Sheets and Excel, both ways.
+
+- **Bring an Excel workbook into Sheets:** Sheet Tools › Cells › **Excel Workbook…** opens .xlsx, .xlsm, .xls, .xlsb and .ods files. Every sheet becomes a tab with:
+  - values, formulas and number formats;
+  - fonts, fills, borders and alignment;
+  - merged cells, column widths and row heights;
+  - frozen panes, tab colour, page setup and pictures.
+
+  One Undo takes the whole import back.
+- **Save the sheets as an Excel workbook to share:** Sheet Tools › Page › **Save as Excel**. The workbook carries:
+  - real numbers and dates, formulas with their results, and number formats;
+  - styles, merged cells, sizes, pictures, frozen panes, tab colours and page setup.
+
+  Formulas that read the plan keep working, from the plan's data on hidden sheets.
+- **Excel export, improved** (also File › Export › Excel workbook):
+  - number formats (currency, dates, percentages, Text) are kept;
+  - typed dates are real dates;
+  - formulas carry their last results, so the values show at once;
+  - frozen panes, tab colours and hidden tabs are kept.
+- **Country flags survive a round trip:** Excel shows the country's name, and a hidden sheet lets Datum Plan bring the flags back.
+- **The ribbon shows Gantt Chart Tools first, then Sheet Tools** (Cells, Page).
+- **Sheets:**
+  - Backspace on a cell clears it and starts typing there;
+  - a leading + or − before a cell or function starts a formula;
+  - Increase and Decrease Decimal work on Currency.
+- The guide describes sheets and Excel workbooks, in English and Chinese.
+
 ## 0.5.19 — 2026-11-03
 
 Sheets that format, print and behave like a spreadsheet.

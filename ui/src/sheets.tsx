@@ -30,7 +30,9 @@ export const FORMATS: [string, string][] = [["General", ""], ["Number (1,234.50)
   ["Currency", "money"], ["Date", "date"], ["Long date (30 October 2026)", "d mmmm yyyy"], ["Month (Oct-26)", "mmm-yy"], ["Text", "@"], ["Country with flag", "flag"]];
 /** One more or one fewer decimal in a format code. */
 const decimals = (code: string, d: number) => {
-  if (["money", "date", "flag", "@"].includes(code)) return code;
+  // Currency becomes its own code ("$"#,##0.00) so its decimals can change too.
+  if (code === "money") { const c = P().currency; code = `"${c.symbol}"#,##0${c.decimals ? "." + "0".repeat(c.decimals) : ""}`; }
+  if (["date", "flag", "@"].includes(code)) return code;
   if (code === "pct") code = "0.0%";
   return (code || "0").split(";").map(sec => sec.replace(/0(\.(0+))?(?=[^0.]*$)/, (_m, _x, zs?: string) => { const n = Math.max(0, (zs?.length ?? 0) + d); return n ? `0.${"0".repeat(n)}` : "0"; })).join(";");
 };
@@ -141,7 +143,9 @@ export const Sheets = () => {
     if (v === null || !hm) return;
     batch(() => { setEdit(null); setHome(null); setPoint(null); });
     if (hm.k !== k()) setK(hm.k);
-    const val = v.startsWith("=") && v.length > 1 ? closeParens(v) : v;
+    // "+A1*2" or "-SUM(B:B)" starts a formula, as in a spreadsheet; "-5" stays a number.
+    const v2 = /^[+-](?=[A-Za-z$(])/.test(v) ? `=${v}` : v;
+    const val = v2.startsWith("=") && v2.length > 1 ? closeParens(v2) : v2;
     if (move) { const m = mergeAt(hm.r, hm.c), [fr, fc] = m ? [move[0] > 0 ? m.r1 : m.r0, move[1] > 0 ? m.c1 : m.c0] : [hm.r, hm.c]; go(Math.max(0, fr + move[0]), Math.max(0, fc + move[1])); box?.focus(); }
     if (val !== input(hm.k, hm.r, hm.c)) await put([[a1(hm.r, hm.c), val]], hm.k);
   };
@@ -231,7 +235,9 @@ export const Sheets = () => {
       case "ArrowDown": return mv(1, 0); case "ArrowUp": return mv(-1, 0); case "ArrowLeft": return mv(0, -1); case "ArrowRight": return mv(0, 1);
       case "Tab": e.preventDefault(); return go(cur()[0], cur()[1] + (e.shiftKey ? -1 : 1));
       case "Enter": case "F2": e.preventDefault(); return startEdit(input(k(), ...cur()));
-      case "Delete": case "Backspace": e.preventDefault(); return clear();
+      case "Delete": e.preventDefault(); return clear();
+      // Backspace on one cell clears it and starts typing there; on a range it clears the range.
+      case "Backspace": e.preventDefault(); { const g = S.last(); return g.r0 === g.r1 && g.c0 === g.c1 && S.ranges().length === 1 ? startEdit("", cur()[0], cur()[1], true) : clear(); }
     }
     if (ctrl && e.altKey && e.key.toLowerCase() === "v") { e.preventDefault(); return import("./dialogs").then(d => d.pasteSpecial()); }
     if (ctrl && e.key.toLowerCase() === "d" && range()[0] === range()[2] && range()[0] > 0) { e.preventDefault(); const [r0, c0, , c1] = range(); setCur([r0 - 1, c0]); setEnd([r0, c1]); fillRange(r0, c1, true); return; }
@@ -752,7 +758,7 @@ export const Sheets = () => {
         <button class="btn sm" title="The resources (people, vendors) with their group and country, live" onClick={() => quickList("Resources", "", ["Name", "Group", "Country", "Work"])}>Resources</button>
         <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
-      <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><button class="btn pri" style={{ width: "fit-content" }} onClick={addSheet}>Add a sheet</button></div>}>
+      <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><div class="row2"><button class="btn pri" onClick={addSheet}>Add a sheet</button><button class="btn" onClick={() => import("./ribbon").then(m => m.importWorkbook())}>Bring in an Excel workbook…</button></div></div>}>
         <div class="fbar"><span class="fname">{home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : a1(...cur())}</span><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
           <input ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}

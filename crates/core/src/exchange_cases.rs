@@ -466,6 +466,56 @@ fn sheet_layout_is_kept_and_exported() {
     assert!(bytes.len() > 1000, "the workbook is written with the sheet's page setup");
 }
 
+// A sheet saved as a workbook and brought back: values, real dates, formulas, number formats, styles,
+// merges, sizes, tab colour, frozen panes, page setup and flags all come back as they were.
+#[test]
+fn sheets_go_to_a_workbook_and_back() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    let cells: Vec<(String, String)> = [("A1", "Status report"), ("B2", "13/01/2026"), ("C2", "=B2+7"), ("D2", "Germany"), ("E2", "1234.5"), ("F2", "=SUM(E2,10)"), ("G2", "001"), ("A3", "12%")]
+        .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+    let sheet = SheetData { name: "Board".into(), cells: cells.into_iter().collect(), style: [("A1".to_string(), "b;c:#FFFFFF;f:#0B5CAD;a:c;bb:thick #C00000".to_string())].into(),
+        fmt: [("D2".to_string(), "flag".to_string()), ("E2".to_string(), "money".to_string()), ("G2".to_string(), "@".to_string())].into(),
+        merges: vec!["A1:C1".into()], widths: [(0, 180)].into(), heights: [(0, 40)].into(), color: "#00B050".into(),
+        page: Some(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:G9".into(), titles: "1:1".into(), no_hf: true, center: true, ..Default::default() }), ..Default::default() };
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) });
+    op(&mut doc, Op::Ui { key: "freeze".into(), value: serde_json::json!({ "Board": [1, 1] }) });
+    let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    op(&mut doc, Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Logo".into(), role: "Client".into(), data: png.into() }) });
+    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 1, cell: "E4".into(), w: 90, h: 45, fit: true }] });
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let f = std::env::temp_dir().join(format!("dp-rt-{}-{}.xlsx", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    crate::io::table::write_sheets_xlsx(&c, &f).unwrap();
+    if let Ok(keep) = std::env::var("DP_RT_OUT") { std::fs::copy(&f, keep).ok(); }
+    let back = crate::io::sheetbook::import(&f).unwrap();
+    std::fs::remove_file(&f).ok();
+    assert_eq!(back.sheets.len(), 1, "only the sheet tab comes back, not the plan's own data sheets");
+    let s = &back.sheets[0];
+    assert_eq!(s.cells.get("C2").map(String::as_str), Some("=B2+7"), "formulas come back");
+    assert_eq!(s.cells.get("B2").map(String::as_str), Some("46035"), "a typed date is a real date in the workbook");
+    assert!(s.fmt.get("B2").is_some_and(|f| f.contains("yy")), "with a date format: {:?}", s.fmt.get("B2"));
+    assert_eq!((s.fmt.get("D2").map(String::as_str), s.cells.get("D2").map(String::as_str)), (Some("flag"), Some("Germany")), "flags come back");
+    assert!(s.fmt.get("E2").is_some_and(|f| f.contains("#,##0")), "money keeps a money format: {:?}", s.fmt.get("E2"));
+    assert_eq!((s.cells.get("G2").map(String::as_str), s.fmt.get("G2").map(String::as_str)), (Some("001"), Some("@")), "text stays text");
+    assert!(s.fmt.get("A3").is_some_and(|f| f.contains('%')), "a typed percentage keeps its look");
+    let st = s.style.get("A1").cloned().unwrap_or_default();
+    assert!(st.contains('b') && st.contains("f:#0B5CAD") && st.contains("c:#FFFFFF") && st.contains("a:c") && st.contains("bb:thick #C00000"), "styles come back: {st}");
+    assert_eq!(s.merges, vec!["A1:C1".to_string()]);
+    assert_eq!((s.widths.get(&0).copied().map(|w| (w as i32 - 180).abs() <= 8), s.heights.get(&0).copied().map(|h| (h as i32 - 40).abs() <= 2)), (Some(true), Some(true)), "sizes: {:?} {:?}", s.widths, s.heights);
+    assert_eq!(s.color, "#00B050");
+    assert_eq!(back.freeze, vec![("Board".to_string(), 1, 1)]);
+    let pg = s.page.clone().unwrap();
+    assert_eq!((pg.paper.as_str(), pg.orient.as_str(), pg.fit_w, pg.area.as_str(), pg.titles.as_str(), pg.no_hf, pg.center), ("A3", "landscape", 1, "A1:G9", "1:1", true, true));
+    assert_eq!((back.pictures.len(), s.images.len(), s.images.first().map(|i| (i.cell.as_str(), i.fit))), (1, 1, Some(("E4", true))), "pictures come back at their cell");
+    assert!(back.pictures[0].data.starts_with("data:image/png;base64,"));
+    // Brought into a plan: one step, a free name.
+    op(&mut doc, Op::AddSheets { sheets: back.sheets, pictures: back.pictures, freeze: back.freeze });
+    assert_eq!(doc.p.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Board", "Board (2)"]);
+    assert_eq!(doc.p.ui["freeze"]["Board (2)"], serde_json::json!([1, 1]));
+    doc.undo();
+    assert_eq!(doc.p.sheets.len(), 1, "an import undoes in one step");
+}
+
 // Writing and reading XER, PMXML and MPX take time in step with the plan's size, not its square
 // (tasks were found by a search through the whole plan for every link and assignment).
 #[test]

@@ -349,7 +349,24 @@ fn task_style(t: &crate::model::Task, key: &str) -> String {
     [get("*"), get(key)].iter().filter(|x| !x.is_empty()).copied().collect::<Vec<_>>().join(";")
 }
 
-pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
+pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> { write_book(c, cols, path, false) }
+/// The plan's sheets only, as a workbook to share: the sheet tabs, with the plan data their formulas
+/// read on hidden sheets.
+pub fn write_sheets_xlsx(c: &Calc, path: &Path) -> Result<(), String> { write_book(c, &[], path, true) }
+
+/// A sheet number format as a workbook number format (None: General).
+fn xl_numfmt(c: &Calc, fm: &str, date: bool) -> Option<String> {
+    match fm {
+        "" if date => Some(crate::sheet::excel_date(&c.fmt)),
+        "" | "flag" => None,
+        "money" => Some(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\"").trim_end_matches('.').to_string()),
+        "date" => Some(crate::sheet::excel_date(&c.fmt)),
+        "pct" => Some("0.0%".into()),
+        f => Some(f.to_string()),
+    }
+}
+
+fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Result<(), String> {
     use rust_xlsxwriter::{Format, Workbook, Worksheet};
     let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
     let mut wb = Workbook::new();
@@ -373,6 +390,7 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         }
     };
     let keys: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
+    if !sheets_only {
     let ws = wb.add_worksheet();
     ws.set_name("Tasks").map_err(e)?;
     for (k, key) in keys.iter().enumerate() {
@@ -393,9 +411,16 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         }
     }
     ws.set_freeze_panes(1, 0).map_err(e)?;
-    for s in &c.p.sheets {
+    }
+    // The sheet tabs: values as the plan shows them (real numbers and dates), formulas with their last
+    // results, number formats, styles, merges, sizes, frozen panes, tab colours, page setup, pictures.
+    let book = crate::sheet::book(c);
+    let mut meta = serde_json::Map::new();
+    for (k, s) in c.p.sheets.iter().enumerate() {
         let ws = wb.add_worksheet();
         ws.set_name(s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(31).collect::<String>()).map_err(e)?;
+        let sh = book.sheet(k + crate::sheet::BUILT_IN);
+        let mut flags: Vec<String> = vec![];
         // Merged ranges first; the top-left cell's value is written over it below.
         for m in &s.merges {
             let Some((r0, c0, r1, c1)) = crate::model::sheet_range(m) else { continue };
@@ -404,16 +429,39 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         }
         for (r, h) in &s.heights { ws.set_row_height_pixels(*r, *h as u32).map_err(e)?; }
         for (a1, input) in &s.cells {
-            let Some((r, k)) = a1_index(a1) else { continue };
-            let f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));
-            if input.starts_with('=') { ws.write_formula_with_format(r, k, input.as_str(), &f).map_err(e)?; }
-            else if let Ok(n) = input.replace(',', "").parse::<f64>() { ws.write_number_with_format(r, k, n, &f).map_err(e)?; }
-            else { ws.write_string_with_format(r, k, input, &f).map_err(e)?; }
+            let Some((r, col)) = a1_index(a1) else { continue };
+            let v = sh.map_or(gridcraft_core::Value::Empty, |x| x.value(gridcraft_core::CellRef::new(r, col as u32)));
+            let fm = s.fmt.get(a1).map(String::as_str).unwrap_or("");
+            let dated = crate::sheet::is_dated(input, s, &c.fmt);
+            let mut f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));
+            // A number typed with its own look (12%, $1,200, 1.5E+3) keeps it.
+            let typed = if fm.is_empty() && !dated && !input.starts_with('=') { gridcraft_core::parse::parse_input(input, gridcraft_core::DateSystem::default()).format.filter(|f| *f != "General").map(str::to_string) } else { None };
+            if let Some(code) = typed.or_else(|| xl_numfmt(c, fm, dated)) { f = f.set_num_format(code); }
+            if input.starts_with('=') {
+                let res = match &v { gridcraft_core::Value::Number(n) => n.to_string(), gridcraft_core::Value::Bool(b) => (if *b { "TRUE" } else { "FALSE" }).into(), x => x.display() };
+                ws.write_formula_with_format(r, col, rust_xlsxwriter::Formula::new(input.as_str()).set_result(res), &f).map_err(e)?;
+            } else if fm == "flag" || fm == "@" {
+                if fm == "flag" { flags.push(a1.clone()); }
+                ws.write_string_with_format(r, col, input, &f).map_err(e)?;
+            } else {
+                match v {
+                    gridcraft_core::Value::Number(n) => { ws.write_number_with_format(r, col, n, &f).map_err(e)?; }
+                    gridcraft_core::Value::Bool(b) => { ws.write_boolean_with_format(r, col, b, &f).map_err(e)?; }
+                    _ => { ws.write_string_with_format(r, col, input, &f).map_err(e)?; }
+                }
+            }
         }
         for (a1, st) in s.style.iter().filter(|(a1, _)| !s.cells.contains_key(*a1)) {
             if let Some((r, k)) = a1_index(a1) { ws.write_blank(r, k, &styled(Format::new(), st)).map_err(e)?; }
         }
         for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
+        if let Ok(rgb) = u32::from_str_radix(s.color.trim_start_matches('#'), 16) { if s.color.len() == 7 { ws.set_tab_color(rgb); } }
+        if let Some([fr, fc]) = c.p.ui.get("freeze").and_then(|f| f.get(&s.name)).and_then(|v| serde_json::from_value::<[u32; 2]>(v.clone()).ok()) { if fr > 0 || fc > 0 { ws.set_freeze_panes(fr, fc.min(16_000) as u16).map_err(e)?; } }
+        if s.hidden && k > 0 { ws.set_hidden(true); }
+        let fits: Vec<&str> = s.images.iter().filter(|i| i.fit).map(|i| i.cell.as_str()).collect();
+        if !flags.is_empty() || !fits.is_empty() || s.page.as_ref().is_some_and(|p| p.no_hf) {
+            meta.insert(s.name.clone(), serde_json::json!({ "flags": flags, "fit": fits, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf) }));
+        }
         // The sheet's page setup.
         if let Some(pg) = &s.page {
             let paper = match pg.paper.as_str() { "Letter" => 1, "Legal" => 5, "A3" => 8, "A5" => 11, "Tabloid" => 3, "A4" => 9, _ => 0 };
@@ -442,6 +490,7 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         let table = |cols: &[String]| rust_xlsxwriter::Table::new().set_columns(&cols.iter().map(|n| rust_xlsxwriter::TableColumn::new().set_header(n)).collect::<Vec<_>>());
         let ws = wb.add_worksheet();
         ws.set_name("Plan").map_err(e)?;
+        if sheets_only { ws.set_hidden(true); }
         let cols = crate::sheet::task_columns(c);
         for (k, (key, _)) in cols.iter().enumerate() {
             for i in 0..c.p.tasks.len() {
@@ -452,6 +501,7 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
         ws.add_table(0, 0, c.p.tasks.len().max(1) as u32, names.len() as u16 - 1, &table(&names).set_name("Tasks")).map_err(e)?;
         let ws = wb.add_worksheet();
         ws.set_name("Resources").map_err(e)?;
+        if sheets_only { ws.set_hidden(true); }
         let book = crate::sheet::book(c);
         if let Some(rs) = book.sheet(1) {
             for r in 1..=c.p.resources.len() as u32 {
@@ -470,6 +520,14 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
             wb.define_name(name, &f).map_err(e)?;
         }
     }
+    if !meta.is_empty() {
+        let ws = wb.add_worksheet();
+        ws.set_name(super::sheetbook::META_SHEET).map_err(e)?;
+        ws.write_string(0, 0, serde_json::json!({ "format": 1, "sheets": meta }).to_string()).map_err(e)?;
+        ws.write_string(1, 0, "Datum Plan keeps here what only it shows (country flags, pictures placed in cells), so the workbook opens in Datum Plan as it was.").map_err(e)?;
+        ws.set_hidden(true);
+    }
+    if sheets_only && c.p.sheets.is_empty() { return Err("This plan has no sheets to save.".into()) }
     wb.save(path).map_err(|x| format!("Could not save {}: {x}", path.display()))
 }
 

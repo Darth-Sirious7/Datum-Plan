@@ -1,7 +1,7 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
 import { linkSelected, linkedPlans, updateLinks, subplans } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
-import { call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
+import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
 import * as D from "./dialogs";
 import * as P2 from "./progress";
@@ -12,7 +12,8 @@ import { fieldMenu } from "./grid";
 import * as F from "./fmt";
 import { Help, helpCard, HELP } from "./help";
 import { sheetApi, CELL_STYLES, STYLE_SECTIONS } from "./sheets";
-import { sheetMode, setSheetMode } from "./sheetlayout";
+import { sheetMode, setSheetMode, setSheetK } from "./sheetlayout";
+import type { Out } from "./api";
 import { PAPERS, sheetPage } from "./print";
 import type { SheetPage } from "./api";
 import { askText } from "./ui";
@@ -122,7 +123,7 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
-      <For each={[["task", "Task"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["sheet", "Home"], ["format", "Format"], ["help", "Help"]]}>{([k, l]) =>
+      <For each={[["task", "Task"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Home"], ["help", "Help"]]}>{([k, l]) =>
         k === "sheet" ? <Show when={view() === "sheets"}><div class="ctxgrp sheetctx"><small>Sheet Tools</small><div class="ctxtabs"><button classList={{ on: tab() === "sheet" }} onClick={() => setTab("sheet")}>Cells</button><button classList={{ on: tab() === "sheetpage" }} onClick={() => setTab("sheetpage")}>Page</button></div></div></Show>
           : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
@@ -164,6 +165,13 @@ const styleGallery = (e: MouseEvent, apply: (st: string) => void) => {
     );
   });
 };
+/** Brings a workbook's sheets in as tabs (one step to undo). */
+export const importWorkbook = async () => {
+  const r = await call<[Out, string[]]>("import_workbook");
+  if (r) { setOut(r[0]); const sh = P().sheets; setSheetK(Math.max(0, sh.length - r[1].length)); toast(`Brought in ${r[1].length} sheet${r[1].length > 1 ? "s" : ""} from the workbook: ${r[1].join(", ")}.`, true); }
+};
+/** Saves the plan's sheets as a workbook to share. */
+export const exportSheets = async () => { const p = await call<string | null>("export_sheets"); if (p) toast(`Saved ${p}`, true); };
 /** Sheet Tools › Cells: everything for the cells of a sheet. It opens by itself in Sheets. */
 const SheetCells = () => {
   const A = () => sheetApi(), s = () => F.current(), run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
@@ -191,7 +199,7 @@ const SheetCells = () => {
     <G l="Rows & Columns" h="sheetcells"><B big i="task" l="Insert" dd={e => openMenu(e, [{ label: "Insert Rows Above", run: () => A()?.insertCells(false, false) }, { label: "Insert Columns Left", run: () => A()?.insertCells(false, true) }, "-", { label: "Insert Sheet", run: run("addSheet") }])} />
       <B big i="del" l="Delete" dd={e => openMenu(e, [{ label: "Delete Rows", run: () => A()?.insertCells(true, false) }, { label: "Delete Columns", run: () => A()?.insertCells(true, true) }, "-", { label: "Delete Sheet", run: run("del") }])} />
       <B big i="rowh" l="Size" dd={e => openMenu(e, [{ label: "Row Height…", run: run("rowHeight") }, { label: "AutoFit Row Height", run: run("autofitRows") }, { label: "Column Width…", run: run("colWidth") }, { label: "AutoFit Column Width", run: run("autofitCols") }, "-", { label: "Rename Sheet", run: run("rename") }, { label: "Move or Copy Sheet…", run: run("moveCopy") }, { label: "Tab Color, Hide and Unhide", run: run("tabMenu") }])} /></G>
-    <G l="Insert" h="sheets"><B big i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /></S></G>
+    <G l="Insert" h="sheets"><B big i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
     <G l="Data" h="sheetediting"><S><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /><B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: run("fillDown") }, { label: "Right", keys: "Ctrl+R", run: run("fillRight") }])} /><B i="clear" l="Clear" dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
       <S><B i="az" l="Sort A to Z" run={() => A()?.sortRows(true)} /><B i="za" l="Sort Z to A" run={() => A()?.sortRows(false)} /></S></G>
   </>;
@@ -217,7 +225,7 @@ const SheetPageTab = () => {
       <B i="zin" l={`Scale: ${pg().scale || 100} %`} off={!!(pg().fit_w || pg().fit_h)} dd={e => openMenu(e, [50, 70, 80, 90, 100, 110, 125, 150].map(n => ({ label: `${n} %`, on: (pg().scale || 100) === n, run: () => set({ scale: n === 100 ? 0 : n }) })))} /></S></G>
     <G l="On the Paper" h="sheetviews"><div class="chkcol"><Ck k="no_hf" inv l="Header & footer" t="The plan's header (logos, title) and footer on each page; untick to print the cells only" /><Ck k="no_grid" inv l="Gridlines" t="Light lines round every cell" /></div>
       <div class="chkcol"><Ck k="headings" l="Row & column labels" t="Row numbers and column letters" /><Ck k="center" l="Centre on page" t="Centre the cells across the paper" /></div></G>
-    <G l="Print" h="report"><B big i="print" l="Print Preview" run={C.print} /></G>
+    <G l="Print & Share" h="report"><B big i="print" l="Print Preview" run={C.print} /><B big i="export" l="Save as Excel" title="Save the sheets as an Excel workbook to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></G>
   </>;
 };
 export const Ribbon = () => (

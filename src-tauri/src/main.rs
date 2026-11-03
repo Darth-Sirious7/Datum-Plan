@@ -476,6 +476,31 @@ async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<Strin
     Ok(Some(path.display().to_string()))
 }
 
+/// Brings the sheets of a workbook (.xlsx, .xlsm, .xls, .xlsb, .ods) in as sheet tabs: one step to undo.
+#[tauri::command]
+async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Vec<String>)>> {
+    let Some(path) = pick(&app, "Workbooks", &["xlsx", "xlsm", "xls", "xlsb", "ods"]) else { return Ok(None) };
+    if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > 100_000_000 { return Err("That workbook is larger than 100 MB.".into()) }
+    let got = guard(|| io::sheetbook::import(&path))?;
+    let names: Vec<String> = got.sheets.iter().map(|s| s.name.clone()).collect();
+    let mut a = st.lock();
+    let fmt = a.opts.date_fmt.clone();
+    a.doc.apply(Op::AddSheets { sheets: got.sheets, pictures: got.pictures, freeze: got.freeze }, &fmt)?;
+    regroup(&mut a);
+    Ok(Some((out(&a), names)))
+}
+
+/// Saves the plan's sheets as a workbook to share (the plan data their formulas read on hidden sheets).
+#[tauri::command]
+async fn export_sheets(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
+    let name = st.lock().doc.p.name.clone();
+    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - sheets.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let a = st.lock();
+    let c = datum_core::fields::Calc::new(&a.doc.p, &a.opts.date_fmt, today());
+    io::table::write_sheets_xlsx(&c, &path)?;
+    Ok(Some(path.display().to_string()))
+}
+
 /// Saves a picture or a report the window made (SVG, PNG data URL or HTML text).
 #[tauri::command]
 async fn save_file(app: AppHandle, name: String, data: String) -> R<Option<String>> {
@@ -1477,7 +1502,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, copy, paste,
+            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])
