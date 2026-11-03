@@ -317,7 +317,7 @@ const geom = createMemo(() => {
   const k = ps.scale / 100, W = (pw - ps.margins[1] - ps.margins[3]) * MM / k, H = (ph - ps.margins[0] - ps.margins[2]) * MM / k;
   return { pw, ph, k, W, H, headH: headH(), footH: footH(), legH: ps.legend === "none" ? 0 : 58 };
 });
-type PT = { head: string[]; w: number[]; right: boolean[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { head: string[]; w: number[]; right: boolean[]; h?: number[]; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -346,6 +346,10 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     const col = (c: number) => { let s = ""; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; };
     Object.assign(t, { head: ["", ...Array.from({ length: nc }, (_, c) => col(c))], w: [34, ...Array.from({ length: nc }, (_, c) => P().sheets[k].widths?.[c] ?? 96)], right: [true, ...Array.from({ length: nc }, () => false)],
       rows: Array.from({ length: nr }, (_, r) => ({ c: [String(r + 1), ...Array.from({ length: nc }, (_, c) => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...Array.from({ length: nc }, (_, c) => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
+    // Row heights and merged cells, as on screen (table columns are one right of the sheet's: column 0 holds row numbers).
+    const sc0 = ps.rowH / 22, hs = P().sheets[k].heights ?? {};
+    if (Object.keys(hs).length) t.h = Array.from({ length: nr }, (_, r) => Math.round((hs[r] ?? 22) * sc0));
+    t.merges = (P().sheets[k].merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = /^([A-Z]+)(\d+)$/.exec(a), p2 = /^([A-Z]+)(\d+)$/.exec(b); if (!p1 || !p2) return []; const cn = (x: string) => [...x].reduce((q, ch) => q * 26 + ch.charCodeAt(0) - 64, 0); return [{ r: +p1[2] - 1, c: cn(p1[1]), rs: +p2[2] - +p1[2] + 1, cs: cn(p2[1]) - cn(p1[1]) + 1 }]; });
     t.imgs = (P().sheets[k].images ?? []).flatMap(im => { const m = /^([A-Z]+)(\d+)$/.exec(im.cell), src = picData(im.pic); if (!m || !src) return []; const c = [...m[1]].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0), sc = ps.rowH / 22; return [{ src, r: +m[2] - 1, c, w: im.w * sc, h: im.h * sc }]; });
   }
   return { table: t };
@@ -368,10 +372,14 @@ const vpages = createMemo((): VPage[] => {
   }
   if (K === "table" && "table" in d && d.table) {
     const t = d.table, RH = ps.rowH, per = Math.max(1, Math.floor((room - RH) / RH)), key = t.w[0] ?? 0;
+    // Pages of rows: a fixed count, or as many as fit when rows have their own heights.
+    const cuts: [number, number][] = [];
+    if (t.h) { let r0 = 0, y = 0; t.rows.forEach((_, r) => { const hh = t.h![r] ?? RH; if (r > r0 && y + hh > room - RH) { cuts.push([r0, r]); r0 = r; y = 0; } y += hh; }); cuts.push([r0, Math.max(r0 + 1, t.rows.length)]); }
+    else for (let r = 0; r < Math.max(1, t.rows.length); r += per) cuts.push([r, Math.min(t.rows.length, r + per)]);
     const across: number[][] = []; let cur: number[] = [], w = key;
     for (let c = 1; c < t.w.length; c++) { if (w + t.w[c] > G.W && cur.length) { across.push(cur); cur = []; w = key; } cur.push(c); w += t.w[c]; }
     across.push(cur);
-    for (let r = 0; r < Math.max(1, t.rows.length); r += per) for (const cols of across) out_.push({ n: out_.length + 1, rows: [r, Math.min(t.rows.length, r + per)], cols: [0, ...cols] });
+    for (const rr of cuts) for (const cols of across) out_.push({ n: out_.length + 1, rows: rr, cols: [0, ...cols] });
   }
   return out_;
 });
@@ -392,11 +400,18 @@ const ViewPage = (p: { pg: VPage; pages: number }) => {
           <table class="ptable" style={{ "font-size": `${ps.font}px` }}>
             <colgroup><For each={p.pg.cols}>{c => <col style={{ width: `${t.w[c]}px` }} />}</For></colgroup>
             <thead><tr style={{ height: `${ps.rowH}px` }}><For each={p.pg.cols}>{c => <th classList={{ r: t.right[c] }}>{t.head[c]}</th>}</For></tr></thead>
-            <tbody><For each={t.rows.slice(p.pg.rows![0], p.pg.rows![1])}>{r => <tr style={{ height: `${ps.rowH}px` }} classList={{ b: r.b }}><For each={p.pg.cols}>{c => <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r.st?.[c]) }}>{r.c[c]}</td>}</For></tr>}</For></tbody>
+            <tbody><For each={t.rows.slice(p.pg.rows![0], p.pg.rows![1])}>{(r, ri) => { const R0 = p.pg.rows![0] + ri(), [r0, r1] = p.pg.rows!;
+              // A merged range prints as one cell (cut at the page's edges); the cells under it are left out.
+              const span = (c: number) => { const m = t.merges?.find(m => R0 >= m.r && R0 < m.r + m.rs && c >= m.c && c < m.c + m.cs); if (!m) return null;
+                const top = Math.max(m.r, r0), first = p.pg.cols!.find(x => x >= m.c && x < m.c + m.cs);
+                return R0 === top && c === first ? { rs: Math.min(m.r + m.rs, r1) - top, cs: p.pg.cols!.filter(x => x >= m.c && x < m.c + m.cs).length, st: t.rows[m.r]?.st?.[m.c], v: t.rows[m.r]?.c[m.c] } : "skip"; };
+              return <tr style={{ height: `${t.h?.[R0] ?? ps.rowH}px` }} classList={{ b: r.b }}><For each={p.pg.cols}>{c => { const sp = span(c); return sp === "skip" ? null
+                : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": F.parse(sp.st).v === "t" ? "top" : F.parse(sp.st).v === "b" ? "bottom" : "middle", "white-space": F.parse(sp.st).w ? "normal" : undefined }}>{sp.v}</td>
+                : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r.st?.[c]), ...(F.parse(r.st?.[c]).w ? { "white-space": "normal" } : {}), ...(F.parse(r.st?.[c]).v ? { "vertical-align": F.parse(r.st?.[c]).v === "t" ? "top" : "bottom" } : {}) }}>{r.c[c]}</td>; }}</For></tr>; }}</For></tbody>
           </table>
           <For each={(d as { table: PT }).table.imgs?.filter(im => im.r >= p.pg.rows![0] && im.r < p.pg.rows![1] && p.pg.cols!.includes(im.c))}>{im => {
             const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);
-            return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${(im.r - p.pg.rows![0] + 1) * ps.rowH}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For></div>); })()}</Match>
+            return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${ps.rowH + (t0 => t0 ? t0.slice(p.pg.rows![0], im.r).reduce((a, b) => a + b, 0) : (im.r - p.pg.rows![0]) * ps.rowH)((d as { table: PT }).table.h)}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For></div>); })()}</Match>
       </Switch>
     </Frame>
   );

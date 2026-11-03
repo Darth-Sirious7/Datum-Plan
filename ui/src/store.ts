@@ -136,7 +136,7 @@ export const deleteCol = (key: string, field = false) => {
 export const [msg, setMsg] = createSignal<{ text: string; ok: boolean } | null>(null);
 let timer = 0;
 export const toast = (text: string, ok = false) => { setMsg({ text, ok }); clearTimeout(timer); timer = window.setTimeout(() => setMsg(null), ok ? 3000 : 7000); };
-export type Item = { label: string; run?: () => void; keys?: string; off?: boolean; on?: boolean; sub?: Item[]; icon?: string } | "-";
+export type Item = { label: string; run?: () => void; keys?: string; off?: boolean; on?: boolean; sub?: Item[]; icon?: string; swatch?: string } | "-";
 export const [menu, setMenu] = createSignal<{ x: number; y: number; items: Item[] } | null>(null);
 export const openMenu = (e: MouseEvent | { x: number; y: number }, items: Item[]) => {
   if ("preventDefault" in e) e.preventDefault();

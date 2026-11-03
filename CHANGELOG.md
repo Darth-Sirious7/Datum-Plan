@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.17 — 2026-11-03
+
+Sheets with the tools of a spreadsheet.
+
+- **Sheet Tools › Home:** a ribbon tab that opens by itself in Sheets and goes back to Task when you leave.
+  - **Clipboard:** Paste (and Paste Special), Cut, Copy and Format Painter.
+  - **Font:** font, size up to 48, bold, italic, underline, strikethrough, colours.
+  - **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center**, Merge Across, Merge Cells and Unmerge.
+  - **Borders:** bottom, top, left, right, all, outside, thick outside, top and bottom, double and thick lines, no border, with a line colour and style.
+  - **Number:** formats, currency, percent, comma style and decimals.
+  - **Cell styles:** Good, Bad, Neutral, Calculation, Check Cell, Input, Output, Note, Title, Headings, Total and Accent.
+  - **Cells:** insert and delete rows, columns and sheets; row height, column width and AutoFit.
+  - **Insert:** Picture (a logo from the plan's pictures at a cell), Function, Plan Data and Freeze Panes.
+  - **Editing:** AutoSum, Fill, Clear, and Sort A to Z or Z to A.
+- **Row heights:** drag the line under a row number, or use Format › Row Height.
+- **Sheet tabs work like a spreadsheet's:**
+  - double-click to rename in place;
+  - right-click for Insert, Delete, Rename, Move or Copy, Tab Color, Hide and Unhide;
+  - drag a tab to move it.
+- **No more browser boxes:** renaming, deleting and naming things (sheets, dashboards, reports, calendars, codes, pictures) now use Datum Plan's own dialogs.
+- **Merged cells, borders, wrapped text, row heights and tab colours** are saved in the plan, print as shown, and go into exported .xlsx workbooks.
+- **Selected cells keep their fill colour** under a light tint, so formatting stays visible while you work.
+- **Security:** the spreadsheet reader used for imports is updated; a malformed .xls or .xlsb file could crash the app.
+- The guide describes Sheet Tools, in English and Chinese.
+
 ## 0.5.16 — 2026-11-02
 
 Logos and pictures in the plan, a fix for Save as PDF, and a full hardening pass.

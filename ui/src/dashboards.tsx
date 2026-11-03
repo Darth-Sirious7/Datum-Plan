@@ -3,6 +3,7 @@
 // =COUNTIF(Tasks[Late],TRUE)), the plan's charts and lists, charts and tables from sheet ranges or
 // formulas, and country flags. The engine works out every formula in one call (dash_eval).
 import { For, Show, Switch, Match, createMemo, createResource, createSignal, JSX } from "solid-js";
+import { askText, askYes } from "./ui";
 import { act, call, out, P, tick, openMenu, openDialog, Item } from "./store";
 import { Curve, PeriodReport, SCurve, Usage } from "./api";
 import { pictures, picData, addPicture } from "./pictures";
@@ -134,9 +135,9 @@ export const CustomDashboard = (p: { k: number }) => {
     { label: "Height", sub: [1, 2, 3, 4].map(h => ({ label: ["One row", "Two rows", "Three rows", "Four rows"][h - 1], on: t.h === h, run: () => setTile({ ...t, h }) })) },
   ]);
   const boardMenu = (e: MouseEvent) => openMenu(e, [
-    { label: "Rename…", run: () => { const n = prompt("Dashboard name", d().name); if (n?.trim()) save(dashboards().map((x, i) => (i === p.k ? { ...x, name: n.trim() } : x))); } },
+    { label: "Rename…", run: async () => { const n = await askText("Rename Dashboard", "Name", d().name); if (n?.trim()) save(dashboards().map((x, i) => (i === p.k ? { ...x, name: n.trim() } : x))); } },
     { label: "Duplicate", run: () => save([...dashboards(), JSON.parse(JSON.stringify({ ...d(), name: `${d().name} (copy)` }))]).then(() => setDashK(dashboards().length - 1)) },
-    { label: "Delete…", run: () => { if (confirm(`Delete the dashboard ${d().name}?`)) save(dashboards().filter((_, i) => i !== p.k)).then(() => setDashK(-1)); } },
+    { label: "Delete…", run: async () => { if (await askYes("Delete Dashboard", `Delete the dashboard ${d().name}?`, "Delete")) save(dashboards().filter((_, i) => i !== p.k)).then(() => setDashK(-1)); } },
   ]);
   let dragged = "";
   return (

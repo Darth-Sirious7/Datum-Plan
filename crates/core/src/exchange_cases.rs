@@ -428,6 +428,34 @@ fn sheet_pictures_go_into_the_workbook() {
     assert!(zip.contains("xl/media/image1.png"), "the picture is in the workbook");
 }
 
+// Sheets laid out for a client: merged titles, borders, wrapped text, row heights and tab colours
+// are kept, follow inserted rows, and go into the workbook.
+#[test]
+fn sheet_layout_is_kept_and_exported() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    let st = "b;w;v:t;bt:thin #000000;bb:dbl #0B5CAD".to_string();
+    let sheet = SheetData { name: "Board".into(), cells: [("A1".to_string(), "Status report".to_string()), ("A3".into(), "=1+1".into())].into(), style: [("A1".to_string(), st)].into(),
+        merges: vec!["A1:D2".into(), "B2:C3".into(), "E5".into(), "zz".into()], heights: [(0, 40), (9, 0)].into(), color: "#C00000".into(), ..Default::default() };
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) });
+    let s = &doc.p.sheets[0];
+    assert_eq!(s.merges, vec!["A1:D2"], "overlapping, single-cell and invalid merges are dropped");
+    assert_eq!((s.heights.get(&0), s.heights.len(), s.color.as_str()), (Some(&40), 1, "#C00000"));
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 2 });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.merges.clone(), s.heights.get(&2)), (vec!["A3:D4".to_string()], Some(&40)), "merges and heights follow inserted rows");
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Second".into(), ..Default::default() }) });
+    op(&mut doc, Op::SheetMove { from: 1, to: 0 });
+    assert_eq!(doc.p.sheets.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Second", "Board"]);
+    doc.undo();
+    assert_eq!(doc.p.sheets[0].name, "Board", "a move undoes");
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let f = std::env::temp_dir().join(format!("dp-layout-{}-{}.xlsx", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+    crate::io::export(&doc.p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let bytes = std::fs::read(&f).unwrap();
+    std::fs::remove_file(&f).ok();
+    assert!(bytes.len() > 1000, "the workbook is written with merges, borders and heights");
+}
+
 // Writing and reading XER, PMXML and MPX take time in step with the plan's size, not its square
 // (tasks were found by a search through the whole plan for every link and assignment).
 #[test]

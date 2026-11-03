@@ -317,6 +317,16 @@ fn styled(mut f: rust_xlsxwriter::Format, st: &str) -> rust_xlsxwriter::Format {
             "z" => match v.parse::<f64>() { Ok(z) => f.set_font_size(z * 0.75), Err(_) => f },
             "a" => f.set_align(match v { "c" => FormatAlign::Center, "r" => FormatAlign::Right, _ => FormatAlign::Left }),
             "n" if !v.is_empty() => f.set_font_name(v),
+            "w" => f.set_text_wrap(),
+            "v" => f.set_align(match v { "t" => FormatAlign::Top, "b" => FormatAlign::Bottom, _ => FormatAlign::VerticalCenter }),
+            "x" => match v.parse::<u8>() { Ok(n) => f.set_indent(n.min(15)), Err(_) => f },
+            "bt" | "bb" | "bl" | "br" => {
+                use rust_xlsxwriter::FormatBorder as Bd;
+                let (kind, col) = v.split_once(' ').unwrap_or((v, ""));
+                let b = match kind { "med" => Bd::Medium, "thick" => Bd::Thick, "dbl" => Bd::Double, "dash" => Bd::Dashed, "dot" => Bd::Dotted, "none" => Bd::None, _ => Bd::Thin };
+                let c = hex(col).unwrap_or(0);
+                match k { "bt" => f.set_border_top(b).set_border_top_color(c), "bb" => f.set_border_bottom(b).set_border_bottom_color(c), "bl" => f.set_border_left(b).set_border_left_color(c), _ => f.set_border_right(b).set_border_right_color(c) }
+            }
             _ => f,
         };
     }
@@ -376,6 +386,13 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
     for s in &c.p.sheets {
         let ws = wb.add_worksheet();
         ws.set_name(s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(31).collect::<String>()).map_err(e)?;
+        // Merged ranges first; the top-left cell's value is written over it below.
+        for m in &s.merges {
+            let Some((r0, c0, r1, c1)) = crate::model::sheet_range(m) else { continue };
+            let a1 = format!("{}{}", crate::sheet::col_name(c0), r0 + 1);
+            ws.merge_range(r0, c0 as u16, r1, c1 as u16, "", &styled(Format::new(), s.style.get(&a1).map(String::as_str).unwrap_or(""))).map_err(e)?;
+        }
+        for (r, h) in &s.heights { ws.set_row_height_pixels(*r, *h as u32).map_err(e)?; }
         for (a1, input) in &s.cells {
             let Some((r, k)) = a1_index(a1) else { continue };
             let f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));

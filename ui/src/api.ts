@@ -97,7 +97,7 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[] }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean }
 /** A picture in the plan's library (a party's logo or any image), as a data URL. */
 export interface Picture { id: number; name: string; role: string; data: string }
 /** A library picture placed on a sheet at a cell, with its size in px. */

@@ -94,7 +94,7 @@ const srv = http.createServer((q, r) => {
   // Sheets: a weekly report that reads the plan, then a formula being typed.
   await side("Sheets");
   const cells = (r0, c0, r1, c1) => p.evaluate(([r0, c0, r1, c1]) => { const rows = document.querySelectorAll(".sheetgrid .gbody .row"), a = rows[r0].children[c0 + 1].getBoundingClientRect(), z = rows[r1].children[c1 + 1].getBoundingClientRect(); return { x: a.x, y: a.y, width: z.right - a.x, height: z.bottom - a.y }; }, [r0, c0, r1, c1]);
-  const toolsBox = await p.evaluate(() => { const bs = [...document.querySelectorAll(".sheettools .btn")]; const a = bs[0].getBoundingClientRect(), z = bs[4].getBoundingClientRect(); return { x: a.x, y: a.y, width: z.right - a.x, height: a.height }; });
+  const toolsBox = await p.evaluate(() => { const bs = [...document.querySelectorAll(".sheettools .btn")]; const a = bs[0].getBoundingClientRect(), z = bs[bs.length - 1].getBoundingClientRect(); return { x: a.x, y: a.y, width: z.right - a.x, height: a.height }; });
   await shot("sheets", [[toolsBox, 1], [await cells(2, 0, 6, 1), 2, 0, "right"], [await cells(8, 0, 12, 2), 3, 0, "right"], [await cells(3, 5, 5, 5), 4]], { x: 66, y: 160, width: 1374, height: 470 });
   const g8 = await cells(8, 4, 8, 4); await p.mouse.click(g8.x + 20, g8.y + 10); await p.keyboard.type("=COUNTIF(Tasks[La"); await wait(300);
   await shot("sheet-formula", [["input.edit", 1], [".fhint", 2, 0, "right"]], { x: 66, y: 160, width: 1374, height: 470 });

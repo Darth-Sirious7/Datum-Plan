@@ -895,3 +895,24 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .simg .corner { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: var(--blue); border: 1px solid #fff; cursor: nwse-resize; }
 .simg .x { position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; line-height: 17px; }
 @media print { .simg.on { outline: 0; } .simg .corner, .simg .x { display: none; } }
+/* 0.5.17 Sheet Tools: row heights, merged cells, cell styles, Excel-style tabs */
+.sheetgrid .rowh { position: sticky; }
+.sheetgrid .rowh.on { background: var(--sel2); color: var(--navy); }
+.rowh .rszr { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: row-resize; z-index: 3; }
+.sheetgrid .mcell { position: absolute; z-index: 1; background: var(--bg); overflow: hidden; border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
+.sheetgrid .c.sin { box-shadow: inset 0 0 0 9999px rgba(11, 92, 173, .14); }
+.sheetgrid .c > span { overflow: hidden; text-overflow: ellipsis; }
+.sheettabs button { position: relative; }
+.sheettabs button.drop { outline: 1px dashed var(--line); }
+.sheettabs input.tabname { width: 140px; font: 500 10.5px var(--mono); padding: 3px 8px; border: 1px solid var(--blue); outline: none; }
+.mclist { display: flex; flex-direction: column; max-height: 220px; overflow: auto; border: 1px solid var(--line); margin: 6px 0 10px; }
+.mclist button { text-align: left; padding: 4px 10px; }
+.mclist button.on { background: var(--sel); color: var(--navy); }
+.cstyles { display: grid; grid-template-columns: repeat(3, 88px) 16px; grid-auto-rows: 24px; gap: 3px; align-self: center; }
+.cstyles .cst { border: 1px solid var(--line); font-size: 11px; padding: 0 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #fff; color: #1B2733; }
+.cstyles .split { grid-row: 1 / span 2; grid-column: 4; height: 100%; }
+.rb.numfmt { min-width: 130px; justify-content: space-between; border: 1px solid var(--line); padding: 2px 6px; font-size: 11.5px; }
+.vsep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+.menu .tick .swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid #0003; vertical-align: middle; }
+.ctxgrp.sheetctx { border-top-color: #1E8449; }
+.ctxgrp.sheetctx small { color: #1E8449; }

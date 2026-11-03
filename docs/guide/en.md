@@ -347,12 +347,27 @@ Go through the look-ahead with your team every week: clear what is open, chase w
 
 ![A sheet used as a weekly report: the toolbar, plan numbers by name, a live milestone list and vendors with their flags.](img/sheets.png)
 
-Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like any spreadsheet and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**; right-click a tab to rename or delete it.
+Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like any spreadsheet and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**. Double-click a tab to rename it; right-click it to insert, delete, move or copy it, give it a colour, or hide and unhide it; drag a tab to move it.
 
-1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. Then number formats, more or fewer decimals, and **Insert** and **Delete** for rows and columns.
+1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. The formatting tools are on the ribbon (below).
 2. **Plan numbers by name.** `=ProjectFinish`, `=BaselineFinish`, `=PercentComplete`, `=SPI` or `=COUNTIF(Tasks[Late],TRUE)`. Dates and percentages are formatted for you.
 3. **A live list from Plan Data….** Choose Tasks or Resources, the columns, which rows (milestones, critical, late, not finished, in progress, starting in the next four weeks), the order and how many. One formula fills the rows and changes with the plan.
 4. **Country flags.** Give cells the **Country with flag** number format and type a code (DE, cn) or a name (Germany, UK). The flag and the country's name are shown.
+
+### Format a sheet: Sheet Tools › Home
+
+When you open **Sheets**, the ribbon shows **Sheet Tools › Home** with the tools of a spreadsheet; it goes back to **Task** when you leave.
+
+- **Clipboard:** Paste (with Paste Special, values, formatting, transpose), Cut, Copy and Format Painter.
+- **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill.
+- **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells); **Borders** (the arrow: all borders, outside, thick outside, top and bottom, double and thick lines, no border, line colour and line style).
+- **Number:** the number format list, currency, percent, comma style and decimals.
+- **Styles:** cell styles such as Good, Bad, Neutral, Calculation, Check Cell, Title, Headings, Total and Accent.
+- **Cells:** insert or delete rows, columns and sheets; **Format** for row height, column width, AutoFit, rename, move or copy, and the tab colour.
+- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function, Plan Data and Freeze Panes.
+- **Editing:** AutoSum, Fill down or right, Clear (all, formats or contents) and Sort A to Z or Z to A.
+
+Drag the line under a row number to change the row's height. Merged cells, borders, row heights and pictures print as you see them and go into an exported .xlsx workbook.
 
 ### Write formulas
 

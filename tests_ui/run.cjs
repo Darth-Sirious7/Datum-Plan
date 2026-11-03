@@ -38,7 +38,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -485,7 +485,39 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".simg"); await p.waitForTimeout(100);
   await p.keyboard.press("Delete"); await p.waitForTimeout(300);
   check("Delete removes the selected picture from the sheet", (await p.$$(".simg")).length === 0);
+  // 0.5.17: Sheet Tools > Home opens by itself in Sheets: borders, merge, wrap, cell styles; tabs rename in place.
+  check("Sheets opens the Sheet Tools Home tab", !!(await p.$(".ctxgrp.sheetctx button.on")) && !!(await p.$(".ribbon .cstyles")));
+  await p.evaluate(() => { window.prompt = () => { throw new Error("browser prompt used"); }; window.confirm = () => { throw new Error("browser confirm used"); }; });
+  const scell = async (r, c) => { const b = await p.$$eval(".sheetgrid .gbody .row", (rows, rc) => { const row = rows.find(x => x.style.top === `${rc[2]}px`) ?? rows[rc[0]]; const el = row.children[rc[1] + 1].getBoundingClientRect(); return [el.x + 5, el.y + 5]; }, [r, c, r * 22]); return { x: b[0], y: b[1] }; };
+  const lastStyle = async () => JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.SheetStyle).pop()?.[1].op.SheetStyle.cells));
+  let sq = await scell(0, 0); await p.mouse.click(sq.x, sq.y); sq = await scell(0, 2); await p.keyboard.down("Shift"); await p.mouse.click(sq.x, sq.y); await p.keyboard.up("Shift"); await p.waitForTimeout(100);
+  await p.click(".ribbon button[title='Merge & Center']"); await p.waitForTimeout(300);
+  check("Merge & Center merges the selected cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Batch && c[1].op.Batch[0].Sheet).pop()?.[1].op.Batch[0].Sheet.sheet.merges)) === '["A1:C1"]' && (await p.$$(".sheetgrid .mcell")).length === 1);
+  await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('All Borders')"); await p.waitForTimeout(300);
+  check("Borders > All Borders draws lines round the cells", (await lastStyle()).includes("bb:thin #000000"));
+  await p.click(".ribbon button[title='Wrap Text']"); await p.waitForTimeout(300);
+  check("Wrap Text wraps the cells", /(^|[";])w([";]|$)/.test(await lastStyle()));
+  await p.click(".ribbon .cstyles .cst:has-text('Good')"); await p.waitForTimeout(300);
+  check("a cell style (Good) colours the cells", (await lastStyle()).includes("f:#C6EFCE"));
+  if (process.env.SHOT) { const z = await scell(6, 5); await p.mouse.click(z.x, z.y); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT }); await p.mouse.click(sq.x, sq.y); }
+  await p.dblclick(".sheettabs button.on"); await p.waitForTimeout(200);
+  check("double-clicking a sheet tab renames it in place (no browser box)", !!(await p.$(".sheettabs input.tabname")));
+  await p.fill(".sheettabs input.tabname", "Client dashboard"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+  check("the new name is saved", (await p.textContent(".sheettabs")).includes("Client dashboard"));
+  await p.click(".sheettabs button.on", { button: "right" }); await p.waitForTimeout(150);
+  const items = await p.$$eval(".menu button", bs => bs.map(b => b.textContent));
+  check("the tab menu has Insert, Delete, Rename, Move or Copy, Tab Color, Hide and Unhide", ["Insert", "Delete", "Rename", "Move or Copy", "Tab Color", "Hide", "Unhide"].every(t => items.some(x => x.includes(t))), items.join("|"));
+  await p.hover(".menu button:has-text('Tab Color')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('#00B050')"); await p.waitForTimeout(300);
+  const tabSt = ((await p.getAttribute(".sheettabs button.on", "style")) ?? "").toLowerCase();
+  check("Tab Color colours the tab", tabSt.includes("0, 176, 80") || tabSt.includes("#00b050"), tabSt);
+  await p.click(".sheettabs button.on", { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Delete')"); await p.waitForTimeout(200);
+  check("Delete asks in the app's own dialog", ((await p.textContent(".dlg header")) ?? "").includes("Delete Sheet"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
+  check("leaving Sheets goes back to the Task tab", (await p.textContent(".tabs > button.on")) === "Task");
   await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
 
   // 0.5.13: the tutorial: a note per view, Back and Next through the views, × hides the notes.

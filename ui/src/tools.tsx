@@ -1,5 +1,6 @@
 // Update Progress (status a period), the Relationship Diagram, and the Report Builder.
 import { For, Show, createSignal, createResource, JSX } from "solid-js";
+import { askText, askYes } from "./ui";
 import { Grid, TaskInfo, SCurve, PeriodReport, Curve, Usage, fmtDay, iso, dateDay } from "./api";
 import { act, call, curUid, out, P, tick, toast, fields, openMenu, setView, Item } from "./store";
 import { C, selectUid } from "./cmds";
@@ -152,9 +153,9 @@ export const ReportBuilder = () => {
       <div class="ptools noprint">
         <select value={k()} onChange={e => setK(+e.currentTarget.value)}><For each={reports()}>{(x, i) => <option value={i()}>{x.name}</option>}</For></select>
         <button class="btn sm" onClick={e => openMenu(e, [...TEMPLATES.map(t => ({ label: `From template: ${t.name}`, icon: "builder", run: () => save([...reports(), JSON.parse(JSON.stringify(t))]).then(() => setK(reports().length - 1)) } as Item)), "-", { label: "Blank report", run: () => save([...reports(), { name: "New report", sections: [sec("kpis")] }]).then(() => setK(reports().length - 1)) }])}>+ New report</button>
-        <Show when={cur()}><button class="btn sm" onClick={() => { const n = prompt("Report name", cur().name); if (n) put({ ...cur(), name: n }); }}>Rename</button>
+        <Show when={cur()}><button class="btn sm" onClick={async () => { const n = await askText("Rename Report", "Name", cur().name); if (n) put({ ...cur(), name: n }); }}>Rename</button>
           <button class="btn sm" onClick={() => save([...reports(), JSON.parse(JSON.stringify({ ...cur(), name: `${cur().name} (copy)` }))])}>Duplicate</button>
-          <button class="btn sm" onClick={() => confirm(`Delete ${cur().name}?`) && save(reports().filter((_, i) => i !== k())).then(() => setK(0))}>Delete</button>
+          <button class="btn sm" onClick={async () => (await askYes("Delete Report", `Delete ${cur().name}?`, "Delete")) && save(reports().filter((_, i) => i !== k())).then(() => setK(0))}>Delete</button>
           <button class="btn sm pri" onClick={addMenu}>+ Add section</button></Show>
         <Seg options={[["week", "Weekly"], ["month", "Monthly"]]} value={unit()} set={setUnit} />
         <span class="grow" /><button class="btn" onClick={() => C.print()}>Print / PDF</button><button class="btn" onClick={() => import("./reports").then(m => m.saveHtml(cur()?.name ?? "Report"))}>Save as HTML</button>

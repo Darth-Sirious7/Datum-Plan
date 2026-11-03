@@ -1,6 +1,7 @@
 // The plan's picture library: logos of the parties (client, our company, vendors, sub-vendors) and
 // other images, kept in the plan file and used in print headers, dashboards and sheets.
 import { For, Show } from "solid-js";
+import { askYes } from "./ui";
 import { Picture } from "./api";
 import { act, call, P, openDialog, openMenu, Item, toast } from "./store";
 import { Dialog } from "./ui";
@@ -36,7 +37,7 @@ export const Library = () => (
         <select title="Whose logo or what picture this is" onChange={e => act({ Picture: { id: x.id, pic: { ...x, role: e.currentTarget.value } } })}>
           <For each={ROLES.includes(x.role) || !x.role ? ROLES : [x.role, ...ROLES]}>{r => <option selected={r === x.role}>{r}</option>}</For></select>
         <input value={x.name} placeholder="Name, e.g. the company" onChange={e => act({ Picture: { id: x.id, pic: { ...x, name: e.currentTarget.value } } })} />
-        <button class="btn sm" title="Remove this picture from the plan (also from sheets)" onClick={() => { if (confirm(`Remove ${label(x)} from this plan?`)) act({ Picture: { id: x.id, pic: null } }); }}>×</button>
+        <button class="btn sm" title="Remove this picture from the plan (also from sheets)" onClick={async () => { if (await askYes("Remove Picture", `Remove ${label(x)} from this plan? It is also taken off the sheets that use it.`, "Remove")) act({ Picture: { id: x.id, pic: null } }); }}>×</button>
       </div>)}</For>
     <div class="inline"><For each={["Client", "Our company", "Vendor", "Sub-vendor"]}>{r => <button class="btn sm" onClick={() => addPicture(r).then(id => id && toast(`${r} logo added to the plan.`, true))}>+ {r} logo…</button>}</For>
       <button class="btn sm" onClick={() => addPicture("Other", "Picture")}>+ Other picture…</button></div>

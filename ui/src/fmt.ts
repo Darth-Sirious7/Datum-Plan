@@ -3,13 +3,26 @@
 import { createSignal, JSX } from "solid-js";
 import { toast } from "./store";
 
-export type St = { b?: boolean; i?: boolean; u?: boolean; s?: boolean; c?: string; f?: string; z?: number; a?: string; n?: string };
+export type St = { b?: boolean; i?: boolean; u?: boolean; s?: boolean; w?: boolean; c?: string; f?: string; z?: number; a?: string; n?: string; v?: string; x?: number; bt?: string; bb?: string; bl?: string; br?: string };
+/** Border sides; a side is "kind #colour", kind thin, med, thick, dbl, dash or dot. */
+export const SIDES = ["bt", "bb", "bl", "br"] as const;
+export type Side = typeof SIDES[number];
 export const parse = (x = ""): St => {
   const s: St = {};
-  for (const t of x.split(";")) { const [k, v] = [t.slice(0, 1), t.slice(2)]; if ("bius".includes(k) && t.length === 1) (s as any)[k] = true; else if (k === "z") s.z = +v; else if (k === "c" || k === "f" || k === "a" || k === "n") s[k] = v; }
+  for (const t of x.split(";")) {
+    if (!t) continue;
+    const i = t.indexOf(":"), k = i < 0 ? t : t.slice(0, i), v = i < 0 ? "" : t.slice(i + 1);
+    if (i < 0 && "biusw".includes(k) && k.length === 1) (s as any)[k] = true;
+    else if (k === "z" || k === "x") s[k] = +v;
+    else if (["c", "f", "a", "n", "v", ...SIDES].includes(k)) (s as any)[k] = v;
+  }
   return s;
 };
-export const ser = (s: St) => [s.b && "b", s.i && "i", s.u && "u", s.s && "s", s.c && `c:${s.c}`, s.f && `f:${s.f}`, s.z && `z:${s.z}`, s.a && `a:${s.a}`, s.n && `n:${s.n}`].filter(Boolean).join(";");
+export const ser = (s: St) => [s.b && "b", s.i && "i", s.u && "u", s.s && "s", s.w && "w", s.c && `c:${s.c}`, s.f && `f:${s.f}`, s.z && `z:${s.z}`, s.a && `a:${s.a}`, s.n && `n:${s.n}`, s.v && `v:${s.v}`, s.x && `x:${s.x}`,
+  ...SIDES.map(k => s[k] && `${k}:${s[k]}`)].filter(Boolean).join(";");
+const LINE: Record<string, string> = { thin: "1px solid", med: "2px solid", thick: "3px solid", dbl: "3px double", dash: "1px dashed", dot: "1px dotted" };
+/** A border side as CSS ("thin #000" → "1px solid #000"). */
+export const line = (v?: string) => { if (!v) return undefined; const [k, c] = v.split(" "); return `${LINE[k] ?? LINE.thin} ${c || "#000"}`; };
 /** CSS for a style; `fill: false` leaves the background out (used where selection colours must win). */
 export const css = (x?: string): JSX.CSSProperties => {
   if (!x) return {};
@@ -22,6 +35,11 @@ export const css = (x?: string): JSX.CSSProperties => {
   if (s.z) o["font-size"] = `${s.z}px`;
   if (s.n) o["font-family"] = `'${s.n}', sans-serif`;
   if (s.a) { o["text-align"] = s.a === "c" ? "center" : s.a === "r" ? "right" : "left"; o["justify-content"] = s.a === "c" ? "center" : s.a === "r" ? "flex-end" : "flex-start"; }
+  if (s.x) o["padding-left"] = `${5 + s.x * 12}px`;
+  if (s.bt) o["border-top"] = line(s.bt);
+  if (s.bb) o["border-bottom"] = line(s.bb);
+  if (s.bl) o["border-left"] = line(s.bl);
+  if (s.br) o["border-right"] = line(s.br);
   return o;
 };
 
@@ -37,7 +55,9 @@ const change = (f: (s: St) => St) => {
   if (out.length) t.set(out);
 };
 export const toggle = (k: "b" | "i" | "u" | "s") => { const on = !(target()?.get() ?? []).every(([, v]) => parse(v)[k]); change(s => ({ ...s, [k]: on })); };
-export const setProp = <K extends "c" | "f" | "z" | "a" | "n">(k: K, v: St[K]) => change(s => ({ ...s, [k]: v }));
+export const setProp = <K extends "c" | "f" | "z" | "a" | "n" | "v" | "x" | "w">(k: K, v: St[K]) => change(s => ({ ...s, [k]: v }));
+/** Changes each selected cell's style with `f`, given the cell's id. */
+export const changeEach = (f: (s: St, id: string) => St) => { const t = target(), list = t?.get() ?? []; if (!t || !list.length) return toast("Select the cells to format first."); const out = list.map(([id, v]) => [id, ser(f(parse(v), id))] as [string, string]).filter(([, v], k) => v !== list[k][1]); if (out.length) t.set(out); };
 export const clearFmt = () => change(() => ({}));
 
 // Format Painter: copy the active cell's style, then the next selection gets it.

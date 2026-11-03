@@ -1,12 +1,12 @@
 [package]
 name = "datum-core"
-version = "0.5.16"
+version = "0.5.17"
 license = "MIT"
 edition = "2021"
 description = "Datum Plan scheduling engine: model, calendars, CPM, parsing, edit operations."
 
 [dependencies]
-calamine = { version = "0.37.0", default-features = false }
+calamine = { version = "0.38.0", default-features = false }
 # Already in calamine's tree: used to measure .xls and .ods sheets before calamine builds them.
 cfb = "0.14.0"
 quick-xml = "0.42.0"

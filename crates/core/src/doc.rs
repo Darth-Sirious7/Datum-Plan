@@ -80,6 +80,8 @@ pub enum Op {
     /// Inserts (`count` > 0) or deletes (`count` < 0) whole rows or columns of a spreadsheet tab
     /// at `at` (0-based); formulas on every tab follow, as in a spreadsheet.
     SheetInsert { k: usize, cols: bool, at: u32, count: i32 },
+    /// Moves a spreadsheet tab from position `from` to `to`.
+    SheetMove { from: usize, to: usize },
     /// Adds, replaces (`old`) or (rule None) removes a rule of credit.
     Credit { old: Option<String>, rule: Option<CreditRule> },
     /// Gives the tasks the steps of a rule of credit (from the plan or the built-in library).
@@ -941,7 +943,8 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         Op::Sheet { k, sheet } => match (k, sheet) {
             (None, Some(s)) => {
                 if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
-                p.sheets.push(s)
+                p.sheets.push(s);
+                p.normalize();
             }
             (Some(k), Some(s)) if k < p.sheets.len() => {
                 let old = p.sheets[k].name.clone();
@@ -953,6 +956,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 } else {
                     p.sheets[k] = s;
                 }
+                p.normalize();
             }
             (Some(k), None) if k < p.sheets.len() => {
                 let order: Vec<String> = ["Plan", "Resources"].iter().map(|x| x.to_string()).chain(p.sheets.iter().map(|x| x.name.clone())).collect();
@@ -998,6 +1002,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             };
             for m in [&mut s.cells, &mut s.fmt, &mut s.style] {
                 *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
+            }
+            for im in &mut s.images { if let Some(x) = shift(&im.cell) { im.cell = x } }
+            // A merge moves with its cells; one whose corner is deleted goes.
+            s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
+            if !cols {
+                s.heights = std::mem::take(&mut s.heights).into_iter().filter_map(|(r, h)| if r < at { Some((r, h)) } else if count > 0 { Some((r.saturating_add(n), h)) } else if r < at.saturating_add(n) { None } else { Some((r - n, h)) }).collect();
             }
             if cols {
                 s.widths = std::mem::take(&mut s.widths).into_iter().filter_map(|(c, w)| if c < at { Some((c, w)) } else if count > 0 { Some((c.saturating_add(n), w)) } else if c < at.saturating_add(n) { None } else { Some((c - n, w)) }).collect();
@@ -1050,6 +1060,11 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 }
             }
         },
+        Op::SheetMove { from, to } => {
+            if from >= p.sheets.len() || to >= p.sheets.len() { return Err("That sheet does not exist.".into()) }
+            let s = p.sheets.remove(from);
+            p.sheets.insert(to, s);
+        }
         Op::SheetImages { k, images } => {
             let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();
             let s = p.sheets.get_mut(k).ok_or("There is no such sheet.")?;

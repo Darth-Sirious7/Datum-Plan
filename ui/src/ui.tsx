@@ -1,6 +1,6 @@
 // Small building blocks: icons, menus, dialogs, tabs and form rows.
 import { For, Show, JSX, createSignal, onMount, onCleanup } from "solid-js";
-import { menu, setMenu, Item, closeDialog, msg, setMsg } from "./store";
+import { menu, setMenu, Item, closeDialog, openDialog, msg, setMsg } from "./store";
 import { asDate } from "./cells";
 import { iso } from "./api";
 import { Help } from "./help";
@@ -26,7 +26,7 @@ export const Menu = () => {
           <button disabled={it.off} classList={{ on: it.on }}
             onMouseEnter={e => { const r = e.currentTarget.getBoundingClientRect(); setSubs([...subs().slice(0, depth), ...(it.sub ? [{ x: r.right, y: r.top - 4, px: r.left, items: it.sub }] : [])]); }}
             onClick={() => { if (it.sub) return; close(); it.run?.(); }}>
-            <i class="tick">{it.on ? "✓" : it.icon ? <Icon n={it.icon} /> : ""}</i><span>{it.label}</span>{it.keys && <kbd>{it.keys}</kbd>}{it.sub && <b class="more">›</b>}
+            <i class="tick">{it.on ? "✓" : it.icon ? <Icon n={it.icon} /> : it.swatch ? <b class="swatch" style={{ background: it.swatch }} /> : ""}</i><span>{it.label}</span>{it.keys && <kbd>{it.keys}</kbd>}{it.sub && <b class="more">›</b>}
           </button>
         )}</For>
       </div>
@@ -99,3 +99,18 @@ export const Check = (p: { label: string; value: boolean; set: (v: boolean) => v
 export const Seg = (p: { options: [string, string][]; value: string; set: (v: string) => void }) => (
   <div class="seg"><For each={p.options}>{([k, l]) => <button classList={{ on: p.value === k }} onClick={() => p.set(k)}>{l}</button>}</For></div>
 );
+
+/** Asks for a line of text in the app's own dialog (never the browser's prompt box). Null when cancelled. */
+export const askText = (title: string, label: string, value = "", okText = "OK") => new Promise<string | null>(res => openDialog(() => {
+  const [v, setV] = createSignal(value);
+  let done = false;
+  onCleanup(() => { if (!done) res(null); });
+  onMount(() => queueMicrotask(() => (document.querySelector(".ov:last-child .dlg input") as HTMLInputElement | null)?.select()));
+  return <Dialog title={title} okText={okText} ok={() => { done = true; res(v()); }}><div class="form"><Row label={label}><input class="asktext" value={v()} onInput={e => setV(e.currentTarget.value)} /></Row></div></Dialog>;
+}));
+/** Asks a yes/no question in the app's own dialog (never the browser's confirm box). */
+export const askYes = (title: string, text: string, okText = "OK") => new Promise<boolean>(res => openDialog(() => {
+  let done = false;
+  onCleanup(() => { if (!done) res(false); });
+  return <Dialog title={title} okText={okText} ok={() => { done = true; res(true); }}><p>{text}</p></Dialog>;
+}));

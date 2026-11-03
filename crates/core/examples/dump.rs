@@ -63,7 +63,7 @@ fn guide_plan() -> (Project, NaiveDate) {
         ] },
     ]);
     doc.apply(Op::Ui { key: "dashboards".into(), value: dashes.clone() }, f).unwrap_or_else(|e| panic!("{e}"));
-    doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 230), (4, 170), (5, 150), (6, 160)].into_iter().collect(), style, images: vec![] });
+    doc.p.sheets.push(SheetData { name: "Weekly report".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.into_iter().collect(), widths: [(0, 230), (4, 170), (5, 150), (6, 160)].into_iter().collect(), style, ..Default::default() });
     (doc.p, d(12, 4))
 }
 

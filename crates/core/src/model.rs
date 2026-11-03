@@ -462,7 +462,21 @@ pub struct SnapRow { pub uid: u32, pub start: i64, pub finish: i64, pub pct: u8,
 #[serde(default)]
 pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pub fmt: BTreeMap<String, String>, pub widths: BTreeMap<u32, u16>, #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub style: BTreeMap<String, String>,
     /// Pictures placed on the sheet: a library picture, its top-left cell and its size in px.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub images: Vec<SheetImage> }
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub images: Vec<SheetImage>,
+    /// Merged ranges ("A1:C2"); the top-left cell's value and style show across the range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub merges: Vec<String>,
+    /// Row heights in px (0-based row), where not the default.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub heights: BTreeMap<u32, u16>,
+    /// The tab's colour ("#RRGGBB", empty for none) and whether the tab is hidden.
+    #[serde(default, skip_serializing_if = "String::is_empty")] pub color: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub hidden: bool }
+
+/// A range "A1:C2" as (row0, col0, row1, col1), 0-based and ordered.
+pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
+    let (a, b) = r.split_once(':').unwrap_or((r, r));
+    let (a, b) = (gridcraft_core::CellRef::parse(a.trim())?, gridcraft_core::CellRef::parse(b.trim())?);
+    Some((a.row.min(b.row), a.col.min(b.col), a.row.max(b.row), a.col.max(b.col)))
+}
 
 /// A picture on a sheet, anchored at a cell ("B2") like a picture over a spreadsheet's cells.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -719,7 +733,20 @@ impl Project {
             s.images.retain(|i| seen.contains(&i.pic));
             s.images.truncate(500);
             s.images.iter_mut().for_each(|i| (i.w, i.h) = (i.w.clamp(8, 4000), i.h.clamp(8, 4000)));
+            // Merges: real ranges of more than one cell that do not overlap one another.
+            let mut kept: Vec<(u32, u32, u32, u32)> = vec![];
+            s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| {
+                let g = sheet_range(&m).filter(|g| (g.0, g.1) != (g.2, g.3) && g.2 - g.0 < 10_000 && g.3 - g.1 < 1_000)?;
+                if kept.len() >= 5_000 || kept.iter().any(|k| g.0 <= k.2 && k.0 <= g.2 && g.1 <= k.3 && k.1 <= g.3) { return None }
+                kept.push(g);
+                Some(format!("{}{}:{}{}", crate::sheet::col_name(g.1), g.0 + 1, crate::sheet::col_name(g.3), g.2 + 1))
+            }).collect();
+            s.heights.retain(|_, h| *h != 0);
+            s.heights.values_mut().for_each(|h| *h = (*h).clamp(6, 600));
+            if !(s.color.len() == 7 && s.color.starts_with('#') && s.color[1..].chars().all(|c| c.is_ascii_hexdigit())) { s.color.clear() }
         }
+        // At least one tab stays visible.
+        if !self.sheets.is_empty() && self.sheets.iter().all(|s| s.hidden) { self.sheets[0].hidden = false }
         if self.calendars.is_empty() {
             self.calendars.push(Calendar::standard("Standard"));
         }

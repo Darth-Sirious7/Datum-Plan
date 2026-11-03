@@ -3,7 +3,7 @@ import { For, Show, createSignal, createMemo, Index } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { Calendar, CustomDef, Filter, Rule, Out, Diff, iso, dateDay, invoke, LevelPreview, fmtAt } from "./api";
 import { allCols, saveAll, deleteCol, act, call, closeDialog, cols, fields, filter, group, openDialog, out, P, saveCols, setFilter, setGroup, setSort, sort, toast, setOut, useTable, tables, table, opts, setBackstage, grid, query } from "./store";
-import { Dialog, Row, Text, Pick, Check, Tabs } from "./ui";
+import { Dialog, Row, Text, Pick, Check, Tabs, askText } from "./ui";
 import * as F from "./fmt";
 import { TaskTab, useInfo, TABS } from "./details";
 
@@ -156,7 +156,7 @@ export const calendars = () => openDialog(() => {
     <Dialog title="Change Working Time" wide help="calendars" ok={save}>
       <div class="ptools">
         For calendar <Pick value={name()} set={load} options={P().calendars.map(c => c.name)} />
-        <button class="btn sm" onClick={async () => { const n = prompt("Name of the new calendar", "New calendar"); if (n && await act({ CalPut: { old: null, cal: { ...JSON.parse(JSON.stringify(draft)), name: n } } })) load(n); }}>Create New Calendar…</button>
+        <button class="btn sm" onClick={async () => { const n = await askText("Create New Calendar", "Name", "New calendar"); if (n && await act({ CalPut: { old: null, cal: { ...JSON.parse(JSON.stringify(draft)), name: n } } })) load(n); }}>Create New Calendar…</button>
         <button class="btn sm" onClick={async () => { if (await act({ CalDelete: { name: name() } })) load(P().calendar); }}>Delete</button>
         <span class="grow" /><label>Name <input value={draft.name} onChange={e => setDraft("name", e.currentTarget.value)} /></label>
       </div>
@@ -387,7 +387,7 @@ export const activityCodes = () => openDialog(() => {
     <Dialog title="Activity Codes" wide>
       <div class="cols2">
         <div><table class="tbl"><tbody><For each={P().codes}>{c => <tr class="link" classList={{ sel: c.name === name() }} onClick={() => setName(c.name)}><td>{c.name}</td><td class="muted">{c.values.length} values</td></tr>}</For></tbody></table>
-          <button class="btn sm" onClick={async () => { const n = prompt("Code name (e.g. Phase, Area, Discipline)"); if (n && await act({ CodeDef: { old: null, def: { name: n, scope: "Project", values: [] } } })) setName(n); }}>+ New code</button>
+          <button class="btn sm" onClick={async () => { const n = await askText("New Code", "Code name (e.g. Phase, Area, Discipline)"); if (n && await act({ CodeDef: { old: null, def: { name: n, scope: "Project", values: [] } } })) setName(n); }}>+ New code</button>
           <Show when={code()}><button class="btn sm" onClick={() => act({ CodeDef: { old: name(), def: null } }).then(() => setName(P().codes[0]?.name ?? ""))}>Delete</button></Show></div>
         <Show when={code()} fallback={<p class="empty">Codes classify tasks (activity codes): group, filter and colour by them.</p>}>{c => <div>
           <div class="form"><Row label="Name"><Text value={c().name} set={x => put({ ...c(), name: x }).then(() => setName(x))} /></Row></div>
