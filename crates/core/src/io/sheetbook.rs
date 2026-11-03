@@ -28,10 +28,19 @@ pub fn import(path: &Path) -> Result<Imported, String> {
         wb.worksheet_range(META_SHEET).ok().and_then(|r| r.get_value((0, 0)).map(|v| v.to_string())).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
     } else { serde_json::Value::Null };
     let ours = !meta.is_null();
-    let parts = if path.extension().is_some_and(|e| matches!(e.to_string_lossy().to_lowercase().as_str(), "xlsx" | "xlsm")) { xml_parts(path).ok() } else { None };
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    // Calamine builds the whole box around a sheet's cells: two far-apart cells would ask for
+    // hundreds of gigabytes (an abort, not an error). Measure first, as the table import does.
+    if matches!(ext.as_str(), "xls" | "ods") { super::table::sheet_size(path, &ext)?; }
+    let parts = if matches!(ext.as_str(), "xlsx" | "xlsm") { xml_parts(path).ok() } else { None };
     let mut out = Imported::default();
-    for name in names.iter().filter(|n| *n != META_SHEET && !(ours && PLAN_SHEETS.contains(&n.as_str()))) {
+    // Its own tabs, as the workbook lists them (older files: every sheet but the plan's).
+    let tabs: Option<Vec<&str>> = meta["tabs"].as_array().map(|t| t.iter().filter_map(|x| x.as_str()).collect());
+    for name in names.iter().filter(|n| *n != META_SHEET && tabs.as_ref().map_or(!(ours && PLAN_SHEETS.contains(&n.as_str())), |t| t.contains(&n.as_str()))) {
         let mut s = SheetData { name: name.clone(), ..Default::default() };
+        if parts.as_ref().and_then(|p| p.sheets.get(name)).is_some_and(|l| l.span > 10_000_000) {
+            return Err(format!("The sheet {name} spans more than 10 million cells (something far to the right or at the bottom). Clear the far cells in the workbook and try again."))
+        }
         let values = wb.worksheet_range(name).map_err(|e| format!("Could not read the sheet {name}: {e}"))?;
         let formulas = wb.worksheet_formula(name).ok();
         let (vr, vc) = values.start().unwrap_or((0, 0));
@@ -45,7 +54,14 @@ pub fn import(path: &Path) -> Result<Imported, String> {
                 Data::Float(x) => x.to_string(),
                 Data::Bool(b) => if *b { "TRUE".into() } else { "FALSE".into() },
                 Data::DateTime(d) => { s.fmt.entry(a1.clone()).or_insert_with(|| "date".into()); d.as_f64().to_string() }
-                Data::String(t) => { if t.trim().parse::<f64>().is_ok() || t.starts_with('=') { s.fmt.insert(a1.clone(), "@".into()); } t.clone() }
+                Data::String(t) if t.starts_with(['=', '\'']) && t.len() > 1 => format!("'{t}"),
+                Data::String(t) => {
+                    // Text the plan would read as a number, date, percentage or TRUE stays text.
+                    let looks = !matches!(gridcraft_core::parse::parse_input(t, gridcraft_core::DateSystem::default()).value, gridcraft_core::Value::Text(_))
+                        || t.trim().starts_with(|ch: char| ch.is_ascii_digit()) && t.contains(['/', '-', '.']);
+                    if looks { s.fmt.insert(a1.clone(), "@".into()); }
+                    t.clone()
+                }
                 Data::DateTimeIso(t) | Data::DurationIso(t) => t.clone(),
                 _ => String::new(),
             };
@@ -57,6 +73,8 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             for (r, c, t) in f.used_cells() {
                 if t.is_empty() { continue }
                 let (r, c) = (r as u32 + fr, c as u32 + fc);
+                // OpenDocument formulas ("of:=SUM([.A1:.B2])"); one that does not read keeps its value.
+                let t = if t.starts_with("of:") { match ods_formula(t) { Some(f) => f, None => continue } } else { t.clone() };
                 let t = t.replace("_xlfn._xlws.", "").replace("_xlfn.", "").replace("_xlws.", "").replace("_xlpm.", "");
                 s.cells.insert(a1(r, c), format!("={}", t.trim_start_matches('=')));
             }
@@ -95,11 +113,31 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             }
         }
         if let Ok(cond) = serde_json::from_value::<Vec<crate::model::CondRule>>(meta["sheets"][name.as_str()]["cond"].clone()) { s.cond = cond; }
+        if meta["sheets"][name.as_str()]["page"].as_bool() == Some(false) { s.page = None; }
         if meta["sheets"][name.as_str()]["no_hf"].as_bool() == Some(true) { s.page.get_or_insert_with(Default::default).no_hf = true; }
         out.sheets.push(s);
     }
     if out.sheets.is_empty() { return Err("That workbook has no sheets to bring in.".into()) }
     Ok(out)
+}
+
+/// An OpenDocument formula in the window's syntax: [.A1] → A1, [Sheet2.A1:.B2] → Sheet2!A1:B2, ; → ,.
+fn ods_formula(t: &str) -> Option<String> {
+    let body = t.strip_prefix("of:")?.trim_start_matches('=');
+    let (mut out, mut q, mut it) = (String::new(), false, body.chars());
+    while let Some(ch) = it.next() {
+        match ch {
+            '"' => { q = !q; out.push(ch) }
+            '[' if !q => {
+                let r: String = it.by_ref().take_while(|c| *c != ']').collect();
+                let parts: Vec<String> = r.split(':').enumerate().map(|(i, p)| match p.trim_start_matches('$').rsplit_once('.') { Some((sh, a)) if !sh.is_empty() && i == 0 => format!("{sh}!{a}"), Some((_, a)) => a.to_string(), None => p.to_string() }).collect();
+                out.push_str(&parts.join(":"));
+            }
+            ';' if !q => out.push(','),
+            _ => out.push(ch),
+        }
+    }
+    gridcraft_formula::parse(&out).ok().map(|_| out)
 }
 
 fn a1(r: u32, c: u32) -> String { format!("{}{}", crate::sheet::col_name(c), r + 1) }
@@ -140,7 +178,7 @@ fn style_text(st: &calamine::Style) -> String {
 
 /// The layout a workbook keeps outside the cells, read straight from its parts.
 #[derive(Default)]
-struct Layout { hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
+struct Layout { span: u64, hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
 struct Parts { sheets: HashMap<String, Layout> }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
@@ -193,6 +231,9 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         let part = resolve("xl/workbook.xml", target);
         let xml = text(read(&part));
         let mut l = Layout { hidden: attr(t, "state").is_some_and(|s| s != "visible"), ..Default::default() };
+        let (mut r0, mut r1, mut c0, mut c1) = (u32::MAX, 0, u32::MAX, 0);
+        for c in tags(&xml, "c").filter_map(|c| gridcraft_core::CellRef::parse(&attr(c, "r")?)) { (r0, r1, c0, c1) = (r0.min(c.row), r1.max(c.row), c0.min(c.col), c1.max(c.col)); }
+        if r0 <= r1 { l.span = (r1 - r0 + 1) as u64 * (c1 - c0 + 1) as u64; }
         for c in tags(&xml, "col") {
             let (Some(a), Some(b), Some(w)) = (attr(c, "min").and_then(|x| x.parse::<u32>().ok()), attr(c, "max").and_then(|x| x.parse::<u32>().ok()), attr(c, "width").and_then(|x| x.parse::<f64>().ok())) else { continue };
             if matches!(attr(c, "hidden").as_deref(), Some("1") | Some("true")) { for k in a.max(1)..=b.min(a + 1_000) { l.hide_cols.push(k - 1); } continue }
@@ -246,7 +287,7 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
                 let mpart = resolve(&dpart, target);
                 let Some(bytes) = read(&mpart) else { continue };
                 if bytes.len() > 4_000_000 { continue }
-                let ext = tags(anchor, "a:ext").next().or_else(|| tags(anchor, "xdr:ext").next());
+                let ext = tags(anchor, "a:ext").chain(tags(anchor, "xdr:ext")).find(|e| attr(e, "cx").is_some());
                 let emu = |k: &str| ext.and_then(|e| attr(e, k)).and_then(|x| x.parse::<f64>().ok()).map(|v| (v / 9525.0).round().clamp(8.0, 4000.0) as u16);
                 let mime = match mpart.rsplit('.').next().unwrap_or("").to_lowercase().as_str() { "jpg" | "jpeg" => "image/jpeg", "gif" => "image/gif", "svg" => "image/svg+xml", _ => "image/png" };
                 l.pictures.push((a1(row, col), emu("cx").unwrap_or(120), emu("cy").unwrap_or(60), bytes, mime.into()));

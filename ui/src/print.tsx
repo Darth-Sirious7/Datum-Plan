@@ -10,7 +10,7 @@ import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS
 import { sheetK } from "./sheetlayout";
 import { picData } from "./pictures";
 import { FlagText } from "./flags";
-import { condLooks } from "./condfmt";
+import { condLooks, lookCss } from "./condfmt";
 import { sheetRowH, fitBox } from "./sheetlayout";
 import type { SheetPage } from "./api";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
@@ -315,7 +315,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
 const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
-type PT = { flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -358,7 +358,7 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
       rows: rows.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
     // Conditional formatting, as on screen.
     const lk = condLooks(sh, cells as Map<string, [string, string, string, boolean, number | null]>);
-    t.rows.forEach((row, i) => cs.forEach((c, j) => { const l = lk.get(col(c) + (rows[i] + 1)); if (l) row.st![j + 1] = [row.st![j + 1], l.st, l.bg && `f:${l.bg}`].filter(Boolean).join(";"); }));
+    t.rows.forEach((row, i) => cs.forEach((c, j) => { const l = lk.get(col(c) + (rows[i] + 1)); if (l) row.st![j + 1] = [row.st![j + 1], l.st, l.bg && `f:${l.bg}`].filter(Boolean).join(";"); if (l?.bar) (t.bars ??= new Map()).set(`${i},${j + 1}`, l.bar); }));
     // Row heights as on screen (bigger fonts and wrapped text make taller rows), merged cells, pictures.
     t.h = rows.map(r => sheetRowH(sh, r, cells));
     t.merges = (sh.merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = ref(a), p2 = ref(b); if (!p1 || !p2) return []; return [{ r: p1[0] - r0, c: p1[1] - c0 + 1, rs: p2[0] - p1[0] + 1, cs: p2[1] - p1[1] + 1 }]; }).filter(m => m.r + m.rs > 0 && m.r < nr && m.c + m.cs > 1 && m.c <= nc);
@@ -467,7 +467,7 @@ const TablePage = (p: { t: PT; pg: VPage }) => {
             return R0 === top && c === first ? { rs: Math.min(m.r + m.rs, hi) - top, cs: p.pg.cols!.filter(x => x >= m.c && x < m.c + m.cs).length, st: t.rows[m.r]?.st?.[m.c], v: t.rows[m.r]?.c[m.c] } : "skip"; };
           return <tr style={{ height: `${hOf(R0)}px` }} classList={{ b: r?.b }}><For each={p.pg.cols}>{c => { const sp = span(c); return sp === "skip" ? null
             : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": vAlign(sp.st), "white-space": F.parse(sp.st).w ? "normal" : undefined }}>{sp.v}</td>
-            : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r?.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r?.st?.[c]), ...(F.parse(r?.st?.[c]).w ? { "white-space": "normal" } : {}), ...(t.font ? { "vertical-align": vAlign(r?.st?.[c]) } : {}) }}>{r?.c[c] && t.flags?.has(`${R0},${c}`) ? <FlagText country={r.c[c]} /> : r?.c[c]}</td>; }}</For></tr>; }}</For></tbody>
+            : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r?.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r?.st?.[c]), ...(F.parse(r?.st?.[c]).w ? { "white-space": "normal" } : {}), ...(t.font ? { "vertical-align": vAlign(r?.st?.[c]) } : {}), ...(t.bars?.has(`${R0},${c}`) ? lookCss({ bar: t.bars.get(`${R0},${c}`) }) : {}) }}>{r?.c[c] && t.flags?.has(`${R0},${c}`) ? <FlagText country={r.c[c]} /> : r?.c[c]}</td>; }}</For></tr>; }}</For></tbody>
       </table>
       <For each={t.imgs?.filter(im => im.r >= r0 && im.r < r1 && p.pg.cols!.includes(im.c))}>{im => {
         const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);

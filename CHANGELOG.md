@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.22 — 2026-11-03
+
+The open Sheets items closed, and a hardening pass.
+
+- **Conditional formatting by date:** Highlight Cells › **A Date Occurring…**: before today (overdue), today, yesterday, tomorrow, last or next 7 days, last, this or next week or month, after today. It goes into exported workbooks as a date rule.
+- **Hide and unhide rows and columns:** right-click, or Rows & Columns › Size.
+  - A double line marks where something is hidden.
+  - Arrow keys step over hidden rows and columns.
+  - Hidden rows and columns don't print, and stay hidden in Excel, both ways.
+- **Fixed, from a hardening pass over Sheets and Excel** (28 new tests):
+  - **Bringing in a workbook:**
+    - a workbook with cells far apart (A1 and the last cell) could stop the app; it is now refused with a message;
+    - text starting with "=" or that looks like a number, date or percentage stays text;
+    - formulas from .ods files work;
+    - pictures saved by spreadsheet programs come in at their real size.
+  - **Sheet names and Save as Excel:**
+    - Save as Excel no longer fails on sheet names that are too long, end in an apostrophe, or are called Tasks or DatumPlan;
+    - names are fitted for the workbook, and formulas that point to them follow;
+    - copies of long sheet names stay within 31 characters.
+  - **Conditional formatting:**
+    - a rule left without a value, or Top/Bottom with 0 or a huge count, no longer breaks the workbook;
+    - text rules with quotes are written correctly;
+    - data bars over very large ranges no longer stop the Sheets view, and now print.
+  - **Inserting or deleting rows** moves the print area, title rows and pictures as well.
+  - **Fill:** filling dates follows the plan's date format (day first or month first) and keeps the cells' look.
+  - **Editing:**
+    - Ctrl+D on one row copies the row above;
+    - Cut and Paste moves merged cells;
+    - Replace treats $ in the new text literally.
+  - **A round trip** keeps the plan's own page setup for sheets that have none of their own.
+
 ## 0.5.21 — 2026-11-03
 
 Conditional formatting, Find and Replace, and more Sheets fixes.

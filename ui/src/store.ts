@@ -1,4 +1,5 @@
 // Window state: the open plan, the current view and its table, filter, group and sort, selection.
+import { order as fillOrder } from "./cells";
 import { createSignal, createEffect, createMemo, createRoot, on, batch, JSX } from "solid-js";
 import { invoke, Out, Grid, Query, Filter, FieldList, Options } from "./api";
 
@@ -15,6 +16,8 @@ export const [themeTick, setThemeTick] = createSignal(0);
 darkMq?.addEventListener("change", () => theme() === "auto" && applyTheme());
 export const setTheme = (t: string) => { setThemeRaw(t); applyTheme(); invoke("set_options", { opts: { ...opts(), theme: t } }).then(o => setOut(o as Out)).catch(() => {}); setOpts({ ...opts(), theme: t }); };
 export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", autosave: 5, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: true, theme: "auto", openLast: false, startView: "gantt", manualDefault: false, weekEnd: 4, monthEnd: 0, paper: "A4", landscape: true });
+// Fill series read 03/04/2026 the way the plan writes dates (day first unless the format starts with the month).
+createRoot(() => createEffect(() => { fillOrder.dayFirst = !opts().dateFmt.startsWith("%m"); }));
 
 export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "simrisk" | "checks" | "lookahead" | "manpower" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
 export const [view, setView] = createSignal<View>("gantt");

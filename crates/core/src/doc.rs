@@ -109,6 +109,15 @@ pub struct Doc {
 }
 
 const UNDO_LIMIT: usize = 200;
+/// The sheets a workbook export adds: no tab may take their names.
+const RESERVED: [&str; 4] = ["plan", "resources", "tasks", "datumplan"];
+/// A tab name a workbook can hold: 1 to 31 characters, none of []:*?/\, no apostrophe at either end.
+fn sheet_name_ok(n: &str) -> Result<(), String> {
+    if n.trim().is_empty() || n.chars().count() > 31 || n.contains(['[', ']', ':', '*', '?', '/', '\\']) || n.starts_with('\'') || n.ends_with('\'') {
+        return Err("A sheet name has 1 to 31 characters, none of : \\ / ? * [ ], and does not start or end with an apostrophe.".into())
+    }
+    Ok(())
+}
 
 impl Doc {
     pub fn new(p: Project) -> Self {
@@ -945,14 +954,16 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
         }
         Op::Sheet { k, sheet } => match (k, sheet) {
             (None, Some(s)) => {
-                if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
+                sheet_name_ok(&s.name)?;
+                if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || RESERVED.contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
                 p.sheets.push(s);
                 p.normalize();
             }
             (Some(k), Some(s)) if k < p.sheets.len() => {
                 let old = p.sheets[k].name.clone();
                 if !old.eq_ignore_ascii_case(&s.name) {
-                    if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
+                    sheet_name_ok(&s.name)?;
+                    if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || RESERVED.contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
                     rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, &s.name, &[]));
                 }
                 // Cells, formats, styles and pictures have their own edits: a change to the tab's layout never
@@ -1007,7 +1018,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             for m in [&mut s.cells, &mut s.fmt, &mut s.style] {
                 *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
             }
-            for im in &mut s.images { if let Some(x) = shift(&im.cell) { im.cell = x } }
+            // A picture whose row (column) goes moves to where the deleted rows (columns) were.
+            let to_at = |a1: &str| gridcraft_core::CellRef::parse(a1).map(|r| if cols { format!("{}{}", crate::sheet::col_name(at), r.row + 1) } else { format!("{}{}", crate::sheet::col_name(r.col), at + 1) });
+            for im in &mut s.images { if let Some(x) = shift(&im.cell).or_else(|| to_at(&im.cell)) { im.cell = x } }
             // A merge moves with its cells and shrinks when some of its rows (columns) go; it goes when one cell is left.
             let edge = |x: u32, last: bool| if x < at { Some(x) } else if count > 0 { Some(x.saturating_add(n)) } else if x >= at.saturating_add(n) { Some(x - n) } else if last { at.checked_sub(1) } else { Some(at) };
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| {
@@ -1024,7 +1037,18 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };
                 (r1 >= r0 && c1 >= c0).then(|| { c.range = format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1); c })
             }).collect();
-            if let Some(pg) = &mut s.page { if !cols { pg.breaks = pg.breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); } }
+            if let Some(pg) = &mut s.page {
+                if !cols { pg.breaks = pg.breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); }
+                // The print area and the title rows follow their cells too (they go when all their cells go).
+                pg.area = crate::model::sheet_range(&pg.area).and_then(|(r0, c0, r1, c1)| {
+                    let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };
+                    (r1 >= r0 && c1 >= c0).then(|| format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1))
+                }).unwrap_or_default();
+                if !cols {
+                    let t = pg.titles.split_once(':').unwrap_or((&pg.titles, &pg.titles));
+                    pg.titles = (|| { let (a, b) = (t.0.trim().parse::<u32>().ok()?.checked_sub(1)?, t.1.trim().parse::<u32>().ok()?.checked_sub(1)?); let (a, b) = (edge(a, false)?, edge(b, true)?); (b >= a).then(|| format!("{}:{}", a + 1, b + 1)) })().unwrap_or_default();
+                }
+            }
             if !cols {
                 s.heights = std::mem::take(&mut s.heights).into_iter().filter_map(|(r, h)| if r < at { Some((r, h)) } else if count > 0 { Some((r.saturating_add(n), h)) } else if r < at.saturating_add(n) { None } else { Some((r - n, h)) }).collect();
             }
@@ -1092,12 +1116,14 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }
             let mut renamed = std::collections::HashMap::new();
             for s in &mut sheets {
-                let base: String = s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(28).collect::<String>().trim().to_string();
+                let base: String = s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).collect::<String>().trim().trim_matches('\'').to_string();
                 let base = if base.is_empty() { "Sheet".to_string() } else { base };
-                let taken = |n: &str, p: &Project| p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(n)) || ["plan", "resources"].contains(&n.to_lowercase().as_str());
-                let mut name = base.clone();
+                let taken = |n: &str, p: &Project| p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(n)) || RESERVED.contains(&n.to_lowercase().as_str());
+                // At most 31 characters with the " (2)" that makes it free.
+                let fit = |tail: String| base.chars().take(31 - tail.len()).collect::<String>().trim_end().trim_end_matches('\'').to_string() + &tail;
+                let mut name = fit(String::new());
                 let mut k = 2;
-                while taken(&name, p) { name = format!("{base} ({k})"); k += 1; }
+                while taken(&name, p) { name = fit(format!(" ({k})")); k += 1; }
                 renamed.insert(s.name.clone(), name.clone());
                 s.name = name;
                 s.images.retain_mut(|im| ids.get(&im.pic).map(|n| im.pic = *n).is_some());

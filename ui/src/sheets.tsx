@@ -250,7 +250,7 @@ export const Sheets = () => {
       case "Backspace": e.preventDefault(); { const g = S.last(); return g.r0 === g.r1 && g.c0 === g.c1 && S.ranges().length === 1 ? startEdit("", cur()[0], cur()[1], true) : clear(); }
     }
     if (ctrl && e.altKey && e.key.toLowerCase() === "v") { e.preventDefault(); return import("./dialogs").then(d => d.pasteSpecial()); }
-    if (ctrl && e.key.toLowerCase() === "d" && range()[0] === range()[2] && range()[0] > 0) { e.preventDefault(); const [r0, c0, , c1] = range(); setCur([r0 - 1, c0]); setEnd([r0, c1]); fillRange(r0, c1, true); return; }
+    if (ctrl && e.key.toLowerCase() === "d" && range()[0] === range()[2] && range()[0] > 0) { e.preventDefault(); const [r0, c0, , c1] = range(); setCur([r0 - 1, c0]); setEnd([r0 - 1, c1]); fillRange(r0, c1, true); return; }
     if (ctrl && e.key.toLowerCase() === "d") { e.preventDefault(); const [a, , c2] = range(); if (c2 > a) { const [r0, c0, , c1] = range(); setCur([r0, c0]); setEnd([r0, c1]); fillRange(c2, c1, true); } return; }
     if (ctrl && e.key.toLowerCase() === "r") { e.preventDefault(); const [, b, , d] = range(); if (d > b) { const [r0, c0, r1] = range(); setCur([r0, c0]); setEnd([r1, c0]); fillRange(r1, d, true); } return; }
     if (ctrl && ["b", "i", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return F.toggle(e.key.toLowerCase() as "b"); }
@@ -310,7 +310,8 @@ export const Sheets = () => {
       // Merged cells inside the copy are merged where they land (not when transposed).
       if (!tr && !one && src.merges.length) {
         const add = src.merges.map(m => ({ r0: r0 + m.r0, c0: c0 + m.c0, r1: r0 + m.r1, c1: c0 + m.c1 }));
-        const keep = merges().filter(m => !add.some(x => m.r0 <= x.r1 && x.r0 <= m.r1 && m.c0 <= x.c1 && x.c0 <= m.c1)).map(m => `${a1(m.r0, m.c0)}:${a1(m.r1, m.c1)}`);
+        const inSrc = (m: { r0: number; c0: number; r1: number; c1: number }) => cutting && src.k === k() && m.r0 >= src.r0 && m.c0 >= src.c0 && m.r1 < src.r0 + src.inputs.length && m.c1 < src.c0 + (src.inputs[0]?.length ?? 0);
+        const keep = merges().filter(m => !inSrc(m) && !add.some(x => m.r0 <= x.r1 && x.r0 <= m.r1 && m.c0 <= x.c1 && x.c0 <= m.c1)).map(m => `${a1(m.r0, m.c0)}:${a1(m.r1, m.c1)}`);
         ops.unshift({ Sheet: { k: k(), sheet: { ...sheet(), merges: [...keep, ...add.map(m => `${a1(m.r0, m.c0)}:${a1(m.r1, m.c1)}`)] } } });
       }
     }
@@ -688,7 +689,9 @@ export const Sheets = () => {
     return <Dialog title="Move or Copy" okText="OK" ok={async () => {
       const n = P().sheets.length, dest = Math.min(to(), n);
       if (copy()) {
-        let name = `${P().sheets[i].name} (2)`, j = 2; while (P().sheets.some(x => x.name.toLowerCase() === name.toLowerCase())) name = `${P().sheets[i].name} (${++j})`;
+        // A copy's name stays within 31 characters, so it fits a workbook.
+        const named = (j: number) => { const t = ` (${j})`; return P().sheets[i].name.slice(0, 31 - t.length).trimEnd() + t; };
+        let j = 2, name = named(j); while (P().sheets.some(x => x.name.toLowerCase() === name.toLowerCase())) name = named(++j);
         await act({ Sheet: { k: null, sheet: { ...JSON.parse(JSON.stringify(P().sheets[i])), name } } });
         if (dest < n) await act({ SheetMove: { from: n, to: dest } });
         setK(dest);
@@ -740,7 +743,7 @@ export const Sheets = () => {
       const after = list.find(([[r, c]]) => r > r0 || (r === r0 && c > c0)) ?? list[0];
       go(after[0][0], after[0][1]); setNote(`${list.length} cell${list.length > 1 ? "s" : ""} found.`);
     };
-    const swap = (t: string) => { const re = new RegExp(q().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), mc() ? "g" : "gi"); return whole() ? w() : t.replace(re, w()); };
+    const swap = (t: string) => { const re = new RegExp(q().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), mc() ? "g" : "gi"); return whole() ? w() : t.replace(re, () => w()); };
     const replaceOne = () => { const t = input(k(), ...cur()); if (t && hit(t)) put([[a1(...cur()), swap(t)]]); next(); };
     const replaceAll = () => { const list: [string, string][] = Object.entries(sheet().cells).filter(([, t]) => hit(t)).map(([a, t]) => [a, swap(t)]); put(list); setNote(`Replaced in ${list.length} cell${list.length === 1 ? "" : "s"}.`); };
     return <Dialog title={replace ? "Find and Replace" : "Find"} help="sheetediting">

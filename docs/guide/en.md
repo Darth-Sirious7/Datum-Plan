@@ -366,7 +366,7 @@ When you open **Sheets**, the ribbon shows **Sheet Tools** with two tabs; it goe
 - **Lines:** **Borders**, each choice drawn beside its name, with line colour and style; **All Borders**, **Outside** and **No Border** at one click.
 - **Number:** the number format list, currency, percent, comma style and decimals.
 - **Look:** four quick cell styles, and the arrow opens the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
-- **Rows & Columns:** insert or delete rows, columns and sheets; **Size** for row height, column width, AutoFit and the tab.
+- **Rows & Columns:** insert or delete rows, columns and sheets; **Size** for row height, column width, AutoFit, **Hide** and **Unhide** rows or columns, and the tab. Right-click the cells to hide or unhide them too; a double line marks where rows or columns are hidden. Hidden rows and columns don't print, and stay hidden in an exported workbook.
 - **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function and Plan Data.
 - **Data:** AutoSum, Fill, Clear and Sort A to Z or Z to A (formulas move with their rows, empty cells go last).
 
@@ -387,7 +387,7 @@ Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+E
 
 Select the cells, then Sheet Tools › Cells › Look › **Conditional**:
 
-- **Highlight Cells:** greater than, less than, between, equal to, text that contains, blank cells, duplicate values;
+- **Highlight Cells:** greater than, less than, between, equal to, text that contains, a date occurring (before today, today, this week, in the next 7 days, this month and more), blank cells, duplicate values;
 - **Top and Bottom:** top 10, bottom 10, above or below average;
 - **Data Bars** in six colours, and **Colour Scales** (green to red, red to green, white to green and more).
 

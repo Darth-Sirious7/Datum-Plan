@@ -94,7 +94,7 @@ fn cell(d: &Data) -> String {
 const MAX_CELLS: u64 = 10_000_000;
 
 /// Measures every sheet of an .xls or .ods file without building it, and refuses absurd sizes.
-fn sheet_size(path: &Path, ext: &str) -> Result<(), String> {
+pub(super) fn sheet_size(path: &Path, ext: &str) -> Result<(), String> {
     use std::io::Read;
     let bad = |e: &dyn std::fmt::Display| format!("Could not read the workbook: {e}");
     let too_big = || Err::<(), String>("This sheet spans more than 1,048,576 rows, 1,024 columns or 10 million cells. Copy the plan's rows to a new sheet, save it as .xlsx or .csv and import that.".into());
@@ -416,9 +416,12 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     // results, number formats, styles, merges, sizes, frozen panes, tab colours, page setup, pictures.
     let book = crate::sheet::book(c);
     let mut meta = serde_json::Map::new();
+    let names = xl_names(&c.p.sheets, !sheets_only);
+    // Formulas follow a tab whose name had to change in the workbook.
+    let renamed: Vec<(&str, &str)> = c.p.sheets.iter().zip(&names).filter(|(s, n)| s.name != **n).map(|(s, n)| (s.name.as_str(), n.as_str())).collect();
     for (k, s) in c.p.sheets.iter().enumerate() {
         let ws = wb.add_worksheet();
-        ws.set_name(s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).take(31).collect::<String>()).map_err(e)?;
+        ws.set_name(&names[k]).map_err(e)?;
         let sh = book.sheet(k + crate::sheet::BUILT_IN);
         let mut flags: Vec<String> = vec![];
         // Merged ranges first; the top-left cell's value is written over it below.
@@ -438,6 +441,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             let typed = if fm.is_empty() && !dated && !input.starts_with('=') { gridcraft_core::parse::parse_input(input, gridcraft_core::DateSystem::default()).format.filter(|f| *f != "General").map(str::to_string) } else { None };
             if let Some(code) = typed.or_else(|| xl_numfmt(c, fm, dated)) { f = f.set_num_format(code); }
             if input.starts_with('=') {
+                let input = renamed.iter().fold(input.clone(), |f, (o, n)| crate::sheet::rename(&f, o, n, &[]));
                 let res = match &v { gridcraft_core::Value::Number(n) => n.to_string(), gridcraft_core::Value::Bool(b) => (if *b { "TRUE" } else { "FALSE" }).into(), x => x.display() };
                 ws.write_formula_with_format(r, col, rust_xlsxwriter::Formula::new(input.as_str()).set_result(res), &f).map_err(e)?;
             } else if fm == "flag" || fm == "@" {
@@ -447,7 +451,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
                 match v {
                     gridcraft_core::Value::Number(n) => { ws.write_number_with_format(r, col, n, &f).map_err(e)?; }
                     gridcraft_core::Value::Bool(b) => { ws.write_boolean_with_format(r, col, b, &f).map_err(e)?; }
-                    _ => { ws.write_string_with_format(r, col, input, &f).map_err(e)?; }
+                    _ => { ws.write_string_with_format(r, col, input.strip_prefix('\'').unwrap_or(input), &f).map_err(e)?; }
                 }
             }
         }
@@ -464,6 +468,9 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             // Numbers as numbers; anything else as text (the workbook quotes it).
             let v = |x: &str| -> rust_xlsxwriter::ConditionalFormatValue { match x.trim().parse::<f64>() { Ok(n) => n.into(), Err(_) => x.trim().into() } };
             let col = |x: &str| u32::from_str_radix(x.trim_start_matches('#'), 16).unwrap_or(0x63BE7B);
+            // A value rule with no value is no rule (the file would need repair).
+            let cell_rule = matches!(cf.op.as_str(), "gt" | "ge" | "lt" | "le" | "eq" | "ne" | "between" | "notbetween");
+            if cell_rule && (cf.a.trim().is_empty() || cf.op.ends_with("between") && cf.b.trim().is_empty()) { continue }
             let r = match cf.op.as_str() {
                 "gt" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::GreaterThan(v(&cf.a))).set_format(fm)),
                 "ge" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::GreaterThanOrEqualTo(v(&cf.a))).set_format(fm)),
@@ -481,8 +488,8 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
                 "notblank" => ws.add_conditional_format(r0, c0, r1, c1, &Bl::new().invert().set_format(fm)),
                 "dup" => ws.add_conditional_format(r0, c0, r1, c1, &Du::new().set_format(fm)),
                 "unique" => ws.add_conditional_format(r0, c0, r1, c1, &Du::new().invert().set_format(fm)),
-                "top" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Top(cf.a.trim().parse().unwrap_or(10))).set_format(fm)),
-                "bottom" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Bottom(cf.a.trim().parse().unwrap_or(10))).set_format(fm)),
+                "top" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Top(top_n(&cf.a))).set_format(fm)),
+                "bottom" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Bottom(top_n(&cf.a))).set_format(fm)),
                 "above" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::AboveAverage).set_format(fm)),
                 "below" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::BelowAverage).set_format(fm)),
                 "date" => {
@@ -508,9 +515,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         for r in &s.hide_rows { ws.set_row_hidden(*r).map_err(e)?; }
         for c2 in &s.hide_cols { if *c2 < 16_384 { ws.set_column_hidden(*c2 as u16).map_err(e)?; } }
         let fits: Vec<&str> = s.images.iter().filter(|i| i.fit).map(|i| i.cell.as_str()).collect();
-        if !flags.is_empty() || !fits.is_empty() || !s.cond.is_empty() || s.page.as_ref().is_some_and(|p| p.no_hf) {
-            meta.insert(s.name.clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf) }));
-        }
+        meta.insert(names[k].clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf), "page": s.page.is_some() }));
         // The sheet's page setup.
         if let Some(pg) = &s.page {
             let paper = match pg.paper.as_str() { "Letter" => 1, "Legal" => 5, "A3" => 8, "A5" => 11, "Tabloid" => 3, "A4" => 9, _ => 0 };
@@ -572,13 +577,28 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     if !meta.is_empty() {
         let ws = wb.add_worksheet();
         ws.set_name(super::sheetbook::META_SHEET).map_err(e)?;
-        ws.write_string(0, 0, serde_json::json!({ "format": 1, "sheets": meta }).to_string()).map_err(e)?;
+        ws.write_string(0, 0, serde_json::json!({ "format": 1, "tabs": names, "sheets": meta }).to_string()).map_err(e)?;
         ws.write_string(1, 0, "Datum Plan keeps here what only it shows (country flags, pictures placed in cells), so the workbook opens in Datum Plan as it was.").map_err(e)?;
         ws.set_hidden(true);
     }
     if sheets_only && c.p.sheets.is_empty() { return Err("This plan has no sheets to save.".into()) }
     wb.save(path).map_err(|x| format!("Could not save {}: {x}", path.display()))
 }
+
+/// The names the tabs get in a workbook: as a workbook allows them (31 characters, none of []:*?/\\,
+/// no apostrophe at either end), unique, and not the name of a sheet the export adds.
+fn xl_names(sheets: &[crate::model::SheetData], full: bool) -> Vec<String> {
+    let mut taken: Vec<String> = ["plan", "resources", "datumplan"].into_iter().chain(full.then_some("tasks")).map(String::from).collect();
+    sheets.iter().map(|s| {
+        let base = s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).collect::<String>().trim().trim_matches('\'').to_string();
+        let base = if base.is_empty() { "Sheet".to_string() } else { base };
+        (1..).map(|k| { let tail = if k == 1 { String::new() } else { format!(" ({k})") }; base.chars().take(31 - tail.len()).collect::<String>().trim_end_matches('\'').to_string() + &tail })
+            .find(|n| !taken.contains(&n.to_lowercase())).inspect(|n| taken.push(n.to_lowercase())).unwrap_or_default()
+    }).collect()
+}
+
+/// How many items a top or bottom rule takes, as the window reads it (1 to 1000).
+fn top_n(a: &str) -> u16 { a.trim().parse::<f64>().ok().filter(|n| *n >= 1.0).map_or(10, |n| n.round().min(1000.0) as u16) }
 
 /// "B12" → (row 11, column 1), 0-based.
 fn a1_index(a1: &str) -> Option<(u32, u16)> {

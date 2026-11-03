@@ -38,7 +38,8 @@ export const condLooks = (sh: SheetData | undefined, cells: Map<string, Cell>): 
     for (let r = b.r0; r <= Math.min(b.r1, b.r0 + 5000); r++) for (let c = b.c0; c <= Math.min(b.c1, b.c0 + 200); c++) ids.push(`${name(c)}${r + 1}`);
     const num = (id: string) => cells.get(id)?.[4] ?? null, txt = (id: string) => cells.get(id)?.[2] ?? "";
     const nums = ids.map(num).filter((x): x is number => x !== null);
-    const lo = Math.min(...nums), hi = Math.max(...nums), avg = nums.reduce((a, x) => a + x, 0) / Math.max(1, nums.length);
+    let lo = Infinity, hi = -Infinity; for (const x of nums) { if (x < lo) lo = x; if (x > hi) hi = x; }
+    const avg = nums.reduce((a, x) => a + x, 0) / Math.max(1, nums.length);
     const sorted = [...nums].sort((x, y) => y - x), n = Math.max(1, Math.round(+rule.a || 10));
     const counts = new Map<string, number>(); ids.forEach(id => { const t = txt(id).toLowerCase(); if (t) counts.set(t, (counts.get(t) ?? 0) + 1); });
     const a = rule.a.trim(), bb = rule.b.trim(), an = a === "" ? NaN : +a, bn = bb === "" ? NaN : +bb;
