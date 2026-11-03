@@ -101,6 +101,7 @@ export const HELP: Record<string, Topic> = {
     how: ["Type = and click or drag over cells to add them to the formula; F4 adds $ anchors. Tab inserts a suggested function or name.",
       "Read the plan by name: Tasks[Finish], Tasks[% Complete] (0–100), Resources[Country], ProjectFinish, PercentComplete, SPI, TasksLate…",
       "Plan Data… puts a live list of tasks or resources (milestones, late, critical, the next four weeks) at the selected cell.",
+      "From the plan: one click puts Project facts (start, finish, % complete, SPI…), Milestones, Critical, Late, Next 4 weeks, In progress or Resources at the selected cell; Task value… puts one value of one task. All of them stay live.",
       "Σ AutoSum adds up the numbers above (Alt+=). Right-click to insert or delete rows and columns; formulas follow.",
       "The Country with flag format shows a country's flag: type a code (DE) or a name (Germany)."],
     tip: "File › Export to Excel keeps the formulas and adds the Tasks and Resources tables, so the workbook works in other spreadsheet programs too." },

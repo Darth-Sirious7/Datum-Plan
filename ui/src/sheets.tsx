@@ -13,7 +13,8 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
-import { askText, askYes, Dialog } from "./ui";
+import { askText, askYes, Dialog, Row } from "./ui";
+import { colorPalette } from "./colors";
 import { openDialog } from "./store";
 
 const RH = 22, CW = 96, HW = 46;
@@ -278,7 +279,8 @@ export const Sheets = () => {
     const t = edit()!, at = caret(), ins = `${name}(`;
     setText(t.slice(0, at) + ins + t.slice(at), at + ins.length);
   }));
-  const planData = () => import("./sheetdlg").then(d => d.planDataDialog(cat(), x => {
+  /** Writes a Plan Data list at the cursor: bold headings, one live formula, formats down the columns. */
+  const putList = (x: { formula: string; heads: string[]; fmt: string[] }) => {
     const [r, c] = cur();
     const n = Math.max(grid().rows.length, P().resources.length) + 20;
     const cellsOut: [string, string][] = x.heads.map((hd, j) => [a1(r, c + j), hd]);
@@ -289,7 +291,44 @@ export const Sheets = () => {
     const nameCol = x.heads.indexOf("Name");
     if (nameCol >= 0 && width(c + nameCol) < 220) ops.unshift({ Sheet: { k: k(), sheet: { ...sheet(), widths: { ...(sheet().widths ?? {}), [c + nameCol]: 240 } } } });
     act({ Batch: ops });
-  }));
+  };
+  const planData = () => import("./sheetdlg").then(d => d.planDataDialog(cat(), putList));
+  /** One click from the plan: a ready-made live list at the selected cell. */
+  const quickList = (table: "Tasks" | "Resources", rows: string, cols: string[], sortBy = "") => import("./sheetdlg").then(d => {
+    const all = (table === "Tasks" ? cat()?.tasks : cat()?.resources) ?? [];
+    putList(d.planData(table, all, cols.filter(x => all.includes(x)), rows, sortBy, false, 0));
+  });
+  /** The project's key figures, each a live name (ProjectFinish, SPI…), with labels. */
+  const projectFacts = () => {
+    const [r, c] = cur();
+    const facts: [string, string][] = [["Project", "=ProjectName"], ["Start", "=ProjectStart"], ["Finish", "=ProjectFinish"], ["Status date", "=StatusDate"], ["Baseline finish", "=BaselineFinish"], ["Finish variance (days)", "=FinishVariance"],
+      ["% complete", "=PercentComplete"], ["Planned % complete", "=PlannedPercent"], ["SPI", "=SPI"], ["CPI", "=CPI"], ["Tasks", "=TaskCount"], ["Tasks done", "=TasksDone"], ["Late tasks", "=TasksLate"], ["Critical tasks", "=CriticalCount"], ["Milestones", "=MilestoneCount"]];
+    const ops: unknown[] = [{ SheetCells: { k: k(), cells: facts.flatMap(([l, f], i) => [[a1(r + i, c), l], [a1(r + i, c + 1), f]]), fmt: null } }, { SheetStyle: { k: k(), cells: facts.map((_, i) => [a1(r + i, c), "b"]) } }];
+    if (width(c) < 170) ops.unshift({ Sheet: { k: k(), sheet: { ...sheet(), widths: { ...(sheet().widths ?? {}), [c]: 180 } } } });
+    act({ Batch: ops });
+  };
+  /** One value of one task (its finish, % complete…), live: =XLOOKUP(its Unique ID, Tasks[Unique ID], Tasks[field]). */
+  const taskValue = () => openDialog(() => {
+    const tasks = grid().rows.filter(x => x.uid > 0 && (x.kind === "task" || x.kind === "summary") && !x.sub), fields = () => (cat()?.tasks ?? []).filter(f => f !== "Unique ID");
+    const [uid, setUid] = createSignal(tasks[0]?.uid ?? 0), [field, setField] = createSignal("Finish"), [label, setLabel] = createSignal(true), [q, setQ] = createSignal("");
+    const shown = () => tasks.filter(x => !q() || x.name.toLowerCase().includes(q().toLowerCase())).slice(0, 400);
+    return <Dialog title="Task Value" okText="Insert" ok={async () => {
+      const t = tasks.find(x => x.uid === uid()); if (!t) return false;
+      const [r, c] = cur(), d = await import("./sheetdlg"), fm = d.planData("Tasks", cat()?.tasks ?? [], [field()], "all", "", false, 0).fmt[0];
+      const at = label() ? c + 1 : c, f = `=XLOOKUP(${t.uid},Tasks[Unique ID],Tasks[${field()}])`;
+      const ops: unknown[] = [{ SheetCells: { k: k(), cells: [...(label() ? [[a1(r, c), `${t.name} – ${field()}`] as [string, string]] : []), [a1(r, at), f]], fmt: null } }];
+      if (fm) ops.push({ SheetCells: { k: k(), cells: [[a1(r, at), ""]], fmt: fm } });
+      act({ Batch: ops });
+    }}>
+      <p class="muted">Puts one value of a task in the selected cell. It stays live: when the plan changes, so does the cell.</p>
+      <div class="form">
+        <Row label="Find"><input placeholder="Type part of the task's name" value={q()} onInput={e => setQ(e.currentTarget.value)} /></Row>
+        <Row label="Task"><select size="8" class="tasklist" onChange={e => setUid(+e.currentTarget.value)}><For each={shown()}>{t => <option value={t.uid} selected={t.uid === uid()}>{"\u00a0".repeat(t.lvl * 3)}{t.id}. {t.name}</option>}</For></select></Row>
+        <Row label="Value"><select onChange={e => setField(e.currentTarget.value)}><For each={fields()}>{f => <option selected={f === field()}>{f}</option>}</For></select></Row>
+        <Row label=""><label class="chk"><input type="checkbox" checked={label()} onChange={e => setLabel(e.currentTarget.checked)} />Put the task's name in the cell to the left</label></Row>
+      </div>
+    </Dialog>;
+  });
   /** Inserts (or deletes) as many whole rows as the selection is tall, or columns when whole columns are selected. */
   const insertCells = (del: boolean, cols?: boolean) => {
     const g = S.last(), wholeCols = g.r0 === 0 && g.r1 >= nrows() - 1;
@@ -307,6 +346,9 @@ export const Sheets = () => {
   // ---------- Home tab commands ----------
   const bounds = () => { const g = S.last(); return { r0: Math.min(g.r0, g.r1), c0: Math.min(g.c0, g.c1), r1: Math.max(g.r0, g.r1), c1: Math.max(g.c0, g.c1) }; };
   const [pen, setPen] = createSignal<[string, string]>(["thin", "#000000"]);
+  let lastClick: MouseEvent | undefined;
+  const trackClick = (e: MouseEvent) => { lastClick = e; };
+  addEventListener("mousedown", trackClick, true); onCleanup(() => removeEventListener("mousedown", trackClick, true));
   /** Borders on the selection, as a spreadsheet draws them (inner lines once, not twice). */
   const border = (kind: string) => {
     const b = bounds(), [kd, col] = pen(), ln = (k = kd) => `${k} ${col}`;
@@ -326,12 +368,13 @@ export const Sheets = () => {
       return o;
     });
   };
+  const BI = (label: string, kind: string): Item => ({ label, icon: `bd-${kind}`, run: () => border(kind) });
   const borderItems = (): Item[] => [
-    { label: "Bottom Border", run: () => border("bottom") }, { label: "Top Border", run: () => border("top") }, { label: "Left Border", run: () => border("left") }, { label: "Right Border", run: () => border("right") }, "-",
-    { label: "No Border", run: () => border("none") }, { label: "All Borders", run: () => border("all") }, { label: "Outside Borders", run: () => border("outside") }, { label: "Thick Outside Borders", run: () => border("thickbox") }, "-",
-    { label: "Bottom Double Border", run: () => border("dblbottom") }, { label: "Thick Bottom Border", run: () => border("thickbottom") }, { label: "Top and Bottom Border", run: () => border("topbottom") }, { label: "Top and Thick Bottom Border", run: () => border("topthickbottom") }, "-",
-    { label: "Line Color", sub: [...STD_COLORS.map(c => ({ label: c, swatch: c, on: pen()[1] === c, run: () => setPen([pen()[0], c]) })), { label: "More Colors…", run: () => { const i = document.createElement("input"); i.type = "color"; i.value = pen()[1]; i.onchange = () => setPen([pen()[0], i.value]); i.click(); } }] },
-    { label: "Line Style", sub: ([["Thin", "thin"], ["Medium", "med"], ["Thick", "thick"], ["Double", "dbl"], ["Dashed", "dash"], ["Dotted", "dot"]] as [string, string][]).map(([l, k2]) => ({ label: l, on: pen()[0] === k2, run: () => setPen([k2, pen()[1]]) })) },
+    BI("Bottom Border", "bottom"), BI("Top Border", "top"), BI("Left Border", "left"), BI("Right Border", "right"), "-",
+    BI("No Border", "none"), BI("All Borders", "all"), BI("Outside Borders", "outside"), BI("Thick Outside Borders", "thickbox"), "-",
+    BI("Bottom Double Border", "dblbottom"), BI("Thick Bottom Border", "thickbottom"), BI("Top and Bottom Border", "topbottom"), BI("Top and Thick Bottom Border", "topthickbottom"), "-",
+    { label: "Line Color…", icon: "palette", swatch: pen()[1], run: () => colorPalette(lastClick ?? new MouseEvent("click", { clientX: 400, clientY: 160 }), pen()[1], c => setPen([pen()[0], c || "#000000"]), "Automatic") },
+    { label: "Line Style", sub: ([["Thin", "thin"], ["Medium", "med"], ["Thick", "thick"], ["Double", "dbl"], ["Dashed", "dash"], ["Dotted", "dot"]] as [string, string][]).map(([l, k2]) => ({ label: l, icon: `ls-${k2}`, on: pen()[0] === k2, run: () => setPen([k2, pen()[1]]) })) },
   ];
   const saveMerges = (list: string[], extra: unknown[] = []) => act({ Batch: [{ Sheet: { k: k(), sheet: { ...sheet(), merges: list } } }, ...extra] });
   const overlaps = (b: { r0: number; c0: number; r1: number; c1: number }) => (m: { r0: number; c0: number; r1: number; c1: number }) => m.r0 <= b.r1 && b.r0 <= m.r1 && m.c0 <= b.c1 && b.c0 <= m.c1;
@@ -510,8 +553,7 @@ export const Sheets = () => {
       { label: "Rename", run: () => setRenaming(i) },
       { label: "Move or Copy…", run: () => moveCopy(i) },
       "-",
-      { label: "Tab Color", sub: [{ label: "No Color", on: !P().sheets[i].color, run: () => tabColor(i, "") }, ...STD_COLORS.map(c => ({ label: c, swatch: c, on: P().sheets[i].color === c, run: () => tabColor(i, c) })),
-        { label: "More Colors…", run: () => { const el2 = document.createElement("input"); el2.type = "color"; el2.value = P().sheets[i].color || "#0B5CAD"; el2.onchange = () => tabColor(i, el2.value); el2.click(); } }] },
+      { label: "Tab Color…", icon: "palette", swatch: P().sheets[i].color || undefined, run: () => colorPalette(e, P().sheets[i].color, c => tabColor(i, c), "No Color") },
       "-",
       { label: "Hide", off: P().sheets.filter(x => !x.hidden).length < 2, run: () => { putTab(i, { hidden: true }).then(() => { const v = P().sheets.findIndex(x => !x.hidden); setK(Math.max(0, v)); }); } },
       { label: "Unhide", off: !hidden.length, sub: hidden.length ? hidden.map(([j, x]) => ({ label: x.name, run: () => putTab(j, { hidden: false }).then(() => setK(j)) })) : undefined },
@@ -580,13 +622,20 @@ export const Sheets = () => {
     <section class="ganttview">
       <CountryList />
       <div class="ptools sheettools">
-        <b>Sheets</b><Help k="sheets" />
+        <b title="Type = and click cells to build a formula · plan data by name: Tasks[Finish], Resources[Country], ProjectFinish">Sheets</b><Help k="sheets" />
         <button class="btn sm" title="AutoSum (Alt+=): add up the numbers above" onMouseDown={e => e.preventDefault()} onClick={() => autoSum("SUM")}>Σ AutoSum</button>
         <button class="btn sm caret" title="Average, Count, Max, Min" onClick={e => openMenu(e, sumItems())}>▾</button>
         <button class="btn sm" title="Insert Function: find any of the 490 functions" onMouseDown={e => e.preventDefault()} onClick={insertFn}><i class="fxi">fx</i> Function</button>
         <button class="btn sm" title="A live list of tasks or resources: milestones, late tasks, vendors…" onClick={planData}>Plan Data…</button>
-        <span class="grow" />
-        <span class="muted hintline">Type = and click cells · plan data: Tasks[Finish], Resources[Country], ProjectFinish</span>
+        <span class="sep" /><span class="muted fromplan">From the plan:</span>
+        <button class="btn sm" title="The project's key figures with labels: start, finish, status date, % complete, SPI, CPI, counts. They stay live." onClick={projectFacts}>Project facts</button>
+        <button class="btn sm" title="Milestones with their finish dates and % complete, live" onClick={() => quickList("Tasks", "milestones", ["Name", "Finish", "% Complete"])}>Milestones</button>
+        <button class="btn sm" title="Critical tasks with their dates and float, live" onClick={() => quickList("Tasks", "critical", ["Name", "Start", "Finish", "Total Float", "% Complete"])}>Critical</button>
+        <button class="btn sm" title="Late tasks with their finish and % complete, live" onClick={() => quickList("Tasks", "late", ["Name", "Finish", "% Complete"])}>Late</button>
+        <button class="btn sm" title="Tasks starting in the next four weeks, live" onClick={() => quickList("Tasks", "next", ["Name", "Start", "Finish", "Resources"], "Start")}>Next 4 weeks</button>
+        <button class="btn sm" title="Tasks in progress with their % complete, live" onClick={() => quickList("Tasks", "now", ["Name", "Start", "Finish", "% Complete"])}>In progress</button>
+        <button class="btn sm" title="The resources (people, vendors) with their group and country, live" onClick={() => quickList("Resources", "", ["Name", "Group", "Country", "Work"])}>Resources</button>
+        <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><button class="btn pri" style={{ width: "fit-content" }} onClick={addSheet}>Add a sheet</button></div>}>
         <div class="fbar"><span class="fname">{home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : a1(...cur())}</span><Show when={aggregate(S, (r, c) => cells().get(a1(r, c))?.[2] ?? "")}>{t => <span class="agg">{t()}</span>}</Show>

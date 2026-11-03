@@ -66,8 +66,8 @@ kbd { font: 10.5px "Segoe UI", sans-serif; color: var(--muted); border: 1px soli
 .rb.big svg { width: 30px; height: 30px; }
 .rb:hover:not(:disabled) { background: var(--pale); border-color: var(--sel2); }
 .rb.on { background: var(--sel); border-color: var(--sel2); }
-.rb.split { height: auto; padding: 0 3px; font-size: 10px; justify-content: center; min-width: 0; }
-.rbw:not(.big) .rb.split { height: 22px; }
+.rb.sarr { height: auto; padding: 0 3px; font-size: 10px; justify-content: center; min-width: 0; }
+.rbw:not(.big) .rb.sarr { height: 22px; }
 .rb .car { font-weight: 400; font-size: 9px; color: var(--muted); }
 .pcts { display: flex; gap: 1px; align-self: flex-start; }
 .pcts .rb { padding: 2px 3px; font-size: 10px; flex-direction: column; gap: 0; height: auto; }
@@ -535,7 +535,7 @@ tr.behind td { background: var(--err-bg); }
 .rb.fb { min-width: 26px; height: 26px; justify-content: center; padding: 0 4px; font-size: 14px; }
 .rb.fb sup { font-size: 9px; }
 .fcol { display: inline-flex; margin-left: 4px; }
-.fcol .rb.split { width: 14px; padding: 0; }
+.fcol .rb.sarr { width: 14px; padding: 0; }
 .ca { position: relative; display: inline-block; padding-bottom: 3px; font-weight: 700; }
 .ca i { position: absolute; left: -3px; right: -3px; bottom: 0; height: 4px; }
 
@@ -899,7 +899,7 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .sheetgrid .rowh { position: sticky; }
 .sheetgrid .rowh.on { background: var(--sel2); color: var(--navy); }
 .rowh .rszr { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: row-resize; z-index: 3; }
-.sheetgrid .mcell { position: absolute; z-index: 1; background: var(--bg); overflow: hidden; border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
+.sheetgrid .mcell { position: absolute; z-index: 1; background: var(--bg2); overflow: hidden; border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
 .sheetgrid .c.sin { box-shadow: inset 0 0 0 9999px rgba(11, 92, 173, .14); }
 .sheetgrid .c > span { overflow: hidden; text-overflow: ellipsis; }
 .sheettabs button { position: relative; }
@@ -910,9 +910,48 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .mclist button.on { background: var(--sel); color: var(--navy); }
 .cstyles { display: grid; grid-template-columns: repeat(3, 88px) 16px; grid-auto-rows: 24px; gap: 3px; align-self: center; }
 .cstyles .cst { border: 1px solid var(--line); font-size: 11px; padding: 0 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #fff; color: #1B2733; }
-.cstyles .split { grid-row: 1 / span 2; grid-column: 4; height: 100%; }
+.cstyles .sarr { grid-row: 1 / span 2; grid-column: 4; height: 100%; }
 .rb.numfmt { min-width: 130px; justify-content: space-between; border: 1px solid var(--line); padding: 2px 6px; font-size: 11.5px; }
 .vsep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
 .menu .tick .swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid #0003; vertical-align: middle; }
 .ctxgrp.sheetctx { border-top-color: #1E8449; }
 .ctxgrp.sheetctx small { color: #1E8449; }
+/* 0.5.18: split buttons as one button, menu pictures, colour palette and Colors dialog */
+.rbw.sp { border: 1px solid transparent; border-radius: 3px; }
+.rbw.sp:hover { border-color: var(--sel2); }
+.rbw.sp .rb { border: 0; border-radius: 0; }
+.rbw.sp .rb.sarr { width: 14px; padding: 0; border-left: 1px solid transparent; }
+.rbw.sp:hover .rb.sarr { border-left-color: var(--sel2); }
+.fcol { border: 1px solid transparent; border-radius: 3px; }
+.fcol:hover { border-color: var(--sel2); }
+.fcol .rb { border: 0; border-radius: 0; }
+.rb:focus { outline: none; }
+.rb:focus-visible { outline: 1px solid var(--blue); outline-offset: -1px; }
+.menu .tick { width: 18px; position: relative; }
+.menu .tick svg { width: 16px; height: 16px; vertical-align: middle; color: var(--ink); }
+.menu button.on .tick svg { color: var(--blue); }
+.menu .tick .swatch.under { position: absolute; left: 1px; right: 1px; bottom: -2px; width: auto; height: 4px; border: 0; }
+.cpov { position: fixed; inset: 0; z-index: 60; }
+.cpop { position: fixed; background: var(--bg2); border: 1px solid var(--line3); box-shadow: 0 6px 20px #0002; padding: 6px 8px 8px; width: 212px; display: flex; flex-direction: column; gap: 4px; }
+.cpop small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.cnone, .cmore { display: flex; align-items: center; gap: 8px; padding: 4px 6px; text-align: left; border-radius: 3px; }
+.cnone:hover, .cmore:hover { background: var(--pale); }
+.cnone i { width: 14px; height: 14px; border: 1px solid var(--line3); background: linear-gradient(to top right, transparent 46%, #C00000 48%, #C00000 52%, transparent 54%); }
+.cmore svg { width: 16px; height: 16px; }
+.cgrid { display: grid; grid-template-columns: repeat(10, 16px); gap: 4px; }
+.cgrid.shades { row-gap: 0; }
+.cgrid.wide { margin-top: 10px; gap: 5px; }
+.csw { width: 16px; height: 16px; border: 1px solid #0002; padding: 0; }
+.csw:hover, .csw.on { outline: 2px solid #E67E22; outline-offset: 0; z-index: 1; position: relative; }
+.mcol { display: flex; gap: 12px; }
+.mcol .sv { position: relative; width: 220px; height: 160px; cursor: crosshair; border: 1px solid var(--line); }
+.mcol .sv i { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #0008; pointer-events: none; }
+.mcol .hue { position: relative; width: 16px; height: 160px; cursor: ns-resize; border: 1px solid var(--line); background: linear-gradient(#f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00); }
+.mcol .hue i { position: absolute; left: -3px; right: -3px; height: 4px; margin-top: -2px; border: 1px solid #000; background: #fff8; pointer-events: none; }
+.mside { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.mside .cmp { display: flex; flex-direction: column; width: 70px; border: 1px solid var(--line); }
+.mside .cmp span { height: 24px; }
+.mside label { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.mside input { width: 70px; }
+.sheettools .fromplan { font-size: 11px; margin: 0 2px 0 4px; }
+.dlg select.tasklist { width: 100%; min-height: 150px; }

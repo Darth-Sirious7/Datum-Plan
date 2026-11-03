@@ -349,7 +349,7 @@ Go through the look-ahead with your team every week: clear what is open, chase w
 
 Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan file. It works like any spreadsheet and reads the plan directly, so the numbers you used to copy from the schedule into a separate workbook are always up to date. Add a tab with **+**. Double-click a tab to rename it; right-click it to insert, delete, move or copy it, give it a colour, or hide and unhide it; drag a tab to move it.
 
-1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. The formatting tools are on the ribbon (below).
+1. **The toolbar.** **Σ AutoSum** adds up the numbers above the selected cell ([[Alt+=]]; the arrow offers Average, Count, Max and Min). **fx Function** finds any of the 490 functions by name or by what it does. **Plan Data…** inserts a live list. **From the plan:** one click puts **Project facts** (start, finish, status date, % complete, SPI, CPI and task counts), **Milestones**, **Critical**, **Late**, **Next 4 weeks**, **In progress** or **Resources** at the selected cell, and **Task value…** puts one value of one task (its finish, % complete…). They all stay live. The formatting tools are on the ribbon (below).
 2. **Plan numbers by name.** `=ProjectFinish`, `=BaselineFinish`, `=PercentComplete`, `=SPI` or `=COUNTIF(Tasks[Late],TRUE)`. Dates and percentages are formatted for you.
 3. **A live list from Plan Data….** Choose Tasks or Resources, the columns, which rows (milestones, critical, late, not finished, in progress, starting in the next four weeks), the order and how many. One formula fills the rows and changes with the plan.
 4. **Country flags.** Give cells the **Country with flag** number format and type a code (DE, cn) or a name (Germany, UK). The flag and the country's name are shown.
@@ -359,7 +359,7 @@ Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan 
 When you open **Sheets**, the ribbon shows **Sheet Tools › Home** with the tools of a spreadsheet; it goes back to **Task** when you leave.
 
 - **Clipboard:** Paste (with Paste Special, values, formatting, transpose), Cut, Copy and Format Painter.
-- **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill.
+- **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill. The colour arrows open a palette: theme colours with lighter and darker shades, standard and recent colours, and **More Colors…** for any colour (a colour field, hue bar, hex and RGB).
 - **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells); **Borders** (the arrow: all borders, outside, thick outside, top and bottom, double and thick lines, no border, line colour and line style).
 - **Number:** the number format list, currency, percent, comma style and decimals.
 - **Styles:** cell styles such as Good, Bad, Neutral, Calculation, Check Cell, Title, Headings, Total and Accent.

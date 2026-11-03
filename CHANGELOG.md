@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.18 — 2026-11-03
+
+Sheets: clearer tools, a proper colour chooser, and plan data in one click.
+
+- **Dropdown arrows are part of their button,** as in a spreadsheet. Before, they were drawn like pane dividers: a grey bar with a resize cursor.
+- **Pictures in the menus:** every border choice shows the lines it draws, line styles show their line, and the merge choices have their own icons.
+- **Colour palette:** font colour, fill, border line colour and tab colour open a palette under the button, with:
+  - theme colours with lighter and darker shades;
+  - standard colours;
+  - your recent colours;
+  - **More Colors…**, a small Colors window with a colour field, a hue bar and hex and RGB boxes.
+
+  The system colour box that opened at the top of the screen is gone.
+- **Merged cells keep the sheet's white background** (they turned grey).
+- **From the plan,** on the Sheets toolbar: one click puts a live block at the selected cell.
+  - **Project facts:** start, finish, status date, baseline finish, % complete, planned %, SPI, CPI and the task counts.
+  - **Milestones, Critical, Late, Next 4 weeks, In progress and Resources:** live lists.
+  - **Task value…:** one value of one task, such as its finish or % complete.
+- The guide describes them, in English and Chinese.
+
 ## 0.5.17 — 2026-11-03
 
 Sheets with the tools of a spreadsheet.

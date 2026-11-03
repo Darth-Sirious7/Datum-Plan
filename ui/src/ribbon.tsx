@@ -12,13 +12,10 @@ import { fieldMenu } from "./grid";
 import * as F from "./fmt";
 import { Help, helpCard, HELP } from "./help";
 import { sheetApi, CELL_STYLES } from "./sheets";
+import { colorPalette } from "./colors";
 
 const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
 export const FONTS = ["Aptos", "Calibri", "Arial", "Segoe UI", "Tahoma", "Verdana", "Times New Roman", "Cambria", "Georgia", "Garamond", "Consolas", "IBM Plex Sans"];
-const COLORS: [string, string][] = [["Red", "#C0392B"], ["Orange", "#E67E22"], ["Amber", "#B7950B"], ["Green", "#1E8449"], ["Blue", "#0B5CAD"], ["Dark Blue", "#0C1A2B"], ["Purple", "#7D3C98"], ["Grey", "#7F8C8D"]];
-const FILLS: [string, string][] = [["Yellow", "#FFF2CC"], ["Green", "#E2F0D9"], ["Blue", "#DDEBF7"], ["Red", "#FADBD8"], ["Orange", "#FCE4D6"], ["Purple", "#E8DAEF"], ["Grey", "#EDEDED"]];
-const pickColor = (k: "c" | "f") => { const i = document.createElement("input"); i.type = "color"; i.value = F.current()[k] || (k === "c" ? "#000000" : "#ffffff"); i.onchange = () => F.setProp(k, i.value); i.click(); };
-const colorMenu = (k: "c" | "f"): Item[] => [{ label: k === "c" ? "Automatic" : "No Fill", run: () => F.setProp(k, undefined) }, ...(k === "c" ? COLORS : FILLS).map(([l, v]) => ({ label: l, run: () => F.setProp(k, v), on: F.current()[k] === v })), "-", { label: "More Colors…", run: () => pickColor(k) }];
 /** Spreadsheet-style Font and Alignment controls; they act on the selected cells of the task sheet or a sheet tab. */
 const SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 const Font = (p0: { noAlign?: boolean }) => {
@@ -31,8 +28,8 @@ const Font = (p0: { noAlign?: boolean }) => {
         <select class="fsize" title="Font size" value={String(s().z || 12)} onChange={e => F.setProp("z", +e.currentTarget.value === 12 ? undefined : +e.currentTarget.value)}><For each={SIZES}>{z => <option value={z}>{z}</option>}</For></select>
         <button class="rb fb" title="Increase font size" onClick={() => F.setProp("z", SIZES.find(z => z > (s().z || 12)) ?? 48)}><span>A<sup>+</sup></span></button><button class="rb fb" title="Decrease font size" onClick={() => F.setProp("z", [...SIZES].reverse().find(z => z < (s().z || 12)) ?? 8)}><span>A<sup>−</sup></span></button></div>
       <div><T k="b" l="B" t="Bold (Ctrl+B)" st={{ "font-weight": 700 }} /><T k="i" l="I" t="Italic (Ctrl+I)" st={{ "font-style": "italic" }} /><T k="u" l="U" t="Underline (Ctrl+U)" st={{ "text-decoration": "underline" }} /><T k="s" l="S" t="Strikethrough" st={{ "text-decoration": "line-through" }} />
-        <span class="fcol"><button class="rb fb" title="Font color" onClick={() => F.setProp("c", last()[0])}><span class="ca">A<i style={{ background: last()[0] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("c").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().c; if (v) setLast([v, last()[1]]); } }))}>▾</button></span>
-        <span class="fcol"><button class="rb fb" title="Fill color" onClick={() => F.setProp("f", last()[1])}><span class="ca"><Icon n="bucket" /><i style={{ background: last()[1] }} /></span></button><button class="rb split" onClick={e => openMenu(e, colorMenu("f").map(x => x === "-" || !x.run ? x : { ...x, run: () => { x.run!(); const v = F.current().f; if (v) setLast([last()[0], v]); } }))}>▾</button></span></div>
+        <span class="fcol"><button class="rb fb" title="Font color" onClick={() => F.setProp("c", last()[0])}><span class="ca">A<i style={{ background: last()[0] }} /></span></button><button class="rb sarr" title="Font Color" onClick={e => colorPalette(e, F.current().c, v => { F.setProp("c", v || undefined); if (v) setLast([v, last()[1]]); }, "Automatic")}>▾</button></span>
+        <span class="fcol"><button class="rb fb" title="Fill color" onClick={() => F.setProp("f", last()[1])}><span class="ca"><Icon n="bucket" /><i style={{ background: last()[1] }} /></span></button><button class="rb sarr" title="Fill Color" onClick={e => colorPalette(e, F.current().f, v => { F.setProp("f", v || undefined); if (v) setLast([last()[0], v]); }, "No Fill")}>▾</button></span></div>
     </div></G>
     <Show when={!p0.noAlign}><G l="Alignment" h="alignment"><div class="fontg"><div><A a="" i="al" t="Align left" /><A a="c" i="ac" t="Center" /><A a="r" i="ar" t="Align right" /></div><div><button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div></G></Show>
   </>;
@@ -45,9 +42,9 @@ const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boole
     <button class="rb bot" title={`${p.l} options`} onClick={e => p.dd!(e)}><span>{p.l}</span><b class="car">▾</b></button>
   </div>
 ) : (
-  <div class="rbw" classList={{ big: p.big }}>
+  <div class="rbw" classList={{ big: p.big, sp: !p.big && !!p.run && !!p.dd }}>
     <button class="rb" classList={{ big: p.big, on: p.on }} disabled={p.off} title={p.title ?? p.l} onClick={e => (p.run ?? p.dd)?.(e)}><Icon n={p.i} />{p.big ? <span>{p.l}{p.dd && !p.run ? " ▾" : ""}</span> : <span>{p.l}</span>}{!p.big && p.dd && !p.run && <b class="car">▾</b>}</button>
-    {p.run && p.dd && <button class="rb split" title={`${p.l} options`} onClick={e => p.dd!(e)}>▾</button>}
+    {p.run && p.dd && <button class="rb sarr" title={`${p.l} options`} onClick={e => p.dd!(e)}>▾</button>}
   </div>
 );
 const G = (p: { l: string; h?: string; children: JSX.Element }) => <div class="grp"><div class="items">{p.children}</div><div class="cap">{p.l}{p.h && <Help k={p.h} />}</div></div>;
@@ -158,14 +155,14 @@ const SheetHome = () => {
       <div><AL k="a" v="" i="al" t="Align Left" /><AL k="a" v="c" i="ac" t="Center" /><AL k="a" v="r" i="ar" t="Align Right" /><span class="vsep" />
         <button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div>
       <S><B i="wrap" l="Wrap Text" on={!!s().w} run={() => F.setProp("w", !s().w || undefined)} />
-        <B i="merge" l={A()?.merged() ? "Unmerge Cells" : "Merge & Center"} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", run: () => A()?.merge("center") }, { label: "Merge Across", run: () => A()?.merge("across") }, { label: "Merge Cells", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", run: () => A()?.merge("unmerge") }])} />
-        <B i="border" l="Borders" run={() => A()?.border("bottom")} dd={e => openMenu(e, (A()?.borderItems() ?? []) as Item[])} title="Bottom border (the arrow: all borders, line colour and style)" /></S></G>
+        <B i={A()?.merged() ? "unmerge" : "merge"} l={A()?.merged() ? "Unmerge Cells" : "Merge & Center"} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", icon: "merge", run: () => A()?.merge("center") }, { label: "Merge Across", icon: "mergeacross", run: () => A()?.merge("across") }, { label: "Merge Cells", icon: "merge", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", icon: "unmerge", run: () => A()?.merge("unmerge") }])} />
+        <B i="bd-bottom" l="Borders" run={() => A()?.border("bottom")} dd={e => openMenu(e, (A()?.borderItems() ?? []) as Item[])} title="Bottom border (the arrow: all borders, line colour and style)" /></S></G>
     <G l="Number" h="sheetnumber"><div class="fontg">
       <div><button class="rb numfmt" title="Number format" onClick={e => openMenu(e, (A()?.fmtItems() ?? []) as Item[])}>{(A()?.fmtLabel() as string) ?? "General"} ▾</button></div>
       <div><button class="rb fb" title="Currency" onClick={() => A()?.setFmt("money")}>$</button><button class="rb fb" title="Percent Style (28 → 28%)" onClick={() => A()?.setFmt('0"%"')}>%</button><button class="rb fb" title="Comma Style (1,234.50)" onClick={() => A()?.setFmt("#,##0.00")}>,</button>
         <button class="rb fb" title="Increase Decimal" onClick={() => A()?.moreDecimals(1)}>.0+</button><button class="rb fb" title="Decrease Decimal" onClick={() => A()?.moreDecimals(-1)}>.0−</button></div></div></G>
     <G l="Styles" h="sheetstyles"><div class="cstyles"><For each={CELL_STYLES.slice(0, 6)}>{([l, st]) => <button class="cst" style={F.css(st)} title={`Cell style: ${l}`} onClick={() => A()?.cellStyle(st)}>{l}</button>}</For>
-      <button class="rb split" title="More cell styles" onClick={e => openMenu(e, styles())}>▾</button></div></G>
+      <button class="rb sarr" title="More cell styles" onClick={e => openMenu(e, styles())}>▾</button></div></G>
     <G l="Cells" h="sheetcells"><B big i="task" l="Insert" dd={e => openMenu(e, [{ label: "Insert Sheet Rows", run: () => A()?.insertCells(false, false) }, { label: "Insert Sheet Columns", run: () => A()?.insertCells(false, true) }, { label: "Insert Sheet", run: run("addSheet") }])} />
       <B big i="del" l="Delete" dd={e => openMenu(e, [{ label: "Delete Sheet Rows", run: () => A()?.insertCells(true, false) }, { label: "Delete Sheet Columns", run: () => A()?.insertCells(true, true) }, { label: "Delete Sheet", run: run("del") }])} />
       <B big i="rowh" l="Format" dd={e => openMenu(e, [{ label: "Row Height…", run: run("rowHeight") }, { label: "AutoFit Row Height", run: run("autofitRows") }, { label: "Column Width…", run: run("colWidth") }, { label: "AutoFit Column Width", run: run("autofitCols") }, "-", { label: "Rename Sheet", run: run("rename") }, { label: "Move or Copy Sheet…", run: run("moveCopy") }, { label: "Tab Color, Hide and Unhide", run: run("tabMenu") }])} /></G>
