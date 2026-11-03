@@ -333,6 +333,16 @@ fn styled(mut f: rust_xlsxwriter::Format, st: &str) -> rust_xlsxwriter::Format {
     f
 }
 
+/// A picture placed in its cell: the size that fits inside the cell (or the merged range it starts), keeping its shape.
+fn fit_in_cell(s: &crate::model::SheetData, cell: &str, iw: f64, ih: f64) -> (f64, f64) {
+    let Some((r0, c0, ..)) = crate::model::sheet_range(cell) else { return (iw, ih) };
+    let (r1, c1) = s.merges.iter().filter_map(|m| crate::model::sheet_range(m)).find(|m| m.0 == r0 && m.1 == c0).map_or((r0, c0), |m| (m.2, m.3));
+    let bw: f64 = (c0..=c1).map(|c| *s.widths.get(&c).unwrap_or(&96) as f64).sum::<f64>() - 4.0;
+    let bh: f64 = (r0..=r1).map(|r| *s.heights.get(&r).unwrap_or(&22) as f64).sum::<f64>() - 4.0;
+    let k = (bw / iw).min(bh / ih).max(0.01);
+    (iw * k, ih * k)
+}
+
 /// The style of one task cell: the row's style, then the column's.
 fn task_style(t: &crate::model::Task, key: &str) -> String {
     let get = |k: &str| t.style.get(k).and_then(|v| v.as_str()).unwrap_or("");
@@ -404,13 +414,26 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
             if let Some((r, k)) = a1_index(a1) { ws.write_blank(r, k, &styled(Format::new(), st)).map_err(e)?; }
         }
         for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
+        // The sheet's page setup.
+        if let Some(pg) = &s.page {
+            let paper = match pg.paper.as_str() { "Letter" => 1, "Legal" => 5, "A3" => 8, "A5" => 11, "Tabloid" => 3, "A4" => 9, _ => 0 };
+            if paper > 0 { ws.set_paper_size(paper); }
+            if pg.orient == "landscape" { ws.set_landscape(); }
+            if let Some([t, r, b, l]) = pg.margins { let i = |mm: f32| (mm / 25.4) as f64; ws.set_margins(i(l), i(r), i(t), i(b), 0.3, 0.3); }
+            if pg.fit_w > 0 || pg.fit_h > 0 { ws.set_print_fit_to_pages(pg.fit_w as u16, pg.fit_h as u16); } else if pg.scale > 0 { ws.set_print_scale(pg.scale); }
+            if let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&pg.area) { ws.set_print_area(r0, c0 as u16, r1, c1 as u16).map_err(e)?; }
+            if let Some((a, b)) = pg.titles.split_once(':').or(Some((pg.titles.as_str(), pg.titles.as_str()))).and_then(|(a, b)| Some((a.trim().parse::<u32>().ok()?, b.trim().parse::<u32>().ok()?))) { if a > 0 && b >= a { ws.set_repeat_rows(a - 1, b - 1).map_err(e)?; } }
+            ws.set_print_gridlines(!pg.no_grid).set_print_headings(pg.headings).set_print_center_horizontally(pg.center);
+            if !pg.breaks.is_empty() { ws.set_page_breaks(&pg.breaks).map_err(e)?; }
+        }
         // Pictures placed on the sheet, at their cell and size (SVG pictures cannot go into a workbook).
         for im in &s.images {
             let (Some((r, k)), Some(x)) = (a1_index(&im.cell), c.p.pictures.iter().find(|x| x.id == im.pic)) else { continue };
             let Some(bytes) = x.data.split_once(";base64,").filter(|(m, _)| !m.contains("svg")).and_then(|(_, b)| unbase64(b)) else { continue };
             let Ok(img) = rust_xlsxwriter::Image::new_from_buffer(&bytes) else { continue };
             let (iw, ih) = (img.width().max(1.0), img.height().max(1.0));
-            let img = img.set_scale_width(im.w as f64 / iw).set_scale_height(im.h as f64 / ih).set_alt_text(&x.name);
+            let (w, h) = if im.fit { fit_in_cell(s, &im.cell, iw, ih) } else { (im.w as f64, im.h as f64) };
+            let img = img.set_scale_width(w / iw).set_scale_height(h / ih).set_alt_text(&x.name);
             ws.insert_image(r, k, &img).map_err(e)?;
         }
     }

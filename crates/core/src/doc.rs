@@ -951,11 +951,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 if !old.eq_ignore_ascii_case(&s.name) {
                     if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || ["plan", "resources"].contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
                     rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, &s.name, &[]));
-                    // A rename keeps the cells, now pointing at the new name.
-                    p.sheets[k] = SheetData { cells: std::mem::take(&mut p.sheets[k].cells), images: std::mem::take(&mut p.sheets[k].images), ..s };
-                } else {
-                    p.sheets[k] = s;
                 }
+                // Cells, formats, styles and pictures have their own edits: a change to the tab's layout never
+                // overwrites them (a copy from the window a moment old would undo an edit just made).
+                let o = &mut p.sheets[k];
+                let (cells, fmt, style, images) = (std::mem::take(&mut o.cells), std::mem::take(&mut o.fmt), std::mem::take(&mut o.style), std::mem::take(&mut o.images));
+                p.sheets[k] = SheetData { cells, fmt, style, images, ..s };
                 p.normalize();
             }
             (Some(k), None) if k < p.sheets.len() => {
@@ -1004,8 +1005,14 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
             }
             for im in &mut s.images { if let Some(x) = shift(&im.cell) { im.cell = x } }
-            // A merge moves with its cells; one whose corner is deleted goes.
-            s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
+            // A merge moves with its cells and shrinks when some of its rows (columns) go; it goes when one cell is left.
+            let edge = |x: u32, last: bool| if x < at { Some(x) } else if count > 0 { Some(x.saturating_add(n)) } else if x >= at.saturating_add(n) { Some(x - n) } else if last { at.checked_sub(1) } else { Some(at) };
+            s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| {
+                let (r0, c0, r1, c1) = crate::model::sheet_range(&m)?;
+                let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };
+                (r1 >= r0 && c1 >= c0 && (r1 > r0 || c1 > c0)).then(|| format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1))
+            }).collect();
+            if let Some(pg) = &mut s.page { if !cols { pg.breaks = pg.breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); } }
             if !cols {
                 s.heights = std::mem::take(&mut s.heights).into_iter().filter_map(|(r, h)| if r < at { Some((r, h)) } else if count > 0 { Some((r.saturating_add(n), h)) } else if r < at.saturating_add(n) { None } else { Some((r - n, h)) }).collect();
             }

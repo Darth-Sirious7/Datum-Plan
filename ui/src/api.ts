@@ -97,11 +97,13 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage }
+/** A sheet's own page setup (empty text and missing values follow the plan's). */
+export interface SheetPage { paper?: string; orient?: string; margins?: number[] | null; scale?: number; fit_w?: number; fit_h?: number; area?: string; titles?: string; no_hf?: boolean; no_grid?: boolean; headings?: boolean; center?: boolean; breaks?: number[] }
 /** A picture in the plan's library (a party's logo or any image), as a data URL. */
 export interface Picture { id: number; name: string; role: string; data: string }
 /** A library picture placed on a sheet at a cell, with its size in px. */
-export interface SheetImage { pic: number; cell: string; w: number; h: number }
+export interface SheetImage { pic: number; cell: string; w: number; h: number; fit?: boolean }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
 export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean][] }

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.5.19 — 2026-11-03
+
+Sheets that format, print and behave like a spreadsheet.
+
+- **Sheet Tools has two tabs, Cells and Page,** laid out our own way.
+  - **Cells** is grouped as Clipboard, Font, Align, Lines, Number, Look, Rows & Columns, Insert and Data.
+  - **Look** has a full **cell style gallery**: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
+- **Page: each sheet prints its own way.**
+  - **Paper:** size, orientation and margins.
+  - **What Prints:** a **print area**, **title rows** on every page, and **page breaks**.
+  - **Fit:** to so many pages wide and tall, or a scale.
+  - **On the Paper:** **Header & footer on or off** (the cells only, without the plan's logos and title), gridlines, row and column labels, and centre on page.
+  - The same choices are at the top of File › Print. The plan's own page setup is unchanged. They also go into an exported .xlsx workbook.
+- **Three ways to look at a sheet:** Normal; **Page Layout**, the pages exactly as they will print; and **Page Breaks**, each printed page outlined over the cells with its number. Switch from Sheet Tools › Page or the buttons by the sheet tabs.
+- **Place in cell:** a picture on a sheet fits inside its cell, or merged cells, and follows the cell's size. A small button by the selected picture switches it on and off.
+- **Fixed in Sheets, from a full review:**
+  - **Paste:** it now brings formats and number formats and is one undo step. Cut clears the source only when you paste, and one cell pasted on a larger selection fills it.
+  - **Fill and sort:** filling keeps styles and number formats. Sort moves formulas with their rows and keeps formats, with empty cells last.
+  - **Dates:**
+    - dates follow the plan's date format (05/01/2026 is 5 January when the plan writes the day first);
+    - the fill handle continues dates;
+    - a formula on a date shows a date;
+    - the Text format keeps what was typed (001).
+  - **Merged cells:** deleting the first row of a merge shrinks it instead of removing it, and Enter and Tab step past a merge.
+  - **Layout changes:** a width, height, merge or page change no longer undoes an edit made a moment before.
+  - **Frozen panes:** the cell editor and merged titles show in frozen rows; pictures no longer cover the column letters; the cursor stays in view under frozen panes; renaming a sheet keeps its frozen panes.
+  - **Sheet size:** the sheet goes on past row 200 and column Z.
+  - **Rows and text:** rows grow to fit a bigger font or wrapped text, and long text runs on over empty cells.
+  - **Printing:**
+    - printed sheets show country flags;
+    - cells that only have borders or fills print too;
+    - a sheet prints without row numbers and column letters unless you ask.
+  - **Sum** in the status bar counts numbers only.
+  - **Sheet names** are checked for characters a workbook cannot use.
+- **New keys:**
+  - [[Ctrl+Arrow]] to the edge of the data;
+  - [[Ctrl+Home]], [[Home]], [[End]] and [[Ctrl+End]];
+  - [[Page Up]] and [[Page Down]];
+  - [[Ctrl+Enter]] puts what you typed in every selected cell;
+  - [[Ctrl+D]] on one cell copies the cell above.
+- The guide describes Sheet Tools › Cells and Page, in English and Chinese.
+
 ## 0.5.18 — 2026-11-03
 
 Sheets: clearer tools, a proper colour chooser, and plan data in one click.

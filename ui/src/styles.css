@@ -955,3 +955,40 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .mside input { width: 70px; }
 .sheettools .fromplan { font-size: 11px; margin: 0 2px 0 4px; }
 .dlg select.tasklist { width: 100%; min-height: 150px; }
+/* 0.5.19 Sheets: page views, pictures in cells, printing options */
+.sheetgrid.hidden { display: none; }
+.sheetgrid.breaks { background: #E9EBEE; }
+.sheetgrid .pbg { position: absolute; background: var(--bg2); }
+.sheetgrid .pbreak { position: absolute; z-index: 2; border: 2px dashed #2F6FDE; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+.sheetgrid .pbreak span { font: 600 34px var(--sans, sans-serif); color: #2F6FDE22; }
+.slayoutwrap { flex: 1; overflow: auto; background: #E9EBEE; }
+.slayout { padding: 18px; display: flex; justify-content: center; }
+.slayout .ppage { margin: 0 auto 18px; box-shadow: 0 2px 10px #0002; background: #fff; }
+.smodes { display: flex; gap: 0; border-left: 1px solid var(--line); }
+.sheettabs .smodes button { padding: 3px 8px; border-right: 0; }
+.sheettabs .smodes button.on { box-shadow: none; background: var(--sel); }
+.smodes svg { width: 16px; height: 16px; }
+.simg .pinc { position: absolute; right: -30px; top: 0; width: 24px; height: 24px; display: grid; place-items: center; background: var(--bg2); border: 1px solid var(--line3); border-radius: 4px; box-shadow: 0 1px 4px #0002; }
+.simg .pinc svg { width: 16px; height: 16px; }
+.simg.fit { outline: 1px dotted #2F6FDE80; }
+.ptable.nogrid td, .ptable.nogrid th { border-color: transparent; }
+.ptwrap.pcenter { width: fit-content; margin: 0 auto; }
+.ctxtabs { display: flex; }
+.sgal { position: fixed; background: var(--bg2); border: 1px solid var(--line3); box-shadow: 0 8px 24px #0002; padding: 8px 10px 10px; width: 640px; max-height: 70vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; border-radius: 4px; }
+.sgal section small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 2px 0 4px; }
+.sgal section div { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.sgal .cst { height: 26px; border: 1px solid var(--line); padding: 0 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #fff; color: #1B2733; font-size: 12px; }
+.sgal .cst[style*="font-size"] { font-size: 14px !important; height: 30px; }
+.sgal .cst:hover { outline: 2px solid #E67E22; outline-offset: -1px; }
+.sgal .cst.num { background: none; border-color: transparent; }
+.cstyles { grid-template-columns: repeat(2, 84px) 16px; }
+.cstyles .sarr { grid-column: 3; }
+.chkcol { display: flex; flex-direction: column; gap: 2px; padding: 2px 4px; }
+.chkcol .chk { white-space: nowrap; font-size: 12px; }
+.psheet { border: 1px solid var(--line); background: var(--bg2); padding: 10px 12px; margin: 6px 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.prow.hidden { display: none; }
+button.link { color: var(--blue); text-decoration: underline; padding: 0; }
+.sheetgrid .ghead { z-index: 6; }
+.sheetgrid .simg { z-index: 2; }
+.sheetgrid .sfrozen { z-index: 4; }
+.sheetgrid .sfrozen .edit { z-index: 5; }

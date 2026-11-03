@@ -354,20 +354,34 @@ Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan 
 3. **A live list from Plan Data….** Choose Tasks or Resources, the columns, which rows (milestones, critical, late, not finished, in progress, starting in the next four weeks), the order and how many. One formula fills the rows and changes with the plan.
 4. **Country flags.** Give cells the **Country with flag** number format and type a code (DE, cn) or a name (Germany, UK). The flag and the country's name are shown.
 
-### Format a sheet: Sheet Tools › Home
+### Format and print a sheet: Sheet Tools
 
-When you open **Sheets**, the ribbon shows **Sheet Tools › Home** with the tools of a spreadsheet; it goes back to **Task** when you leave.
+When you open **Sheets**, the ribbon shows **Sheet Tools** with two tabs; it goes back to **Task** when you leave.
 
-- **Clipboard:** Paste (with Paste Special, values, formatting, transpose), Cut, Copy and Format Painter.
-- **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill. The colour arrows open a palette: theme colours with lighter and darker shades, standard and recent colours, and **More Colors…** for any colour (a colour field, hue bar, hex and RGB).
-- **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells); **Borders** (the arrow: all borders, outside, thick outside, top and bottom, double and thick lines, no border, line colour and line style).
+**Cells** holds everything for the cells:
+
+- **Clipboard:** Paste (with Paste Special), Cut, Copy and Format Painter. A paste brings the copied cells' formulas, look and number formats in one step; one copied cell pasted on a larger selection fills all of it.
+- **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill. The colour arrows open a palette (theme colours with lighter and darker shades, standard and recent colours, **More Colors…**).
+- **Align:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells).
+- **Lines:** **Borders**, each choice drawn beside its name, with line colour and style; **All Borders**, **Outside** and **No Border** at one click.
 - **Number:** the number format list, currency, percent, comma style and decimals.
-- **Styles:** cell styles such as Good, Bad, Neutral, Calculation, Check Cell, Title, Headings, Total and Accent.
-- **Cells:** insert or delete rows, columns and sheets; **Format** for row height, column width, AutoFit, rename, move or copy, and the tab colour.
-- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function, Plan Data and Freeze Panes.
-- **Editing:** AutoSum, Fill down or right, Clear (all, formats or contents) and Sort A to Z or Z to A.
+- **Look:** four quick cell styles, and the arrow opens the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
+- **Rows & Columns:** insert or delete rows, columns and sheets; **Size** for row height, column width, AutoFit and the tab.
+- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function and Plan Data.
+- **Data:** AutoSum, Fill, Clear and Sort A to Z or Z to A (formulas move with their rows, empty cells go last).
 
-Drag the line under a row number to change the row's height. Merged cells, borders, row heights and pictures print as you see them and go into an exported .xlsx workbook.
+**Page** sets how this sheet prints; each sheet keeps its own setup and the plan's stays as it is:
+
+- **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page outlined over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
+- **Paper:** size, orientation and margins (Normal, Narrow, Wide, None or your own).
+- **What Prints:** **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page) and **Breaks** (a new page starts at the selected row).
+- **Fit:** fit to so many pages wide and tall, or a scale.
+- **On the Paper:** **Header & footer** (untick to print the cells only, without the plan's logos and title), **Gridlines**, **Row & column labels** and **Centre on page**.
+- **Print Preview** opens File › Print, where the same choices sit at the top.
+
+A picture on a sheet shows a small button at its top right when selected: **Place in cell** fits it inside its cell, or its merged cells, and it follows the cell's size; click again to let it float. Rows grow to fit a bigger font or wrapped text unless you set their height; drag the line under a row number to set it. Long text runs on over the empty cells to its right.
+
+Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+End]] to the last used cell, [[Page Up]] and [[Page Down]] by a screen, [[Ctrl+Enter]] puts what you typed in every selected cell, and [[Ctrl+D]] on one cell copies the cell above. Dates follow the plan's date format (Options), so 05/01/2026 is 5 January when the plan writes the day first; a formula on a date shows a date.
 
 ### Write formulas
 

@@ -469,7 +469,9 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub heights: BTreeMap<u32, u16>,
     /// The tab's colour ("#RRGGBB", empty for none) and whether the tab is hidden.
     #[serde(default, skip_serializing_if = "String::is_empty")] pub color: String,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub hidden: bool }
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub hidden: bool,
+    /// The sheet's own page setup for printing.
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<SheetPage> }
 
 /// A range "A1:C2" as (row0, col0, row1, col1), 0-based and ordered.
 pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
@@ -481,7 +483,29 @@ pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
 /// A picture on a sheet, anchored at a cell ("B2") like a picture over a spreadsheet's cells.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct SheetImage { pub pic: u32, pub cell: String, pub w: u16, pub h: u16 }
+pub struct SheetImage { pub pic: u32, pub cell: String, pub w: u16, pub h: u16,
+    /// Placed in its cell (or the merged range it starts): drawn to fit inside, centred, keeping its shape.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub fit: bool }
+
+/// How a sheet prints, where it differs from the plan's page setup. Empty text and None follow the plan.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SheetPage {
+    /// "A4", "A3", "A5", "Letter", "Legal", "Tabloid"; empty: the plan's paper.
+    pub paper: String,
+    /// "portrait" or "landscape"; empty: the plan's.
+    pub orient: String,
+    /// Margins in mm: top, right, bottom, left.
+    pub margins: Option<[f32; 4]>,
+    /// Scale in % (0: 100 %), or fit to so many pages wide / tall (0: no limit).
+    pub scale: u16, pub fit_w: u8, pub fit_h: u8,
+    /// The print area ("A1:H40", empty: everything used) and the rows printed at the top of every page ("1:2").
+    pub area: String, pub titles: String,
+    /// Leave out the plan's header and footer; leave out cell gridlines; print row numbers and column letters; centre on the paper.
+    pub no_hf: bool, pub no_grid: bool, pub headings: bool, pub center: bool,
+    /// Rows that start a new page (0-based).
+    pub breaks: Vec<u32>,
+}
 
 /// A picture kept in the plan file: a logo of a party to the project (the client, our company, a
 /// vendor or sub-vendor) or any image used on dashboards, sheets and printouts. `data` is a data URL.
@@ -743,6 +767,15 @@ impl Project {
             }).collect();
             s.heights.retain(|_, h| *h != 0);
             s.heights.values_mut().for_each(|h| *h = (*h).clamp(6, 600));
+            if let Some(pg) = &mut s.page {
+                pg.scale = if pg.scale == 0 { 0 } else { pg.scale.clamp(10, 400) };
+                pg.fit_w = pg.fit_w.min(50); pg.fit_h = pg.fit_h.min(50);
+                if let Some(m) = &mut pg.margins { m.iter_mut().for_each(|x| *x = if x.is_finite() { x.clamp(0.0, 100.0) } else { 10.0 }); }
+                if sheet_range(&pg.area).is_none() { pg.area.clear() }
+                if !pg.titles.is_empty() && !pg.titles.split(':').all(|x| x.trim().parse::<u32>().is_ok_and(|n| n > 0)) { pg.titles.clear() }
+                pg.breaks.sort_unstable(); pg.breaks.dedup(); pg.breaks.retain(|r| *r > 0); pg.breaks.truncate(1000);
+                pg.paper.truncate(20); pg.orient.truncate(20);
+            }
             if !(s.color.len() == 7 && s.color.starts_with('#') && s.color[1..].chars().all(|c| c.is_ascii_hexdigit())) { s.color.clear() }
         }
         // At least one tab stays visible.

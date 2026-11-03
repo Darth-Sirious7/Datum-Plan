@@ -7,14 +7,17 @@ import { createStore } from "solid-js/store";
 import { Row, Net, Usage, SheetOut, Grid, fmtDay, iso, dateDay, dayDate, invoke } from "./api";
 import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
 import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS, RES_COLS, fmtB } from "./views";
-import { sheetK } from "./sheets";
+import { sheetK } from "./sheetlayout";
 import { picData } from "./pictures";
+import { FlagText } from "./flags";
+import { sheetRowH, fitBox } from "./sheetlayout";
+import type { SheetPage } from "./api";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
 import * as F from "./fmt";
 import { Pick, Check, Seg } from "./ui";
 
 /** Paper sizes in millimetres (portrait). */
-export const PAPERS: [string, number, number][] = [["A4", 210, 297], ["A3", 297, 420], ["A2", 420, 594], ["A1", 594, 841], ["Letter", 215.9, 279.4], ["Legal", 215.9, 355.6], ["Tabloid", 279.4, 431.8]];
+export const PAPERS: [string, number, number][] = [["A4", 210, 297], ["A3", 297, 420], ["A5", 148, 210], ["A2", 420, 594], ["A1", 594, 841], ["Letter", 215.9, 279.4], ["Legal", 215.9, 355.6], ["Tabloid", 279.4, 431.8]];
 const MM = 96 / 25.4, SCALE_H = 34, IDW = 30;
 type Slots = [string, string, string];
 /** A picture in the header: the company logo ("@company"), the client logo ("@client") or a picture, at a height in px. */
@@ -251,9 +254,9 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
 };
 
 /** The paper, header, footer and legend around a page's content (CSS px at 96 dpi). */
-const Frame = (p: { pw: number; ph: number; k: number; W: number; H: number; headH: number; footH: number; legH: number; n: number; pages: number; legend?: JSX.Element | false; children: JSX.Element }) => (
+const Frame = (p: { m?: number[]; pw: number; ph: number; k: number; W: number; H: number; headH: number; footH: number; legH: number; n: number; pages: number; legend?: JSX.Element | false; children: JSX.Element }) => (
   <div class="ppage" style={{ width: `${p.pw * MM}px`, height: `${p.ph * MM}px` }}>
-    <div class="pin" style={{ left: `${ps.margins[3] * MM}px`, top: `${ps.margins[0] * MM}px`, width: `${p.W}px`, height: `${p.H}px`, transform: `scale(${p.k})` }}>
+    <div class="pin" style={{ left: `${(p.m ?? ps.margins)[3] * MM}px`, top: `${(p.m ?? ps.margins)[0] * MM}px`, width: `${p.W}px`, height: `${p.H}px`, transform: `scale(${p.k})` }}>
       <Show when={p.headH}><Head n={p.n} pages={p.pages} h={p.headH} /></Show>
       {p.children}
       <Show when={p.legend}><div class="plegend" style={{ height: `${p.legH - 8}px` }}><div class="plt"><Slot t={ps.legendText} page={p.n} pages={p.pages} h={40} /></div>{p.legend}</div></Show>
@@ -311,13 +314,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
 const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
-/** Paper and margins for the views other than the Gantt chart. */
-const geom = createMemo(() => {
-  const p = PAPERS.find(x => x[0] === ps.paper) ?? PAPERS[0], [pw, ph] = ps.landscape ? [p[2], p[1]] : [p[1], p[2]];
-  const k = ps.scale / 100, W = (pw - ps.margins[1] - ps.margins[3]) * MM / k, H = (ph - ps.margins[0] - ps.margins[2]) * MM / k;
-  return { pw, ph, k, W, H, headH: headH(), footH: footH(), legH: ps.legend === "none" ? 0 : 58 };
-});
-type PT = { head: string[]; w: number[]; right: boolean[]; h?: number[]; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -341,18 +338,50 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     }
     const un = tasks.filter(r => !r.res); if (un.length) { t.rows.push({ c: ["Unassigned tasks", "", "", "", ""], b: true }); un.forEach(r => t.rows.push({ c: [r.name, fmtDay(r.bar.s, "long"), fmtDay(r.bar.f, "long"), "", `${r.bar.pct}%`], ind: 1 })); }
   } else if (v === "sheets" && P().sheets.length) {
-    const k = Math.min(sheetK(), P().sheets.length - 1), sv = await call<SheetOut>("sheet_view", { k }), st = P().sheets[k]?.style ?? {};
-    const cells = new Map((sv?.cells ?? []).map(c => [c[0], c])), nr = Math.max(1, sv?.rows ?? 1), nc = Math.max(1, sv?.cols ?? 1);
+    const k = Math.min(sheetK(), P().sheets.length - 1), sh = P().sheets[k], sp = sh.page ?? {}, sv = await call<SheetOut>("sheet_view", { k }), st = sh.style ?? {};
+    const cells = new Map((sv?.cells ?? []).map(c => [c[0], c]));
     const col = (c: number) => { let s = ""; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; };
-    Object.assign(t, { head: ["", ...Array.from({ length: nc }, (_, c) => col(c))], w: [34, ...Array.from({ length: nc }, (_, c) => P().sheets[k].widths?.[c] ?? 96)], right: [true, ...Array.from({ length: nc }, () => false)],
-      rows: Array.from({ length: nr }, (_, r) => ({ c: [String(r + 1), ...Array.from({ length: nc }, (_, c) => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...Array.from({ length: nc }, (_, c) => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
-    // Row heights and merged cells, as on screen (table columns are one right of the sheet's: column 0 holds row numbers).
-    const sc0 = ps.rowH / 22, hs = P().sheets[k].heights ?? {};
-    if (Object.keys(hs).length) t.h = Array.from({ length: nr }, (_, r) => Math.round((hs[r] ?? 22) * sc0));
-    t.merges = (P().sheets[k].merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = /^([A-Z]+)(\d+)$/.exec(a), p2 = /^([A-Z]+)(\d+)$/.exec(b); if (!p1 || !p2) return []; const cn = (x: string) => [...x].reduce((q, ch) => q * 26 + ch.charCodeAt(0) - 64, 0); return [{ r: +p1[2] - 1, c: cn(p1[1]), rs: +p2[2] - +p1[2] + 1, cs: cn(p2[1]) - cn(p1[1]) + 1 }]; });
-    t.imgs = (P().sheets[k].images ?? []).flatMap(im => { const m = /^([A-Z]+)(\d+)$/.exec(im.cell), src = picData(im.pic); if (!m || !src) return []; const c = [...m[1]].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0), sc = ps.rowH / 22; return [{ src, r: +m[2] - 1, c, w: im.w * sc, h: im.h * sc }]; });
+    const cn = (x: string) => [...x].reduce((q, ch) => q * 26 + ch.charCodeAt(0) - 64, 0);
+    const ref = (a: string) => { const m = /^([A-Z]+)(\d+)$/.exec(a); return m ? [+m[2] - 1, cn(m[1]) - 1] : null; };
+    // The print area, or everything used (pictures and merges count too).
+    let [r0, c0, r1, c1] = [0, 0, Math.max(0, (sv?.rows ?? 1) - 1), Math.max(0, (sv?.cols ?? 1) - 1)];
+    for (const m of sh.merges ?? []) { const b = ref(m.split(":")[1] ?? m); if (b) { r1 = Math.max(r1, b[0]); c1 = Math.max(c1, b[1]); } }
+    // Cells with only a style or a format (a border, a fill) print too.
+    for (const a of [...Object.keys(sh.style ?? {}), ...Object.keys(sh.fmt ?? {})]) { const x = ref(a); if (x && (sh.style?.[a] || sh.fmt?.[a] === "flag") && x[0] < 5000) { r1 = Math.max(r1, x[0]); c1 = Math.max(c1, x[1]); } }
+    for (const im of sh.images ?? []) { const a = ref(im.cell); if (a) { r1 = Math.max(r1, a[0] + Math.ceil(im.h / 22)); c1 = Math.max(c1, a[1]); } }
+    const ar = sp.area ? sp.area.split(":").map(ref) : null;
+    if (ar?.[0]) { const b = ar[1] ?? ar[0]; [r0, c0, r1, c1] = [Math.min(ar[0][0], b![0]), Math.min(ar[0][1], b![1]), Math.max(ar[0][0], b![0]), Math.max(ar[0][1], b![1])]; }
+    const nr = r1 - r0 + 1, nc = c1 - c0 + 1, rows = Array.from({ length: nr }, (_, i) => r0 + i), cs = Array.from({ length: nc }, (_, j) => c0 + j);
+    Object.assign(t, { r0, c0, head: ["", ...cs.map(col)], w: [34, ...cs.map(c => sh.widths?.[c] ?? 96)], right: [true, ...cs.map(() => false)], bare: !sp.headings, grid: !sp.no_grid, center: !!sp.center, font: 12,
+      rows: rows.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
+    // Row heights as on screen (bigger fonts and wrapped text make taller rows), merged cells, pictures.
+    t.h = rows.map(r => sheetRowH(sh, r, cells));
+    t.merges = (sh.merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = ref(a), p2 = ref(b); if (!p1 || !p2) return []; return [{ r: p1[0] - r0, c: p1[1] - c0 + 1, rs: p2[0] - p1[0] + 1, cs: p2[1] - p1[1] + 1 }]; }).filter(m => m.r + m.rs > 0 && m.r < nr && m.c + m.cs > 1 && m.c <= nc);
+    t.imgs = (sh.images ?? []).flatMap(im => { const a = ref(im.cell), src = picData(im.pic); if (!a || !src || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; const [w, h] = im.fit ? fitBox(sh, a[0], a[1], im) : [im.w, im.h]; return [{ src, r: a[0] - r0, c: a[1] - c0 + 1, w, h }]; });
+    t.flags = new Set(rows.flatMap((r, i) => cs.flatMap((c, j) => (sh.fmt?.[col(c) + (r + 1)] === "flag" ? [`${i},${j + 1}`] : []))));
+    if (sp.titles) { const [a, b = a] = sp.titles.split(":").map(x => +x - 1 - r0); if (a >= 0 && b >= a && b < nr) t.titles = [a, b]; }
+    t.breaks = (sp.breaks ?? []).map(b => b - r0).filter(b => b > 0 && b < nr);
   }
   return { table: t };
+});
+/** A sheet's own page setup while Sheets is the view printed (null for every other view). */
+export const sheetPage = (): SheetPage | null => (view() === "sheets" && P().sheets.length ? P().sheets[Math.min(sheetK(), P().sheets.length - 1)]?.page ?? {} : null);
+/** Paper and margins for the views other than the Gantt chart; a sheet's own setup wins over the plan's. */
+const geom = createMemo(() => {
+  const sp = sheetPage(), paper = sp?.paper || ps.paper, land = sp?.orient ? sp.orient === "landscape" : ps.landscape, m = sp?.margins ?? ps.margins;
+  const p = PAPERS.find(x => x[0] === paper) ?? PAPERS[0], [pw, ph] = land ? [p[2], p[1]] : [p[1], p[2]];
+  const hh = sp?.no_hf ? 0 : headH(), fh = sp?.no_hf ? 0 : footH(), W0 = (pw - m[1] - m[3]) * MM, H0 = (ph - m[0] - m[2]) * MM;
+  let k = (sp ? sp.scale || 100 : ps.scale) / 100;
+  // Fit to so many pages wide and/or tall: the scale that makes the print area fit.
+  const d = sp && (sp.fit_w || sp.fit_h) ? vdata() : null, t = d && "table" in d ? d.table : null;
+  if (t) {
+    const tw = t.w.reduce((a, b) => a + b, 0) - (t.bare ? t.w[0] : 0), th = (t.h ?? t.rows.map(() => 22)).reduce((a, b) => a + b, 0) + (t.bare ? 0 : 22);
+    let kk = 1;
+    if (sp!.fit_w) kk = Math.min(kk, (sp!.fit_w * W0) / Math.max(1, tw));
+    if (sp!.fit_h) kk = Math.min(kk, (sp!.fit_h * H0) / Math.max(1, th + sp!.fit_h * (hh + fh + 8)));
+    k = Math.max(0.1, kk);
+  }
+  return { pw, ph, k, W: W0 / k, H: H0 / k, headH: hh, footH: fh, legH: ps.legend === "none" ? 0 : 58, m };
 });
 /** Splits the view into pages. */
 const vpages = createMemo((): VPage[] => {
@@ -371,18 +400,30 @@ const vpages = createMemo((): VPage[] => {
     return out_;
   }
   if (K === "table" && "table" in d && d.table) {
-    const t = d.table, RH = ps.rowH, per = Math.max(1, Math.floor((room - RH) / RH)), key = t.w[0] ?? 0;
-    // Pages of rows: a fixed count, or as many as fit when rows have their own heights.
+    const t = d.table, RH = t.font ? 22 : ps.rowH, per = Math.max(1, Math.floor((room - RH) / RH)), key = t.bare ? 0 : t.w[0] ?? 0;
+    // Rows printed at the top of every page take room on each one.
+    const head = (t.bare ? 0 : RH) + (t.titles ? (t.h ?? []).slice(t.titles[0], t.titles[1] + 1).reduce((a, b) => a + b, 0) : 0);
+    // Pages of rows: a fixed count, or as many as fit when rows have their own heights; page breaks start a new page.
     const cuts: [number, number][] = [];
-    if (t.h) { let r0 = 0, y = 0; t.rows.forEach((_, r) => { const hh = t.h![r] ?? RH; if (r > r0 && y + hh > room - RH) { cuts.push([r0, r]); r0 = r; y = 0; } y += hh; }); cuts.push([r0, Math.max(r0 + 1, t.rows.length)]); }
+    if (t.h) { let r0 = 0, y = 0; t.rows.forEach((_, r) => { const hh = t.h![r] ?? RH; if (r > r0 && (y + hh > room - head || t.breaks?.includes(r))) { cuts.push([r0, r]); r0 = r; y = 0; } y += hh; }); cuts.push([r0, Math.max(r0 + 1, t.rows.length)]); }
     else for (let r = 0; r < Math.max(1, t.rows.length); r += per) cuts.push([r, Math.min(t.rows.length, r + per)]);
     const across: number[][] = []; let cur: number[] = [], w = key;
     for (let c = 1; c < t.w.length; c++) { if (w + t.w[c] > G.W && cur.length) { across.push(cur); cur = []; w = key; } cur.push(c); w += t.w[c]; }
     across.push(cur);
-    for (const rr of cuts) for (const cols of across) out_.push({ n: out_.length + 1, rows: rr, cols: [0, ...cols] });
+    for (const rr of cuts) for (const cols of across) out_.push({ n: out_.length + 1, rows: rr, cols: t.bare ? cols : [0, ...cols] });
   }
   return out_;
 });
+/** The printed pages of the sheet shown, for Page Break view: each page's first and last sheet row and column. */
+export const sheetPages = (): { r0: number; r1: number; c0: number; c1: number; n: number }[] => {
+  const d = vdata(), t = d && "table" in d ? d.table : null;
+  if (view() !== "sheets" || !t || t.r0 === undefined) return [];
+  return vpages().filter(pg => pg.rows && pg.cols).map(pg => { const cols = pg.cols!.filter(c => c > 0); return { n: pg.n, r0: t.r0! + pg.rows![0], r1: t.r0! + pg.rows![1] - 1, c0: t.c0! + cols[0] - 1, c1: t.c0! + cols[cols.length - 1] - 1 }; });
+};
+/** The pages exactly as they will print, for the Page Layout view of a sheet. */
+export const SheetPagesView = (p: { zoom: number }) => (
+  <div class="slayout"><div style={{ zoom: p.zoom }}><For each={vpages()}>{pg => <ViewPage pg={pg} pages={vpages().length} />}</For></div></div>
+);
 /** One page of a view other than the Gantt chart. */
 const ViewPage = (p: { pg: VPage; pages: number }) => {
   const G = geom(), d = vdata();
@@ -396,24 +437,37 @@ const ViewPage = (p: { pg: VPage; pages: number }) => {
           </svg>
         </Match>
         <Match when={p.pg.month !== undefined}><MonthPage month={p.pg.month!} W={G.W} H={room()} /></Match>
-        <Match when={p.pg.rows && d && "table" in d && d.table}>{(() => { const t = (d as { table: PT }).table; return (<div class="ptwrap">
-          <table class="ptable" style={{ "font-size": `${ps.font}px` }}>
-            <colgroup><For each={p.pg.cols}>{c => <col style={{ width: `${t.w[c]}px` }} />}</For></colgroup>
-            <thead><tr style={{ height: `${ps.rowH}px` }}><For each={p.pg.cols}>{c => <th classList={{ r: t.right[c] }}>{t.head[c]}</th>}</For></tr></thead>
-            <tbody><For each={t.rows.slice(p.pg.rows![0], p.pg.rows![1])}>{(r, ri) => { const R0 = p.pg.rows![0] + ri(), [r0, r1] = p.pg.rows!;
-              // A merged range prints as one cell (cut at the page's edges); the cells under it are left out.
-              const span = (c: number) => { const m = t.merges?.find(m => R0 >= m.r && R0 < m.r + m.rs && c >= m.c && c < m.c + m.cs); if (!m) return null;
-                const top = Math.max(m.r, r0), first = p.pg.cols!.find(x => x >= m.c && x < m.c + m.cs);
-                return R0 === top && c === first ? { rs: Math.min(m.r + m.rs, r1) - top, cs: p.pg.cols!.filter(x => x >= m.c && x < m.c + m.cs).length, st: t.rows[m.r]?.st?.[m.c], v: t.rows[m.r]?.c[m.c] } : "skip"; };
-              return <tr style={{ height: `${t.h?.[R0] ?? ps.rowH}px` }} classList={{ b: r.b }}><For each={p.pg.cols}>{c => { const sp = span(c); return sp === "skip" ? null
-                : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": F.parse(sp.st).v === "t" ? "top" : F.parse(sp.st).v === "b" ? "bottom" : "middle", "white-space": F.parse(sp.st).w ? "normal" : undefined }}>{sp.v}</td>
-                : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r.st?.[c]), ...(F.parse(r.st?.[c]).w ? { "white-space": "normal" } : {}), ...(F.parse(r.st?.[c]).v ? { "vertical-align": F.parse(r.st?.[c]).v === "t" ? "top" : "bottom" } : {}) }}>{r.c[c]}</td>; }}</For></tr>; }}</For></tbody>
-          </table>
-          <For each={(d as { table: PT }).table.imgs?.filter(im => im.r >= p.pg.rows![0] && im.r < p.pg.rows![1] && p.pg.cols!.includes(im.c))}>{im => {
-            const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);
-            return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${ps.rowH + (t0 => t0 ? t0.slice(p.pg.rows![0], im.r).reduce((a, b) => a + b, 0) : (im.r - p.pg.rows![0]) * ps.rowH)((d as { table: PT }).table.h)}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For></div>); })()}</Match>
+        <Match when={p.pg.rows && d && "table" in d && d.table}><TablePage t={(d as { table: PT }).table} pg={p.pg} /></Match>
       </Switch>
     </Frame>
+  );
+};
+/** One page of a table: the rows of the page (after the title rows, when the sheet repeats some), merged cells as one, pictures over the cells. */
+const TablePage = (p: { t: PT; pg: VPage }) => {
+  const t = p.t, [r0, r1] = p.pg.rows!, RH = t.font ? 22 : ps.rowH;
+  const title = t.titles && r0 > t.titles[1] ? Array.from({ length: t.titles[1] - t.titles[0] + 1 }, (_, i) => t.titles![0] + i) : [];
+  const list = [...title, ...Array.from({ length: r1 - r0 }, (_, i) => r0 + i)];
+  const hOf = (r: number) => t.h?.[r] ?? RH;
+  const yOf = (r: number) => (t.bare ? 0 : RH) + title.reduce((a, x) => a + hOf(x), 0) + Array.from({ length: Math.max(0, r - r0) }, (_, i) => hOf(r0 + i)).reduce((a, b) => a + b, 0);
+  const vAlign = (st?: string) => { const v = F.parse(st).v; return v === "t" ? "top" : v === "b" ? "bottom" : "middle"; };
+  return (
+    <div class="ptwrap" classList={{ pcenter: t.center }}>
+      <table class="ptable" classList={{ nogrid: t.grid === false }} style={{ "font-size": `${t.font ?? ps.font}px` }}>
+        <colgroup><For each={p.pg.cols}>{c => <col style={{ width: `${t.w[c]}px` }} />}</For></colgroup>
+        <Show when={!t.bare}><thead><tr style={{ height: `${RH}px` }}><For each={p.pg.cols}>{c => <th classList={{ r: t.right[c] }}>{t.head[c]}</th>}</For></tr></thead></Show>
+        <tbody><For each={list}>{(R0, ri) => { const r = t.rows[R0], inTitle = ri() < title.length, [lo, hi] = inTitle ? [t.titles![0], t.titles![1] + 1] : [r0, r1];
+          // A merged range prints as one cell (cut at the page's edges); the cells under it are left out.
+          const span = (c: number) => { const m = t.merges?.find(m => R0 >= m.r && R0 < m.r + m.rs && c >= m.c && c < m.c + m.cs); if (!m) return null;
+            const top = Math.max(m.r, lo), first = p.pg.cols!.find(x => x >= m.c && x < m.c + m.cs);
+            return R0 === top && c === first ? { rs: Math.min(m.r + m.rs, hi) - top, cs: p.pg.cols!.filter(x => x >= m.c && x < m.c + m.cs).length, st: t.rows[m.r]?.st?.[m.c], v: t.rows[m.r]?.c[m.c] } : "skip"; };
+          return <tr style={{ height: `${hOf(R0)}px` }} classList={{ b: r?.b }}><For each={p.pg.cols}>{c => { const sp = span(c); return sp === "skip" ? null
+            : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": vAlign(sp.st), "white-space": F.parse(sp.st).w ? "normal" : undefined }}>{sp.v}</td>
+            : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r?.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r?.st?.[c]), ...(F.parse(r?.st?.[c]).w ? { "white-space": "normal" } : {}), ...(t.font ? { "vertical-align": vAlign(r?.st?.[c]) } : {}) }}>{r?.c[c] && t.flags?.has(`${R0},${c}`) ? <FlagText country={r.c[c]} /> : r?.c[c]}</td>; }}</For></tr>; }}</For></tbody>
+      </table>
+      <For each={t.imgs?.filter(im => im.r >= r0 && im.r < r1 && p.pg.cols!.includes(im.c))}>{im => {
+        const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);
+        return <img class="psimg" src={im.src} alt="" style={{ left: `${x}px`, top: `${yOf(im.r)}px`, width: `${im.w}px`, height: `${im.h}px` }} />; }}</For>
+    </div>
   );
 };
 const NetLegendSvg = () => (
@@ -599,7 +653,19 @@ export const PrintPage = () => {
           <Show when={ps.range === "dates"}><div class="prow"><label>From<input type="date" value={ps.from || iso(out()!.summary.s)} onChange={e => setPs("from", e.currentTarget.value)} /></label><label>To<input type="date" value={ps.to || iso(out()!.summary.f)} onChange={e => setPs("to", e.currentTarget.value)} /></label></div></Show>
           <Show when={pkind() === "gantt" && P().subplans?.length}><label class="pl">Subplans of this master</label><Pick value={ps.subs} set={v => setPs("subs", v as "shown")} options={[["shown", "As shown on screen (expanded ones with their tasks)"], ["collapsed", "One row each"], ["expanded", "Every subplan with all its tasks"], ["none", "Leave them out"]]} /></Show>
           <label class="pl">Pages <span class="muted">(e.g. 1-3, 5; empty = all)</span></label><input value={ps.pages} placeholder={`1-${pagesNow() || 1}`} onInput={e => setPs("pages", e.currentTarget.value)} />
-          <div class="prow"><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
+          <Show when={sheetPage()}>{sp => { const k = () => Math.min(sheetK(), P().sheets.length - 1), set = (x: Partial<SheetPage>) => act({ Sheet: { k: k(), sheet: { ...P().sheets[k()], page: { ...sp(), ...x } } } });
+            return <div class="psheet"><b>This sheet's page setup</b> <span class="muted">(also on Sheet Tools › Page)</span>
+              <div class="prow"><label>Paper<Pick value={sp().paper || ""} set={v => set({ paper: v })} options={[["", `As the plan (${ps.paper})`], ...PAPERS.map(p => [p[0], p[0]] as [string, string])]} /></label>
+                <label>Orientation<Pick value={sp().orient || ""} set={v => set({ orient: v })} options={[["", `As the plan (${ps.landscape ? "landscape" : "portrait"})`], ["landscape", "Landscape"], ["portrait", "Portrait"]]} /></label></div>
+              <div class="prow"><label>Fit to<Pick value={String(sp().fit_w || 0)} set={v => set({ fit_w: +v })} options={[["0", "Automatic width"], ["1", "1 page wide"], ["2", "2 pages wide"], ["3", "3 pages wide"]]} /></label>
+                <label>&nbsp;<Pick value={String(sp().fit_h || 0)} set={v => set({ fit_h: +v })} options={[["0", "Automatic height"], ["1", "1 page tall"], ["2", "2 pages tall"], ["3", "3 pages tall"]]} /></label></div>
+              <label class="chk"><input type="checkbox" checked={!sp().no_hf} onChange={e => set({ no_hf: !e.currentTarget.checked })} /> Header & footer (logos, title, page numbers)</label>
+              <label class="chk"><input type="checkbox" checked={!sp().no_grid} onChange={e => set({ no_grid: !e.currentTarget.checked })} /> Gridlines</label>
+              <label class="chk"><input type="checkbox" checked={!!sp().headings} onChange={e => set({ headings: e.currentTarget.checked })} /> Row numbers and column letters</label>
+              <label class="chk"><input type="checkbox" checked={!!sp().center} onChange={e => set({ center: e.currentTarget.checked })} /> Centre on the page</label>
+              <Show when={sp().area}><p class="muted">Print area {sp().area}. <button class="link" onClick={() => set({ area: "" })}>Print everything</button></p></Show>
+            </div>; }}</Show>
+          <div class="prow" classList={{ hidden: !!sheetPage() }}><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
           <h4>Page Setup</h4>
           <Seg value={tab()} set={setTab} options={[["page", "Page"], ["margins", "Margins"], ["hf", "Header & footer"], ["legend", "Legend"], ["view", "View"]]} />
           <div class="ptab">

@@ -268,6 +268,18 @@ fn gives_date(input: &str) -> bool {
     }
 }
 
+/// `=A1+7`, `=B2-1`, `=MAX(A1:A9)` where those cells hold dates: the result is a date too.
+fn on_a_date(input: &str, s: &SheetData, fmt: &str) -> bool {
+    let up = input.trim().to_uppercase();
+    let body = up.trim_start_matches('=').replace('$', "");
+    let simple = body.split(['+', '-']).enumerate().all(|(i, t)| { let t = t.trim(); i > 0 && t.parse::<f64>().is_ok() || CellRef::parse(t).is_some() });
+    let minmax = (body.starts_with("MIN(") || body.starts_with("MAX(")) && body.ends_with(')') && !body[4..body.len() - 1].contains('(');
+    if !(simple || minmax) || !up.starts_with('=') { return false }
+    let refs: Vec<CellRef> = body.trim_start_matches("MIN(").trim_start_matches("MAX(").trim_end_matches(')').split(['+', '-', ',', ':']).filter_map(|t| CellRef::parse(t.trim())).collect();
+    let dated = |a1: &str| s.fmt.get(a1).is_some_and(|f| f == "date" || f.contains("yy") || f.contains("mmm")) || s.cells.get(a1).is_some_and(|v| typed_date(v, fmt).is_some());
+    !refs.is_empty() && refs.iter().any(|r| dated(&format!("{}{}", col_name(r.col), r.row + 1)))
+}
+
 /// Whether a formula gives one of the plan's percentages (0–100), shown with a % sign.
 fn gives_pct(input: &str) -> bool {
     let up = input.to_uppercase();
@@ -281,10 +293,19 @@ fn gives_pct(input: &str) -> bool {
     }
 }
 
+/// A date typed in the plan's own date format (24/10/2026 is 24 October when the plan writes the day first), as a serial.
+fn typed_date(input: &str, fmt: &str) -> Option<f64> {
+    let t = input.trim();
+    if !t.starts_with(|ch: char| ch.is_ascii_digit()) || !t.contains(['/', '-', '.']) { return None }
+    let d = chrono::NaiveDate::parse_from_str(t, fmt).ok()?;
+    Some((d - chrono::NaiveDate::from_ymd_opt(1970, 1, 1)?).num_days() as f64 + EPOCH)
+}
+
 fn show(v: &Value, fmt: &str, input: &str, c: &Calc, sys: gridcraft_core::DateSystem) -> (String, bool) {
     let code = match (v, fmt) {
         (Value::Number(n), "money") => return (money(*n, &c.p.currency), true),
         (_, "flag") => return (v.display(), false),
+        (_, "") if !input.starts_with('=') && typed_date(input, &c.fmt).is_some() => excel_date(&c.fmt),
         (_, "") if input.starts_with('=') && matches!(v, Value::Number(_)) && gives_date(input) => excel_date(&c.fmt),
         (_, "") if input.starts_with('=') && matches!(v, Value::Number(_)) && gives_pct(input) => "0\"%\"".into(),
         (_, "") => gridcraft_core::parse::parse_input(input, sys).format.unwrap_or("General").to_string(),
@@ -367,7 +388,10 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
             let cell = if input.starts_with('=') && input.len() > 1 {
                 Cell::formula(Formula::new(&grid_names(c, &cols, input)))
             } else {
-                Cell::value(gridcraft_core::parse::parse_input(input, wb.date_system).value)
+                // Text-formatted cells keep what was typed (001 stays 001); dates follow the plan's date format.
+                if s.fmt.get(a1).is_some_and(|f| f == "@") { Cell::value(Value::text(input.as_str())) }
+                else if let Some(n) = typed_date(input, &c.fmt) { Cell::value(Value::number(n)) }
+                else { Cell::value(gridcraft_core::parse::parse_input(input, wb.date_system).value) }
             };
             sh.set_cell(at, cell);
         }
@@ -447,7 +471,9 @@ pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
     let sh = wb.sheet(k + BUILT_IN)?;
     let (mut rows, mut cols, mut cells) = (0, 0, vec![]);
     let mut add = |a1: String, input: String, at: CellRef, cells: &mut Vec<(String, String, String, bool)>| {
-        let (text, num) = show(&sh.value(at), s.fmt.get(&a1).map_or("", String::as_str), &input, c, wb.date_system);
+        let own = s.fmt.get(&a1).map_or("", String::as_str);
+        let fmt = if own.is_empty() && on_a_date(&input, s, &c.fmt) { "date" } else { own };
+        let (text, num) = show(&sh.value(at), fmt, &input, c, wb.date_system);
         rows = rows.max(at.row + 1);
         cols = cols.max(at.col + 1);
         cells.push((a1, input, text, num));

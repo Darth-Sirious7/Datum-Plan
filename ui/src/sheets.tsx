@@ -3,7 +3,7 @@
 // handle and paste carry formulas along, and the plan is read live by name: Tasks[Finish],
 // Resources[Country], ProjectFinish. The GridCraft engine (in crates/core) calculates everything.
 import { JSX, For, Show, batch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
-import { SheetOut, SheetData } from "./api";
+import { SheetOut, SheetData, SheetPage } from "./api";
 import { act, call, grid, P, tick, openMenu, toast, Item } from "./store";
 import * as F from "./fmt";
 import { parseTsv, toTsv, transpose, series, clip } from "./cells";
@@ -13,6 +13,9 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
+import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode } from "./sheetlayout";
+import { sheetPages, SheetPagesView } from "./print";
+import { Icon } from "./ui";
 import { askText, askYes, Dialog, Row } from "./ui";
 import { colorPalette } from "./colors";
 import { openDialog } from "./store";
@@ -32,7 +35,7 @@ const decimals = (code: string, d: number) => {
   return (code || "0").split(";").map(sec => sec.replace(/0(\.(0+))?(?=[^0.]*$)/, (_m, _x, zs?: string) => { const n = Math.max(0, (zs?.length ?? 0) + d); return n ? `0.${"0".repeat(n)}` : "0"; })).join(";");
 };
 /** The last copy inside Sheets: typed inputs (formulas move when pasted elsewhere) and where they came from. */
-const sclip = { text: "", inputs: [] as string[][], r0: 0, c0: 0, cut: false };
+const sclip = { text: "", inputs: [] as string[][], styles: [] as string[][], fmts: [] as string[][], k: 0, r0: 0, c0: 0, cut: false };
 
 /** Cell styles (palette after GridCraft's built-in styles). */
 export const CELL_STYLES: [string, string][] = [
@@ -43,14 +46,23 @@ export const CELL_STYLES: [string, string][] = [
   ["Title", "b;c:#0C1A2B;z:24"], ["Heading 1", "b;c:#0C1A2B;z:20;bb:thick #0B5CAD"], ["Heading 2", "b;c:#0C1A2B;z:17;bb:thick #9DC3E6"], ["Heading 3", "b;c:#0C1A2B;z:14;bb:med #BDD7EE"], ["Heading 4", "b;c:#0C1A2B"],
   ["Total", "b;bt:thin #0B5CAD;bb:dbl #0B5CAD"], ["Accent", "b;c:#FFFFFF;f:#0B5CAD"], ["Accent, light", "c:#0C1A2B;f:#DDEBF7"],
 ];
+/** The cell style gallery: sections of styles. Accents use the family colours, at 20, 40 and 60 % strength and full. */
+const ACCENTS: [string, string][] = [["Blue", "#0B5CAD"], ["Orange", "#E67E22"], ["Green", "#1E8449"], ["Purple", "#7D3C98"], ["Teal", "#138D90"], ["Red", "#C0392B"]];
+const tint = (h: string, t: number) => "#" + [1, 3, 5].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) + (255 - parseInt(h.slice(i, i + 2), 16)) * (1 - t)).toString(16).padStart(2, "0")).join("").toUpperCase();
+export const STYLE_SECTIONS: [string, [string, string][]][] = [
+  ["Good, bad and neutral", CELL_STYLES.filter(x => ["Normal", "Good", "Bad", "Neutral"].includes(x[0]))],
+  ["Data and checks", CELL_STYLES.filter(x => ["Calculation", "Check Cell", "Input", "Output", "Note", "Warning Text", "Explanatory Text", "Linked Cell"].includes(x[0]))],
+  ["Titles and headings", CELL_STYLES.filter(x => ["Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Total"].includes(x[0]))],
+  ...[0.2, 0.4, 0.6, 1].map(t => [t < 1 ? `Accents, ${t * 100} %` : "Accents", ACCENTS.map(([n, c]) => [t < 1 ? `${n} ${t * 100} %` : n, t < 1 ? `c:#0C1A2B;f:${tint(c, t)}` : `b;c:#FFFFFF;f:${c}`] as [string, string])] as [string, [string, string][]]),
+];
 /** Standard tab and line colours. */
 export const STD_COLORS = ["#C00000", "#FF0000", "#FFC000", "#FFFF00", "#92D050", "#00B050", "#00B0F0", "#0070C0", "#002060", "#7030A0", "#000000", "#7F7F7F"];
 /** What the Sheet Tools ribbon tab can do on the sheet shown (set while Sheets is open). */
-export type SheetApi = Record<string, (...a: any[]) => unknown> & { frozen: () => boolean; pen: () => [string, string] };
+export type SheetApi = Record<string, (...a: any[]) => unknown> & { frozen: () => boolean; pen: () => [string, string]; page: () => SheetPage; setPage: (x: Partial<SheetPage>) => Promise<unknown> };
 export const [sheetApi, setSheetApi] = createSignal<SheetApi | null>(null);
 
 /** The sheet tab shown (also what File › Print prints). */
-export const [sheetK, setSheetK] = createSignal(0);
+export { sheetK, setSheetK };
 export const Sheets = () => {
   const k = sheetK, setK = setSheetK;
   const [data] = createResource(() => [tick(), k(), P().sheets.length], () => (P().sheets.length ? call<SheetOut>("sheet_view", { k: Math.min(k(), P().sheets.length - 1) }) : undefined));
@@ -70,12 +82,16 @@ export const Sheets = () => {
   const [top, setTop] = createSignal(0);
   const [h, setH] = createSignal(600);
   const [tw, setTw] = createSignal<[number, number] | null>(null);
-  const nrows = () => Math.max(200, (data()?.rows ?? 0) + 30), ncols = () => Math.max(26, (data()?.cols ?? 0) + 6);
+  // The grid reaches past the used cells, and grows as you go further (by keys or by scrolling).
+  const [reach, setReach] = createSignal<[number, number]>([0, 0]);
+  const nrows = () => Math.max(200, (data()?.rows ?? 0) + 30, reach()[0] + 40), ncols = () => Math.max(26, (data()?.cols ?? 0) + 6, reach()[1] + 8);
   const width = (c: number) => (tw()?.[0] === c ? tw()![1] : sheet()?.widths?.[c] ?? CW);
   const lefts = createMemo(() => { let x = HW; return Array.from({ length: ncols() }, (_, c) => { const l = x; x += width(c); return l; }); });
   // Row heights: tops[r] is where row r starts (below the header); a row being dragged uses th.
   const [th, setTh] = createSignal<[number, number] | null>(null);
-  const rh = (r: number) => (th()?.[0] === r ? th()![1] : sheet()?.heights?.[r] ?? RH);
+  // Rows grow to fit a bigger font or wrapped text, unless their height was set by hand.
+  const auto = createMemo(() => autoHeights(sheet(), a => cells().get(a)?.[2] ?? ""));
+  const rh = (r: number) => (th()?.[0] === r ? th()![1] : sheet()?.heights?.[r] ?? auto().get(r) ?? RH);
   const tops = createMemo(() => { let y = 0; const t = new Array<number>(nrows() + 1); for (let r = 0; r <= nrows(); r++) { t[r] = y; y += rh(r); } return t; });
   const top_ = (r: number) => tops()[Math.min(r, nrows())] ?? r * RH;
   /** The row at y (px below the header). */
@@ -86,16 +102,17 @@ export const Sheets = () => {
   let box!: HTMLDivElement, cellEl: HTMLInputElement | undefined, barEl!: HTMLInputElement, lastEl: "cell" | "bar" = "cell";
   const ro = new ResizeObserver(() => setH(box.clientHeight));
   // The shared grid engine's selection (as in the task sheet): several ranges, whole rows and columns.
-  const S = createSel(() => [nrows(), ncols()], (r, c) => reveal(r, c));
+  const S = createSel(() => [nrows() - 1, ncols()], (r, c) => reveal(r, c));
   const cur = (): [number, number] => [S.cur().row, S.cur().col];
   const end = (): [number, number] => { const g = S.ranges()[S.ranges().length - 1]; return g ? [g.r1, g.c1] : cur(); };
   const setCur = ([r, c]: [number, number]) => { S.setCur({ row: r, col: c }); S.setRanges([{ r0: r, c0: c, r1: r, c1: c }]); };
   const setEnd = ([r, c]: [number, number]) => S.drag(r, c);
   const reveal = (r: number, c: number) => {
+    if (r > reach()[0] - 10 || c > reach()[1] - 4) setReach([Math.max(reach()[0], r), Math.max(reach()[1], c)]);
     if (!box) return;
-    if (top_(r) < box.scrollTop) box.scrollTop = top_(r); else if (top_(r + 1) + RH > box.scrollTop + box.clientHeight - 24) box.scrollTop = top_(r + 1) + RH - box.clientHeight + 24;
-    const l = lefts()[c] ?? 0, w = width(c);
-    if (l - HW < box.scrollLeft) box.scrollLeft = l - HW; else if (l + w > box.scrollLeft + box.clientWidth - 16) box.scrollLeft = l + w - box.clientWidth + 16;
+    const [fr, fc] = frozen(), y0 = top_(fr), x0 = lefts()[fc] ?? HW;
+    if (r >= fr) { if (top_(r) - y0 < box.scrollTop) box.scrollTop = top_(r) - y0; else if (top_(r + 1) + RH > box.scrollTop + box.clientHeight - 24) box.scrollTop = top_(r + 1) + RH - box.clientHeight + 24; }
+    if (c >= fc) { const l = lefts()[c] ?? 0, w = width(c); if (l - x0 < box.scrollLeft) box.scrollLeft = l - x0; else if (l + w > box.scrollLeft + box.clientWidth - 16) box.scrollLeft = l + w - box.clientWidth + 16; }
   };
   const fmtTarget: F.Target = {
     get: () => { const st = sheet()?.style ?? {}, out: [string, string][] = []; S.each((r, c) => out.push([a1(r, c), st[a1(r, c)] ?? ""]), 20000); return out; },
@@ -125,8 +142,18 @@ export const Sheets = () => {
     batch(() => { setEdit(null); setHome(null); setPoint(null); });
     if (hm.k !== k()) setK(hm.k);
     const val = v.startsWith("=") && v.length > 1 ? closeParens(v) : v;
-    if (move) { go(Math.max(0, hm.r + move[0]), Math.max(0, hm.c + move[1])); box?.focus(); }
+    if (move) { const m = mergeAt(hm.r, hm.c), [fr, fc] = m ? [move[0] > 0 ? m.r1 : m.r0, move[1] > 0 ? m.c1 : m.c0] : [hm.r, hm.c]; go(Math.max(0, fr + move[0]), Math.max(0, fc + move[1])); box?.focus(); }
     if (val !== input(hm.k, hm.r, hm.c)) await put([[a1(hm.r, hm.c), val]], hm.k);
+  };
+  /** Ctrl+Enter: the text typed goes into every selected cell (formulas move with each cell). */
+  const fillSel = async () => {
+    const v = edit(), hm = home(); if (v === null || !hm) return;
+    batch(() => { setEdit(null); setHome(null); setPoint(null); });
+    const val = v.startsWith("=") && v.length > 1 ? closeParens(v) : v, items: [string, number, number][] = [], at: string[] = [];
+    S.each((r, c) => { items.push([val, r - hm.r, c - hm.c]); at.push(a1(r, c)); }, 20000);
+    const moved = val.startsWith("=") ? await call<string[]>("formula_shift", { items }) : null;
+    await put(at.map((a, i) => [a, moved?.[i] ?? val]));
+    box?.focus();
   };
   const typed = (e: HTMLInputElement) => batch(() => { setEdit(e.value); setCaret(e.selectionStart ?? e.value.length); setPoint(null); setSug(0); setHideSug(false); });
   const sugs = createMemo((): Suggestion[] => (edit() === null || hideSug() ? [] : suggest(edit()!, caret(), cat())));
@@ -157,6 +184,7 @@ export const Sheets = () => {
     if (list.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setSug((sug() + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length); return; }
     if (list.length && e.key === "Tab") { e.preventDefault(); accept(list[sug()]); return; }
     if (e.key === "F4") { e.preventDefault(); const [t, c] = cycleAnchor(edit()!, caret()); setText(t, c); return; }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fillSel(); return; }
     if (e.key === "Enter") { e.preventDefault(); commit([e.shiftKey ? -1 : 1, 0]); }
     else if (e.key === "Tab") { e.preventDefault(); commit([0, e.shiftKey ? -1 : 1]); }
     else if (e.key === "Escape") { e.preventDefault(); if (list.length) setHideSug(true); else cancel(); }
@@ -174,18 +202,39 @@ export const Sheets = () => {
     // Keys typed before the cell editor has focus still go into it (fast typing loses nothing).
     if (edit() !== null) { if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const t = edit()!, at = caret(); setText(t.slice(0, at) + e.key + t.slice(at), at + 1); } return; }
     const [r, c] = e.shiftKey ? end() : cur();
-    const mv = (dr: number, dc: number) => { e.preventDefault(); go(r + dr, c + dc, e.shiftKey); };
+    // Arrows step over a merged range as over one cell, and land on its top-left cell.
+    const mv = (dr: number, dc: number) => {
+      e.preventDefault();
+      const here = mergeAt(r, c), [fr, fc] = here ? [dr > 0 ? here.r1 : here.r0, dc > 0 ? here.c1 : here.c0] : [r, c];
+      const tr = Math.max(0, fr + dr), tc = Math.max(0, fc + dc), m = mergeAt(tr, tc);
+      if (m && !e.shiftKey) { go(m.r0, m.c0); setEnd([m.r1, m.c1]); } else go(tr, tc, e.shiftKey);
+    };
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.altKey && e.key === "=") { e.preventDefault(); return autoSum("SUM"); }
     if (ctrl && e.shiftKey && (e.key === "+" || e.key === "=")) { e.preventDefault(); return insertCells(false); }
     if (ctrl && !e.shiftKey && e.key === "-") { e.preventDefault(); return insertCells(true); }
+    // Ctrl+arrow: to the edge of the data (the next filled cell after a gap, or the last of a filled run).
+    const filled = (rr: number, cc: number) => !!cells().get(a1(rr, cc))?.[2];
+    const jump = (dr: number, dc: number) => {
+      e.preventDefault();
+      let [rr, cc] = [r, c]; const lim = (x: number, y: number) => x >= 0 && y >= 0 && x < nrows() && y < ncols();
+      if (lim(rr + dr, cc + dc) && filled(rr, cc) && filled(rr + dr, cc + dc)) { while (lim(rr + dr, cc + dc) && filled(rr + dr, cc + dc)) { rr += dr; cc += dc; } }
+      else { rr += dr; cc += dc; while (lim(rr, cc) && !filled(rr, cc) && lim(rr + dr, cc + dc)) { rr += dr; cc += dc; } if (!lim(rr, cc)) { rr -= dr; cc -= dc; } }
+      go(Math.max(0, rr), Math.max(0, cc), e.shiftKey);
+    };
+    if (ctrl && e.key.startsWith("Arrow")) return jump(...(({ ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key]));
+    const page = Math.max(1, Math.floor((box?.clientHeight ?? 400) / RH) - 2);
     switch (e.key) {
+      case "Home": e.preventDefault(); return ctrl ? go(0, 0, e.shiftKey) : go(r, 0, e.shiftKey);
+      case "End": e.preventDefault(); return ctrl ? go(Math.max(0, (data()?.rows ?? 1) - 1), Math.max(0, (data()?.cols ?? 1) - 1), e.shiftKey) : go(r, Math.max(0, (data()?.cols ?? 1) - 1), e.shiftKey);
+      case "PageDown": return mv(page, 0); case "PageUp": return mv(-page, 0);
       case "ArrowDown": return mv(1, 0); case "ArrowUp": return mv(-1, 0); case "ArrowLeft": return mv(0, -1); case "ArrowRight": return mv(0, 1);
       case "Tab": e.preventDefault(); return go(cur()[0], cur()[1] + (e.shiftKey ? -1 : 1));
       case "Enter": case "F2": e.preventDefault(); return startEdit(input(k(), ...cur()));
       case "Delete": case "Backspace": e.preventDefault(); return clear();
     }
     if (ctrl && e.altKey && e.key.toLowerCase() === "v") { e.preventDefault(); return import("./dialogs").then(d => d.pasteSpecial()); }
+    if (ctrl && e.key.toLowerCase() === "d" && range()[0] === range()[2] && range()[0] > 0) { e.preventDefault(); const [r0, c0, , c1] = range(); setCur([r0 - 1, c0]); setEnd([r0, c1]); fillRange(r0, c1, true); return; }
     if (ctrl && e.key.toLowerCase() === "d") { e.preventDefault(); const [a, , c2] = range(); if (c2 > a) { const [r0, c0, , c1] = range(); setCur([r0, c0]); setEnd([r0, c1]); fillRange(c2, c1, true); } return; }
     if (ctrl && e.key.toLowerCase() === "r") { e.preventDefault(); const [, b, , d] = range(); if (d > b) { const [r0, c0, r1] = range(); setCur([r0, c0]); setEnd([r1, c0]); fillRange(r1, d, true); } return; }
     if (ctrl && ["b", "i", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return F.toggle(e.key.toLowerCase() as "b"); }
@@ -198,8 +247,8 @@ export const Sheets = () => {
     for (let r = r0; r <= r1; r++) { const l = [], m = []; for (let c = c0; c <= c1; c++) { const shown = cells().get(a1(r, c))?.[2] ?? ""; l.push(shown); m.push(input(k(), r, c) || shown); } lines.push(l); inputs.push(m); }
     const st = sheet()?.style ?? {};
     clip.text = toTsv(lines); clip.styles = Array.from({ length: r1 - r0 + 1 }, (_, i) => Array.from({ length: c1 - c0 + 1 }, (_, j) => st[a1(r0 + i, c0 + j)] ?? ""));
-    Object.assign(sclip, { text: clip.text, inputs, r0, c0, cut });
-    if (cut) clear();
+    const fm = sheet()?.fmt ?? {};
+    Object.assign(sclip, { text: clip.text, inputs, styles: clip.styles, fmts: Array.from({ length: r1 - r0 + 1 }, (_, i) => Array.from({ length: c1 - c0 + 1 }, (_, j) => fm[a1(r0 + i, c0 + j)] ?? "")), k: k(), r0, c0, cut });
     return clip.text;
   };
   const onCopy = (e: ClipboardEvent, cut = false) => { if (edit() !== null) return; e.preventDefault(); e.clipboardData?.setData("text/plain", copy(cut)); };
@@ -218,24 +267,51 @@ export const Sheets = () => {
     if (tr) m = transpose(m);
     return m.flatMap((l, i) => l.map((v, j) => [a1(r0 + i, c0 + j), v] as [string, string]));
   };
+  /** A paste in one undo step: a copy made in Sheets brings formulas (moved), styles and number formats; a cut
+   *  clears where it came from; one copied cell pasted on a larger selection fills all of it. */
+  const pasteAll = async (text: string, tr = false) => {
+    const own = !!text && text === sclip.text, cutting = own && sclip.cut, src = { ...sclip }, b = bounds();
+    let list = await pasted(text, tr);
+    if (!list.length) return;
+    const [r0, c0] = cur(), ops: unknown[] = [];
+    const one = src.inputs.length === 1 && src.inputs[0].length === 1 && own && !cutting;
+    if (one && (b.r1 > b.r0 || b.c1 > b.c0)) {
+      const items: [string, number, number][] = [], at: string[] = [];
+      for (let r = b.r0; r <= b.r1; r++) for (let c = b.c0; c <= b.c1; c++) { items.push([src.inputs[0][0], r - src.r0, c - src.c0]); at.push(a1(r, c)); }
+      const moved = await call<string[]>("formula_shift", { items });
+      list = at.map((a, i) => [a, moved?.[i] ?? src.inputs[0][0]]);
+    }
+    if (cutting) { const ids = src.inputs.flatMap((l, i) => l.map((_, j) => a1(src.r0 + i, src.c0 + j)));
+      ops.push({ SheetCells: { k: src.k, cells: ids.map(a => [a, ""]), fmt: null } }, { SheetStyle: { k: src.k, cells: ids.map(a => [a, ""]) } }, { SheetCells: { k: src.k, cells: ids.map(a => [a, ""]), fmt: "" } }); }
+    ops.push({ SheetCells: { k: k(), cells: list, fmt: null } });
+    if (own) {
+      const rep = (m: string[][]) => one ? list.map(([a]) => [a, m[0]?.[0] ?? ""] as [string, string]) : (tr ? transpose(m) : m).flatMap((l, i) => l.map((v, j) => [a1(r0 + i, c0 + j), v] as [string, string]));
+      ops.push({ SheetStyle: { k: k(), cells: rep(src.styles) } });
+      const by = new Map<string, [string, string][]>(); rep(src.fmts).forEach(([a, f]) => by.set(f, [...(by.get(f) ?? []), [a, ""]]));
+      by.forEach((cells2, f) => ops.push({ SheetCells: { k: k(), cells: cells2, fmt: f } }));
+    }
+    await act({ Batch: ops });
+  };
+  const clipText = async () => ((await navigator.clipboard?.readText().catch(() => "")) || sclip.text).replace(/\r/g, "");
   /** Paste Special: values, formats or both, optionally transposed. */
   const pasteSpecial = async (what: "all" | "values" | "formats", tr: boolean) => {
-    const text = clip.text || (await navigator.clipboard?.readText().catch(() => "")) || "";
+    const text = (await clipText()) || clip.text;
     if (!text) return toast("Copy some cells first.");
     let st = clip.text === text ? clip.styles : [];
     if (tr && st.length) st = transpose(st);
     const [r0, c0] = cur();
-    if (what === "all") await put(await pasted(text, tr));
+    if (what === "all") return pasteAll(text, tr);
     if (what === "values") { let m = parseTsv(text); if (tr) m = transpose(m); await put(m.flatMap((l, i) => l.map((v, j) => [a1(r0 + i, c0 + j), v] as [string, string]))); }
     if (what !== "values" && st.length) await act({ SheetStyle: { k: k(), cells: st.flatMap((l, i) => l.map((v, j) => [a1(r0 + i, c0 + j), v] as [string, string])) } });
   };
-  const onPaste = async (e: ClipboardEvent) => { if (edit() !== null) return; e.preventDefault(); put(await pasted((e.clipboardData?.getData("text/plain") ?? "").replace(/\r/g, ""))); };
+  const onPaste = async (e: ClipboardEvent) => { if (edit() !== null) return; e.preventDefault(); pasteAll((e.clipboardData?.getData("text/plain") ?? "").replace(/\r/g, "")); };
   /** Fills from the selection's first rows down (or first columns right): numbers and dates continue
    *  their series, formulas move their references; Ctrl copies. */
   const fillRange = async (r1: number, c1: number, copyOnly = false) => {
-    const [a, b, c, d] = range(), out: [string, string][] = [], moves: [string, number, number][] = [], at: string[] = [];
+    const [a, b, c, d] = range(), out: [string, string][] = [], moves: [string, number, number][] = [], at: string[] = [], sty: [string, string][] = [], fms = new Map<string, [string, string][]>();
     const one = (src: string[], k2: number, srcAt: (i: number) => [number, number], to: [number, number]) => {
-      const i = (k2 - 1) % src.length, s = src[i];
+      const i = (k2 - 1) % src.length, s = src[i], [sr0, sc0] = srcAt(i), f0 = fmtOf(sr0, sc0);
+      sty.push([a1(...to), sheet()?.style?.[a1(sr0, sc0)] ?? ""]); fms.set(f0, [...(fms.get(f0) ?? []), [a1(...to), ""]]);
       if (src.some(x => x.startsWith("="))) { if (s.startsWith("=")) { const [sr, sc] = srcAt(i); moves.push([s, to[0] - sr, to[1] - sc]); at.push(a1(...to)); } else out.push([a1(...to), s]); }
       else out.push([a1(...to), series(src, k2, copyOnly)]);
     };
@@ -243,7 +319,7 @@ export const Sheets = () => {
     else if (c1 > d) for (let r = a; r <= c; r++) { const src = Array.from({ length: d - b + 1 }, (_, i) => input(k(), r, b + i)); for (let cc = d + 1; cc <= c1; cc++) one(src, cc - d, i => [r, b + i], [r, cc]); }
     if (moves.length) (await call<string[]>("formula_shift", { items: moves }))?.forEach((f, i) => out.push([at[i], f]));
     setEnd([Math.max(c, r1), Math.max(d, c1)]);
-    await put(out);
+    await act({ Batch: [{ SheetCells: { k: k(), cells: out, fmt: null } }, { SheetStyle: { k: k(), cells: sty } }, ...[...fms].map(([f, cl]) => ({ SheetCells: { k: k(), cells: cl, fmt: f } }))] });
   };
   const [fillTo, setFillTo] = createSignal<[number, number] | null>(null);
   const fillDrag = (e: MouseEvent) => {
@@ -403,13 +479,17 @@ export const Sheets = () => {
   const fillDown = () => { const b = bounds(); if (b.r1 > b.r0) { setCur([b.r0, b.c0]); setEnd([b.r0, b.c1]); fillRange(b.r1, b.c1, true); } };
   const fillRight = () => { const b = bounds(); if (b.c1 > b.c0) { setCur([b.r0, b.c0]); setEnd([b.r1, b.c0]); fillRange(b.r1, b.c1, true); } };
   /** Sorts the selected rows by the selection's first column (values and formats move with their rows). */
-  const sortRows = (asc: boolean) => {
+  const sortRows = async (asc: boolean) => {
     const b = bounds(); if (b.r1 <= b.r0) return toast("Select the rows to sort (two or more).");
     const key = (r: number) => { const x = cells().get(a1(r, b.c0)); return x?.[3] ? Number(x[3]) : (x?.[2] ?? "").toLowerCase(); };
-    const rows = Array.from({ length: b.r1 - b.r0 + 1 }, (_, i) => b.r0 + i).sort((x, y) => { const p = key(x), q = key(y); const d = typeof p === "number" && typeof q === "number" ? p - q : String(p).localeCompare(String(q), undefined, { numeric: true }); return asc ? d : -d; });
-    const vals: [string, string][] = [], sts: [string, string][] = [];
-    rows.forEach((src, i) => { for (let c = b.c0; c <= b.c1; c++) { vals.push([a1(b.r0 + i, c), input(k(), src, c)]); sts.push([a1(b.r0 + i, c), sheet().style?.[a1(src, c)] ?? ""]); } });
-    act({ Batch: [{ SheetCells: { k: k(), cells: vals, fmt: null } }, { SheetStyle: { k: k(), cells: sts } }] });
+    const blank = (r: number) => !(cells().get(a1(r, b.c0))?.[2] ?? "");
+    const rows = Array.from({ length: b.r1 - b.r0 + 1 }, (_, i) => b.r0 + i).sort((x, y) => {
+      if (blank(x) !== blank(y)) return blank(x) ? 1 : -1;
+      const p = key(x), q = key(y); const d = typeof p === "number" && typeof q === "number" ? p - q : String(p).localeCompare(String(q), undefined, { numeric: true }); return asc ? d : -d; });
+    const items: [string, number, number][] = [], at: string[] = [], sts: [string, string][] = [], fms = new Map<string, [string, string][]>();
+    rows.forEach((src, i) => { for (let c = b.c0; c <= b.c1; c++) { const to = a1(b.r0 + i, c); items.push([input(k(), src, c), b.r0 + i - src, 0]); at.push(to); sts.push([to, sheet().style?.[a1(src, c)] ?? ""]); const f = fmtOf(src, c); fms.set(f, [...(fms.get(f) ?? []), [to, ""]]); } });
+    const moved = await call<string[]>("formula_shift", { items });
+    act({ Batch: [{ SheetCells: { k: k(), cells: at.map((a, i) => [a, moved?.[i] ?? items[i][0]]), fmt: null } }, { SheetStyle: { k: k(), cells: sts } }, ...[...fms].map(([f, cl]) => ({ SheetCells: { k: k(), cells: cl, fmt: f } }))] });
   };
   const rowHeight = async () => { const b = bounds(), v = await askText("Row Height", "Row height (pixels)", String(rh(b.r0))); const n = Math.round(+(v ?? "")); if (!v || !(n >= 6 && n <= 600)) return; const hs = { ...(sheet().heights ?? {}) }; for (let r = b.r0; r <= Math.min(b.r1, b.r0 + 5000); r++) { if (n === RH) delete hs[r]; else hs[r] = n; } act({ Sheet: { k: k(), sheet: { ...sheet(), heights: hs } } }); };
   const colWidth = async () => { const b = bounds(), v = await askText("Column Width", "Column width (pixels)", String(width(b.c0))); const n = Math.round(+(v ?? "")); if (!v || !(n >= 16 && n <= 1200)) return; const ws = { ...(sheet().widths ?? {}) }; for (let c = b.c0; c <= Math.min(b.c1, b.c0 + 500); c++) ws[c] = n; saveWidths(ws); };
@@ -433,7 +513,7 @@ export const Sheets = () => {
     openMenu(e, [
       { label: "Cut", keys: "Ctrl+X", run: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); } },
       { label: "Copy", keys: "Ctrl+C", run: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); } },
-      { label: "Paste", keys: "Ctrl+V", run: async () => put(await pasted(sclip.text || (await navigator.clipboard?.readText().catch(() => "")) || "")) },
+      { label: "Paste", keys: "Ctrl+V", run: async () => pasteAll(await clipText()) },
       { label: "Paste Special…", keys: "Ctrl+Alt+V", run: () => import("./dialogs").then(d => d.pasteSpecial()) },
       "-",
       { label: nr > 1 ? `Insert ${nr} Rows Above` : "Insert Row Above", run: () => insertCells(false, false) },
@@ -462,6 +542,13 @@ export const Sheets = () => {
   // Pictures on the sheet: anchored at a cell, dragged to another cell, resized from the corner.
   const [picSel, setPicSel] = createSignal(-1);
   const imgs = () => (sheet()?.images ?? []) as SheetImage[];
+  /** Where a picture is drawn: its own size at its cell, or (placed in the cell) fitted and centred in the cell or merged range. */
+  const picBox = (im: SheetImage): [number, number, number, number] => {
+    const [r, c] = parseA1(im.cell), x = lefts()[c] ?? 0, y = top_(r);
+    if (!im.fit) return [x, y, im.w, im.h];
+    const [w, h] = fitBox(sheet(), r, c, im, rh), m = mergeAt(r, c), bw = m ? lefts()[m.c1] + width(m.c1) - x : width(c), bh = m ? top_(m.r1 + 1) - y : rh(r);
+    return [x + (bw - w) / 2, y + (bh - h) / 2, w, h];
+  };
   const putImgs = (images: SheetImage[]) => act({ SheetImages: { k: k(), images } });
   const placePic = (id: number) => {
     const im = new Image();
@@ -525,7 +612,15 @@ export const Sheets = () => {
   const addSheet = () => act({ Sheet: { k: null, sheet: { name: newName(), cells: {}, fmt: {}, widths: {} } } }).then(() => setK(P().sheets.length - 1));
   // Tabs as in a spreadsheet: double-click renames in place; right-click for the rest; drag to move.
   const [renaming, setRenaming] = createSignal(-1);
-  const rename = (i: number, n: string) => { setRenaming(-1); n = n.trim(); if (n && n !== P().sheets[i].name) act({ Sheet: { k: i, sheet: { ...P().sheets[i], name: n } } }); };
+  const rename = (i: number, n: string) => {
+    setRenaming(-1); n = n.trim();
+    if (!n || n === P().sheets[i].name) return;
+    if (/[:\\/?*[\]]/.test(n) || n.length > 31) return toast("A sheet name has at most 31 characters and none of : \\ / ? * [ ].");
+    const old = P().sheets[i].name, fz = { ...(P().ui?.freeze ?? {}) } as Record<string, unknown>;
+    const ops: unknown[] = [{ Sheet: { k: i, sheet: { ...P().sheets[i], name: n } } }];
+    if (fz[old]) { fz[n] = fz[old]; delete fz[old]; ops.push({ Ui: { key: "freeze", value: fz } }); }
+    act({ Batch: ops });
+  };
   const putTab = (i: number, x: Partial<SheetData>) => act({ Sheet: { k: i, sheet: { ...P().sheets[i], ...x } } });
   const delSheet = async (i: number) => { if (await askYes("Delete Sheet", `Delete the sheet ${P().sheets[i].name}? Formulas on other sheets that read it will show #REF!.`, "Delete")) act({ Sheet: { k: i, sheet: null } }).then(() => setK(Math.max(0, Math.min(i, P().sheets.length - 1)))); };
   const moveCopy = (i: number) => openDialog(() => {
@@ -560,6 +655,13 @@ export const Sheets = () => {
     ]);
   };
   const [dragTab, setDragTab] = createSignal(-1);
+  // ---------- the sheet's own page setup (Sheet Tools › Page) ----------
+  const page = (): SheetPage => sheet()?.page ?? {};
+  const setPage = (x: Partial<SheetPage>) => act({ Sheet: { k: k(), sheet: { ...sheet(), page: { ...page(), ...x } } } });
+  const areaFromSel = () => { const b = bounds(); setPage({ area: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}` }); toast(`Print area: ${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}. Only these cells print.`, true); };
+  const titlesFromSel = () => { const b = bounds(); setPage({ titles: `${b.r0 + 1}:${b.r1 + 1}` }); toast(`Rows ${b.r0 + 1}–${b.r1 + 1} print at the top of every page.`, true); };
+  const breakHere = () => { const r = cur()[0]; if (r < 1) return toast("Select a cell below the first row: the new page starts at its row."); setPage({ breaks: [...new Set([...(page().breaks ?? []), r])].sort((a, b) => a - b) }); setSheetMode("breaks"); };
+  const unbreakHere = () => setPage({ breaks: (page().breaks ?? []).filter(b => b !== cur()[0]) });
   const api: SheetApi = {
     frozen: () => !!(frozen()[0] || frozen()[1]), pen, merged,
     border, borderItems, merge, cellStyle, clearKind, fillDown, fillRight, sortRows, rowHeight, colWidth, autofitRows, autofitCols,
@@ -567,8 +669,9 @@ export const Sheets = () => {
     picture: (e: MouseEvent) => pictureMenu(e, placePic), freeze: () => freeze(frozen()[0] || frozen()[1] ? [0, 0] : [cur()[0], cur()[1]]),
     fmtLabel: () => FORMATS.find(f => f[1] === fmtOf(...cur()))?.[0].split(" (")[0] ?? (fmtOf(...cur()) || "General"),
     copy: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); box?.focus(); }, cut: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); box?.focus(); },
-    paste: async () => { await put(await pasted(sclip.text || (await navigator.clipboard?.readText().catch(() => "")) || "")); box?.focus(); },
+    paste: async () => { await pasteAll(await clipText()); box?.focus(); },
     focus: () => { box?.focus(); F.setTarget(fmtTarget); },
+    page, setPage, areaFromSel, titlesFromSel, breakHere, unbreakHere,
   };
   setSheetApi(api);
   onCleanup(() => { if (sheetApi() === api) setSheetApi(null); });
@@ -589,6 +692,14 @@ export const Sheets = () => {
     return { ...o, display: "flex", "align-items": p.v === "t" ? "flex-start" : p.v === "b" ? "flex-end" : "center", "justify-content": o["justify-content"] ?? (cells().get(a1(r, c))?.[3] ? "flex-end" : "flex-start"),
       "line-height": p.w ? "1.25" : `${RH - 3}px`, "white-space": p.w ? "normal" : "nowrap", "text-align": o["text-align"] ?? "left", "padding-top": "1px", "padding-bottom": "1px" } as JSX.CSSProperties;
   };
+  /** Text runs on over the empty cells to its right (unless it wraps, is a number or the next cell has something). */
+  const spill = (r: number, c: number): JSX.CSSProperties => {
+    const x = cells().get(a1(r, c));
+    if (!x?.[2] || x[3] || mergeAt(r, c)) return {};
+    const p = F.parse(sheet()?.style?.[a1(r, c)]); if (p.w || p.a === "r" || p.a === "c") return {};
+    if (cells().get(a1(r, c + 1))?.[2] || mergeAt(r, c + 1)) return {};
+    return { overflow: "visible", "text-overflow": "clip", "z-index": 1, position: "relative" };
+  };
   /** Merged ranges drawn over the grid: the top-left cell's value and style across the range. */
   const MergeView = (m: { r0: number; c0: number; r1: number; c1: number }) => {
     const x = () => cells().get(a1(m.r0, m.c0)), st = () => sheet()?.style ?? {};
@@ -605,14 +716,18 @@ export const Sheets = () => {
     const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); const t = th(); if (t) saveHeights(t[0], t[1]).then(() => setTh(null)); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
+  const EditBox = () => (
+                <input class="edit" list={fmtOf(home()!.r, home()!.c) === "flag" ? "countries" : undefined} style={{ left: `${lefts()[home()!.c]}px`, top: `${top_(home()!.r)}px`, width: `${Math.max(mergeAt(home()!.r, home()!.c) ? lefts()[mergeAt(home()!.r, home()!.c)!.c1] + width(mergeAt(home()!.r, home()!.c)!.c1) - lefts()[home()!.c] : width(home()!.c), 180)}px`, height: `${Math.max(RH, rh(home()!.r))}px` }} value={edit()!}
+                  ref={e => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); }} onMouseDown={e => e.stopPropagation()}
+                  onFocus={() => { lastEl = "cell"; }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} />);
   const rowView = (r: number) => (
     <div class="row" style={{ top: `${top_(r)}px`, height: `${rh(r)}px` }}>
-      <div class="c idc rowh" classList={{ on: S.ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1)) }} style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 2, "text-align": "center", "line-height": `${rh(r) - 1}px` }}>{r + 1}<i class="rszr" title="Drag to change the row height; double-click for the standard height" onMouseDown={e => rowResize(e, r)} onDblClick={e => { e.stopPropagation(); saveHeights(r, null); }} /></div>
+      <div class="c idc rowh" classList={{ on: S.ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1)) }} style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 5, "text-align": "center", "line-height": `${rh(r) - 1}px` }}>{r + 1}<i class="rszr" title="Drag to change the row height; double-click for the standard height" onMouseDown={e => rowResize(e, r)} onDblClick={e => { e.stopPropagation(); saveHeights(r, null); }} /></div>
       <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => {
         const x = () => cells().get(a1(r, c));
         const err = () => ERRORS[x()?.[2] ?? ""];
         return <div class="c" classList={{ r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "" }} title={err() ?? undefined}
-          style={{ width: `${width(c)}px`, ...cellCss(r, c, rh(r)), ...(c < frozen()[1] ? { position: "sticky", left: `${lefts()[c]}px`, "z-index": 1 } : {}) }}>
+          style={{ width: `${width(c)}px`, ...cellCss(r, c, rh(r)), ...(c < frozen()[1] ? { position: "sticky", left: `${lefts()[c]}px`, "z-index": 3 } : {}), ...spill(r, c) }}>
           <Show when={!mergeAt(r, c)}><Show when={fmtOf(r, c) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></Show></div>;
       }}</For>
     </div>
@@ -638,35 +753,39 @@ export const Sheets = () => {
         <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><button class="btn pri" style={{ width: "fit-content" }} onClick={addSheet}>Add a sheet</button></div>}>
-        <div class="fbar"><span class="fname">{home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : a1(...cur())}</span><Show when={aggregate(S, (r, c) => cells().get(a1(r, c))?.[2] ?? "")}>{t => <span class="agg">{t()}</span>}</Show>
+        <div class="fbar"><span class="fname">{home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : a1(...cur())}</span><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
           <input ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
             onFocus={() => { lastEl = "bar"; if (edit() === null) startEdit(input(k(), ...cur())); }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} /></div>
-        <div class="gscroll sheetgrid" ref={el => { box = el; ro.observe(el); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => setTop(box.scrollTop)}
+        <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85} /></div></Show>
+        <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { setTop(box.scrollTop); if (box.scrollTop + box.clientHeight > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if (box.scrollLeft + box.clientWidth > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
           onContextMenu={e => { e.preventDefault(); if (edit() === null) cellMenu(e); }} onDblClick={() => { if (edit() === null) startEdit(input(k(), ...cur())); }}>
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px` }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
               <div class="hc idc" style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 2 }} />
               <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => <div class="hc colh" onMouseDown={e => colDown(e, c)} classList={{ on: S.ranges().some(g => c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1)) }} style={{ width: `${width(c)}px`, "justify-content": "center", "align-items": "center", position: "relative" }}>{colName(c)}<i class="rsz" title="Drag to resize; double-click to fit" onMouseDown={e => resize(e, c)} onDblClick={e => { e.stopPropagation(); autofit(c); }} /></div>}</For>
             </div>
-            <Show when={frozen()[0] > 0}><div class="sfrozen" style={{ top: `${RH}px`, height: `${top_(frozen()[0])}px`, "margin-bottom": `${-top_(frozen()[0])}px` }}><For each={Array.from({ length: frozen()[0] }, (_, r) => r)}>{r => rowView(r)}</For></div></Show>
+            <Show when={frozen()[0] > 0}><div class="sfrozen" style={{ top: `${RH}px`, height: `${top_(frozen()[0])}px`, "margin-bottom": `${-top_(frozen()[0])}px` }}><For each={Array.from({ length: frozen()[0] }, (_, r) => r)}>{r => rowView(r)}</For>
+              <For each={merges().filter(m => m.r0 < frozen()[0])}>{m => MergeView(m)}</For>
+              <Show when={edit() !== null && home()?.k === k() && home()!.r < frozen()[0]}>{EditBox()}</Show></div></Show>
             <div class="gbody">
+              <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbg" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }} />}</For></Show>
               <For each={vis().filter(r => r >= frozen()[0])}>{r => rowView(r)}</For>
-              <For each={merges().filter(m => m.r1 >= (vis()[0] ?? 0) && m.r0 <= (vis()[vis().length - 1] ?? 0))}>{m => MergeView(m)}</For>
+              <For each={merges().filter(m => m.r0 >= frozen()[0] && m.r1 >= (vis()[0] ?? 0) && m.r0 <= (vis()[vis().length - 1] ?? 0))}>{m => MergeView(m)}</For>
+              <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbreak" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }}><span>Page {pg.n}</span></div>}</For></Show>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${top_(b.r0)}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${top_(Math.min(b.r1, nrows() - 1) + 1) - top_(b.r0)}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
-              <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell); return (
-                <div class="simg" data-i={i()} classList={{ on: picSel() === i() }} style={{ left: `${lefts()[rc()[1]] ?? 0}px`, top: `${top_(rc()[0])}px`, width: `${im.w}px`, height: `${im.h}px` }}
-                  title="Drag to move; drag the corner to resize; Delete removes it" onMouseDown={e => picDrag(e, i(), false)}>
+              <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell), box2 = () => picBox(im); return (
+                <div class="simg" data-i={i()} classList={{ on: picSel() === i(), fit: !!im.fit }} style={{ left: `${box2()[0]}px`, top: `${box2()[1]}px`, width: `${box2()[2]}px`, height: `${box2()[3]}px` }}
+                  title={im.fit ? "Placed in the cell: it follows the cell's size. Drag to move it to another cell." : "Drag to move; drag the corner to resize; Delete removes it"} onMouseDown={e => picDrag(e, i(), false)}>
                   <img src={picData(im.pic)} alt="" draggable={false} />
-                  <Show when={picSel() === i()}><i class="corner" onMouseDown={e => picDrag(e, i(), true)} /><button class="x" title="Remove the picture from the sheet" onMouseDown={e => e.stopPropagation()} onClick={() => { putImgs(imgs().filter((_, j) => j !== i())); setPicSel(-1); }}>×</button></Show>
-                </div>); }}</For>
+                  <Show when={picSel() === i()}><Show when={!im.fit}><i class="corner" onMouseDown={e => picDrag(e, i(), true)} /></Show>
+                    <button class="x" title="Remove the picture from the sheet" onMouseDown={e => e.stopPropagation()} onClick={() => { putImgs(imgs().filter((_, j) => j !== i())); setPicSel(-1); }}>×</button>
+                    <button class="pinc" title={im.fit ? "Place over cells (free size)" : "Place in cell: fit the picture inside its cell or merged cells"} onMouseDown={e => e.stopPropagation()}
+                      onClick={() => putImgs(imgs().map((x, j) => (j === i() ? { ...x, fit: !x.fit } : x)))}><Icon n={im.fit ? "image" : "pincell"} /></button></Show>
+                </div>); void rc; }}</For>
               <Show when={fillTo()}>{t => { const [a, b] = cur(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(b, range()[1])]}px`, top: `${top_(Math.min(a, range()[0]))}px`, width: `${lefts()[t()[1]] + width(t()[1]) - lefts()[Math.min(b, range()[1])]}px`, height: `${top_(t()[0] + 1) - top_(Math.min(a, range()[0]))}px` }} />; }}</Show>
               <Show when={edit() === null}><i class="fill" title="Drag to fill (series; formulas follow); hold Ctrl to copy" style={{ left: `${lefts()[range()[3]] + width(range()[3]) - 4}px`, top: `${top_(range()[2] + 1) - 4}px` }} onMouseDown={fillDrag} /></Show>
-              <Show when={edit() !== null && home()?.k === k()}>
-                <input class="edit" list={fmtOf(home()!.r, home()!.c) === "flag" ? "countries" : undefined} style={{ left: `${lefts()[home()!.c]}px`, top: `${top_(home()!.r)}px`, width: `${Math.max(mergeAt(home()!.r, home()!.c) ? lefts()[mergeAt(home()!.r, home()!.c)!.c1] + width(mergeAt(home()!.r, home()!.c)!.c1) - lefts()[home()!.c] : width(home()!.c), 180)}px`, height: `${Math.max(RH, rh(home()!.r))}px` }} value={edit()!}
-                  ref={e => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); }} onMouseDown={e => e.stopPropagation()}
-                  onFocus={() => { lastEl = "cell"; }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} />
-              </Show>
+              <Show when={edit() !== null && home()?.k === k() && home()!.r >= frozen()[0]}>{EditBox()}</Show>
             </div>
           </div>
         </div>
@@ -690,6 +809,12 @@ export const Sheets = () => {
             <input class="tabname" value={s2.name} ref={el2 => setTimeout(() => { el2.focus(); el2.select(); })} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") rename(i(), e.currentTarget.value); if (e.key === "Escape") setRenaming(-1); }} onBlur={e => rename(i(), e.currentTarget.value)} />
           </Show></Show>}</For>
         <button onClick={addSheet} title="New sheet">＋</button>
+        <span class="grow" />
+        <span class="smodes">
+          <button classList={{ on: sheetMode() === "normal" }} title="Normal: the cells" onClick={() => setSheetMode("normal")}><Icon n="vnormal" /></button>
+          <button classList={{ on: sheetMode() === "layout" }} title="Page Layout: the pages as they will print, with header and footer" onClick={() => setSheetMode("layout")}><Icon n="vlayout" /></button>
+          <button classList={{ on: sheetMode() === "breaks" }} title="Page Breaks: where each printed page starts and ends" onClick={() => setSheetMode("breaks")}><Icon n="vbreaks" /></button>
+        </span>
       </div>
     </section>
   );

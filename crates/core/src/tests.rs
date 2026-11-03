@@ -535,6 +535,28 @@ fn recurring_tasks_and_excel_export_with_formulas() {
     let _ = std::fs::remove_file(&tmp);
 }
 
+// Typed dates follow the plan's date format; Text keeps what was typed; a merge shrinks with deleted
+// rows; a change to the tab's layout never undoes a cell edit.
+#[test]
+fn sheet_cells_keep_what_was_typed() {
+    let mut doc = Doc::new(plan(&[(2, "")]));
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "S".into(), merges: vec!["B2:C4".into()], ..Default::default() }) }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A1".into(), "13/01/2026".into()), ("A2".into(), "=A1+1".into()), ("A3".into(), "001".into())], fmt: None }).unwrap();
+    op(&mut doc, Op::SheetCells { k: 0, cells: vec![("A3".into(), String::new())], fmt: Some("@".into()) }).unwrap();
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    let v = crate::sheet::sheet_view(&c, 0).unwrap();
+    let at = |a: &str| v.cells.iter().find(|x| x.0 == a).map(|x| x.2.clone()).unwrap_or_default();
+    assert_eq!((at("A1"), at("A2"), at("A3")), ("13/01/2026".to_string(), "14/01/2026".to_string(), "001".to_string()));
+    // A layout change made from an older copy of the tab keeps the cells typed since.
+    let mut old = doc.p.sheets[0].clone();
+    old.cells.clear();
+    old.widths.insert(0, 150);
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(old) }).unwrap();
+    assert_eq!((doc.p.sheets[0].cells.len(), doc.p.sheets[0].widths.get(&0)), (3, Some(&150)));
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 1, count: -1 }).unwrap();
+    assert_eq!(doc.p.sheets[0].merges, vec!["B2:C3".to_string()], "deleting the top row of a merge shrinks it");
+}
+
 #[test]
 fn sheets_read_the_plan_by_name_and_behave_like_excel() {
     let mut doc = Doc::new(plan(&[(2, ""), (3, "1"), (0, "2")]));

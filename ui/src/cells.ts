@@ -23,8 +23,9 @@ export const transpose = (m: string[][]) => Array.from({ length: Math.max(...m.m
 /** The last copy from either grid: values and cell styles (for Paste Special › Formats). */
 export const clip = { text: "", styles: [] as string[][] };
 
-const NUM = /^(-?[\d,]*\.?\d+)(\s*\S*)$/, TAIL = /^(.*?)(\d+)$/;
-export const asDate = (s: string) => { if (!/\d/.test(s) || !/[-/ ]/.test(s) || /^\d+$/.test(s)) return null; const d = new Date(s.replace(/-(\d\d)$/, " 20$1").replace(/-/g, " ")); return isNaN(+d) ? null : dateDay(d); };
+const NUM = /^(-?[\d,]*\.?\d+)(\s*[^\d\s]*)$/, TAIL = /^(.*?)(\d+)$/;
+const DATE = /^\d{4}-\d{1,2}-\d{1,2}$|^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$|^\d{1,2}[ -][A-Za-z]{3,9}[ -]\d{2,4}$|^[A-Za-z]{3,9} \d{1,2},? \d{4}$/;
+export const asDate = (s: string) => { s = s.trim(); if (!DATE.test(s)) return null; const d = new Date(/^\d{4}-/.test(s) ? s.replace(/-/g, "/") : s.replace(/-(\d\d)$/, " 20$1").replace(/-/g, " ")); return isNaN(+d) ? null : dateDay(d); };
 /**
  * The k-th value (k = 1, 2, …) after the source cells `src`, as a spreadsheet fill handle does:
  * numbers continue their step (a single number counts up by 1), "Phase 1" → "Phase 2",

@@ -397,8 +397,8 @@ fn pictures_are_kept_in_the_plan_and_placed_on_sheets() {
     assert_eq!(doc.p.pictures.iter().map(|x| x.id).collect::<Vec<_>>(), vec![1, 2]);
     assert!(doc.apply(Op::Picture { id: 0, pic: Some(Picture { data: "javascript:alert(1)".into(), ..Default::default() }) }, "%d-%b-%y").is_err(), "only images");
     op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Board".into(), ..Default::default() }) });
-    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60 }, SheetImage { pic: 9, cell: "C3".into(), w: 1, h: 1 }] });
-    assert_eq!(doc.p.sheets[0].images, vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60 }], "unknown pictures are left out");
+    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60, fit: false }, SheetImage { pic: 9, cell: "C3".into(), w: 1, h: 1, fit: false }] });
+    assert_eq!(doc.p.sheets[0].images, vec![SheetImage { pic: 2, cell: "B2".into(), w: 120, h: 60, fit: false }], "unknown pictures are left out");
     // Renaming the sheet keeps its pictures; saving and opening keeps everything.
     let s = SheetData { name: "Client board".into(), ..doc.p.sheets[0].clone() };
     op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(SheetData { images: vec![], ..s }) });
@@ -418,7 +418,7 @@ fn sheet_pictures_go_into_the_workbook() {
     let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     op(&mut doc, Op::Picture { id: 0, pic: Some(Picture { id: 0, name: "Logo".into(), role: "Client".into(), data: png.into() }) });
     op(&mut doc, Op::Sheet { k: None, sheet: Some(SheetData { name: "Board".into(), ..Default::default() }) });
-    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 1, cell: "B2".into(), w: 80, h: 40 }] });
+    op(&mut doc, Op::SheetImages { k: 0, images: vec![SheetImage { pic: 1, cell: "B2".into(), w: 80, h: 40, fit: true }] });
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let f = std::env::temp_dir().join(format!("dp-pics-{}-{}.xlsx", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
     crate::io::export(&doc.p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
@@ -454,6 +454,16 @@ fn sheet_layout_is_kept_and_exported() {
     let bytes = std::fs::read(&f).unwrap();
     std::fs::remove_file(&f).ok();
     assert!(bytes.len() > 1000, "the workbook is written with merges, borders and heights");
+    // The sheet's own page setup is kept (and cleaned), and goes into the workbook.
+    let mut s = doc.p.sheets[0].clone();
+    s.page = Some(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:D20".into(), titles: "1:2".into(), no_hf: true, breaks: vec![12, 0, 12, 5], scale: 9999, ..Default::default() });
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) });
+    let pg = doc.p.sheets[0].page.clone().unwrap();
+    assert_eq!((pg.breaks, pg.scale, pg.area.as_str(), pg.no_hf), (vec![5, 12], 400, "A1:D20", true));
+    crate::io::export(&doc.p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let bytes = std::fs::read(&f).unwrap();
+    std::fs::remove_file(&f).ok();
+    assert!(bytes.len() > 1000, "the workbook is written with the sheet's page setup");
 }
 
 // Writing and reading XER, PMXML and MPX take time in step with the plan's size, not its square
