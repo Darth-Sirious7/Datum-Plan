@@ -476,7 +476,7 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     /// Conditional formatting: rules over ranges, the first that applies to a cell wins.
     #[serde(default, skip_serializing_if = "Vec::is_empty")] pub cond: Vec<CondRule>,
     /// The sheet's own page setup for printing.
-    #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<SheetPage> }
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<Box<SheetPage>> }
 
 /// A range "A1:C2" as (row0, col0, row1, col1), 0-based and ordered.
 pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {

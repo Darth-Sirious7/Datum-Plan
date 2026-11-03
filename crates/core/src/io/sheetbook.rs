@@ -86,7 +86,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             s.heights = p.heights.clone();
             s.color = p.color.clone();
             s.hidden = p.hidden;
-            s.page = p.page.clone();
+            s.page = p.page.clone().map(Box::new);
             if let Some((r, c)) = p.freeze { out.freeze.push((name.clone(), r, c)); }
             for (cell, w, h, data, mime) in &p.pictures {
                 let id = out.pictures.len() as u32 + 1;
@@ -95,7 +95,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             }
         }
         if let Ok(cond) = serde_json::from_value::<Vec<crate::model::CondRule>>(meta["sheets"][name.as_str()]["cond"].clone()) { s.cond = cond; }
-        if meta["sheets"][name.as_str()]["no_hf"].as_bool() == Some(true) { s.page.get_or_insert_with(SheetPage::default).no_hf = true; }
+        if meta["sheets"][name.as_str()]["no_hf"].as_bool() == Some(true) { s.page.get_or_insert_with(Default::default).no_hf = true; }
         out.sheets.push(s);
     }
     if out.sheets.is_empty() { return Err("That workbook has no sheets to bring in.".into()) }

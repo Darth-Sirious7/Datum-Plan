@@ -456,7 +456,7 @@ fn sheet_layout_is_kept_and_exported() {
     assert!(bytes.len() > 1000, "the workbook is written with merges, borders and heights");
     // The sheet's own page setup is kept (and cleaned), and goes into the workbook.
     let mut s = doc.p.sheets[0].clone();
-    s.page = Some(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:D20".into(), titles: "1:2".into(), no_hf: true, breaks: vec![12, 0, 12, 5], scale: 9999, ..Default::default() });
+    s.page = Some(Box::new(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:D20".into(), titles: "1:2".into(), no_hf: true, breaks: vec![12, 0, 12, 5], scale: 9999, ..Default::default() }));
     op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) });
     let pg = doc.p.sheets[0].page.clone().unwrap();
     assert_eq!((pg.breaks, pg.scale, pg.area.as_str(), pg.no_hf), (vec![5, 12], 400, "A1:D20", true));
@@ -476,7 +476,7 @@ fn sheets_go_to_a_workbook_and_back() {
     let sheet = SheetData { name: "Board".into(), cells: cells.into_iter().collect(), style: [("A1".to_string(), "b;c:#FFFFFF;f:#0B5CAD;a:c;bb:thick #C00000".to_string())].into(),
         fmt: [("D2".to_string(), "flag".to_string()), ("E2".to_string(), "money".to_string()), ("G2".to_string(), "@".to_string())].into(),
         hide_rows: vec![7], hide_cols: vec![8], merges: vec!["A1:C1".into()], widths: [(0, 180)].into(), cond: vec![CondRule { range: "E2:E9".into(), op: "gt".into(), a: "1000".into(), style: "c:#9C0006;f:#FFC7CE".into(), ..Default::default() }, CondRule { range: "F2:F9".into(), op: "bar".into(), style: "#2F6FDE".into(), ..Default::default() }, CondRule { range: "B2:B9".into(), op: "date".into(), a: "past".into(), style: "c:#C00000".into(), ..Default::default() }, CondRule { range: "A1".into(), op: "nonsense".into(), ..Default::default() }], heights: [(0, 40)].into(), color: "#00B050".into(),
-        page: Some(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:G9".into(), titles: "1:1".into(), no_hf: true, center: true, ..Default::default() }), ..Default::default() };
+        page: Some(Box::new(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:G9".into(), titles: "1:1".into(), no_hf: true, center: true, ..Default::default() })), ..Default::default() };
     op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) });
     op(&mut doc, Op::Ui { key: "freeze".into(), value: serde_json::json!({ "Board": [1, 1] }) });
     let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
