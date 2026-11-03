@@ -97,7 +97,7 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[] }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[] }
 /** A conditional formatting rule (see condfmt.tsx). */
 export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */

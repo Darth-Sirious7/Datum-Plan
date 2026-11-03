@@ -1015,6 +1015,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };
                 (r1 >= r0 && c1 >= c0 && (r1 > r0 || c1 > c0)).then(|| format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1))
             }).collect();
+            // Hidden rows (columns) move with the others; deleted ones go.
+            let moved = |v: Vec<u32>| -> Vec<u32> { v.into_iter().filter_map(|x| if x < at { Some(x) } else if count > 0 { Some(x.saturating_add(n)) } else if x >= at.saturating_add(n) { Some(x - n) } else { None }).collect() };
+            if cols { s.hide_cols = moved(std::mem::take(&mut s.hide_cols)); } else { s.hide_rows = moved(std::mem::take(&mut s.hide_rows)); }
             // Conditional formatting ranges follow their cells too.
             s.cond = std::mem::take(&mut s.cond).into_iter().filter_map(|mut c| {
                 let (r0, c0, r1, c1) = crate::model::sheet_range(&c.range)?;

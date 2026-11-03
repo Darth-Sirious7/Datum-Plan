@@ -485,6 +485,16 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
                 "bottom" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Bottom(cf.a.trim().parse().unwrap_or(10))).set_format(fm)),
                 "above" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::AboveAverage).set_format(fm)),
                 "below" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::BelowAverage).set_format(fm)),
+                "date" => {
+                    use rust_xlsxwriter::{ConditionalFormatDate as Dt, ConditionalFormatDateRule as DR};
+                    let rule = match cf.a.as_str() { "yesterday" => Some(DR::Yesterday), "today" => Some(DR::Today), "tomorrow" => Some(DR::Tomorrow), "last7" => Some(DR::Last7Days), "lastweek" => Some(DR::LastWeek), "thisweek" => Some(DR::ThisWeek), "nextweek" => Some(DR::NextWeek), "lastmonth" => Some(DR::LastMonth), "thismonth" => Some(DR::ThisMonth), "nextmonth" => Some(DR::NextMonth), _ => None };
+                    match (rule, cf.a.as_str()) {
+                        (Some(r), _) => ws.add_conditional_format(r0, c0, r1, c1, &Dt::new().set_rule(r).set_format(fm)),
+                        (None, "past") => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::LessThan(rust_xlsxwriter::Formula::new("TODAY()"))).set_format(fm)),
+                        (None, "future") => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::GreaterThan(rust_xlsxwriter::Formula::new("TODAY()"))).set_format(fm)),
+                        (None, _) => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::Between(rust_xlsxwriter::Formula::new("TODAY()"), rust_xlsxwriter::Formula::new("TODAY()+7"))).set_format(fm)),
+                    }
+                }
                 "bar" => ws.add_conditional_format(r0, c0, r1, c1, &Bar::new().set_fill_color(col(&cf.style))),
                 "scale" if !cf.style.is_empty() => ws.add_conditional_format(r0, c0, r1, c1, &S3::new().set_minimum_color(col(&cf.a)).set_midpoint_color(col(&cf.style)).set_maximum_color(col(&cf.b))),
                 "scale" => ws.add_conditional_format(r0, c0, r1, c1, &S2::new().set_minimum_color(col(&cf.a)).set_maximum_color(col(&cf.b))),
@@ -495,6 +505,8 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         if let Ok(rgb) = u32::from_str_radix(s.color.trim_start_matches('#'), 16) { if s.color.len() == 7 { ws.set_tab_color(rgb); } }
         if let Some([fr, fc]) = c.p.ui.get("freeze").and_then(|f| f.get(&s.name)).and_then(|v| serde_json::from_value::<[u32; 2]>(v.clone()).ok()) { if fr > 0 || fc > 0 { ws.set_freeze_panes(fr, fc.min(16_000) as u16).map_err(e)?; } }
         if s.hidden && k > 0 { ws.set_hidden(true); }
+        for r in &s.hide_rows { ws.set_row_hidden(*r).map_err(e)?; }
+        for c2 in &s.hide_cols { if *c2 < 16_384 { ws.set_column_hidden(*c2 as u16).map_err(e)?; } }
         let fits: Vec<&str> = s.images.iter().filter(|i| i.fit).map(|i| i.cell.as_str()).collect();
         if !flags.is_empty() || !fits.is_empty() || !s.cond.is_empty() || s.page.as_ref().is_some_and(|p| p.no_hf) {
             meta.insert(s.name.clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf) }));

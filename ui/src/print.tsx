@@ -352,7 +352,8 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     for (const im of sh.images ?? []) { const a = ref(im.cell); if (a) { r1 = Math.max(r1, a[0] + Math.ceil(im.h / 22)); c1 = Math.max(c1, a[1]); } }
     const ar = sp.area ? sp.area.split(":").map(ref) : null;
     if (ar?.[0]) { const b = ar[1] ?? ar[0]; [r0, c0, r1, c1] = [Math.min(ar[0][0], b![0]), Math.min(ar[0][1], b![1]), Math.max(ar[0][0], b![0]), Math.max(ar[0][1], b![1])]; }
-    const nr = r1 - r0 + 1, nc = c1 - c0 + 1, rows = Array.from({ length: nr }, (_, i) => r0 + i), cs = Array.from({ length: nc }, (_, j) => c0 + j);
+    const hr = new Set(sh.hide_rows ?? []), hc = new Set(sh.hide_cols ?? []);
+    const rows = Array.from({ length: r1 - r0 + 1 }, (_, i) => r0 + i).filter(r => !hr.has(r)), cs = Array.from({ length: c1 - c0 + 1 }, (_, j) => c0 + j).filter(c => !hc.has(c)), nr = rows.length, nc = cs.length;
     Object.assign(t, { r0, c0, head: ["", ...cs.map(col)], w: [34, ...cs.map(c => sh.widths?.[c] ?? 96)], right: [true, ...cs.map(() => false)], bare: !sp.headings, grid: !sp.no_grid, center: !!sp.center, font: 12,
       rows: rows.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
     // Conditional formatting, as on screen.

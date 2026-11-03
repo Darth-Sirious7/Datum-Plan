@@ -81,6 +81,8 @@ pub fn import(path: &Path) -> Result<Imported, String> {
         for a in meta["sheets"][name.as_str()]["flags"].as_array().into_iter().flatten().filter_map(|a| a.as_str()) { s.fmt.insert(a.to_string(), "flag".into()); }
         if let Some(p) = parts.as_ref().and_then(|p| p.sheets.get(name)) {
             s.widths = p.widths.clone();
+            s.hide_rows = p.hide_rows.clone();
+            s.hide_cols = p.hide_cols.clone();
             s.heights = p.heights.clone();
             s.color = p.color.clone();
             s.hidden = p.hidden;
@@ -138,7 +140,7 @@ fn style_text(st: &calamine::Style) -> String {
 
 /// The layout a workbook keeps outside the cells, read straight from its parts.
 #[derive(Default)]
-struct Layout { widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
+struct Layout { hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
 struct Parts { sheets: HashMap<String, Layout> }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
@@ -193,10 +195,12 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         let mut l = Layout { hidden: attr(t, "state").is_some_and(|s| s != "visible"), ..Default::default() };
         for c in tags(&xml, "col") {
             let (Some(a), Some(b), Some(w)) = (attr(c, "min").and_then(|x| x.parse::<u32>().ok()), attr(c, "max").and_then(|x| x.parse::<u32>().ok()), attr(c, "width").and_then(|x| x.parse::<f64>().ok())) else { continue };
-            if attr(c, "customWidth").as_deref() != Some("1") && attr(c, "hidden").is_none() { continue }
+            if matches!(attr(c, "hidden").as_deref(), Some("1") | Some("true")) { for k in a.max(1)..=b.min(a + 1_000) { l.hide_cols.push(k - 1); } continue }
+            if attr(c, "customWidth").as_deref() != Some("1") { continue }
             for k in a.max(1)..=b.min(a + 1_000) { l.widths.insert(k - 1, ((w * 7.0 + 5.0).round() as u16).clamp(16, 1200)); }
         }
         for r in tags(&xml, "row") {
+            if let (Some(n), Some("1" | "true")) = (attr(r, "r").and_then(|x| x.parse::<u32>().ok()), attr(r, "hidden").as_deref()) { if n > 0 { l.hide_rows.push(n - 1); } }
             let (Some(n), Some(h)) = (attr(r, "r").and_then(|x| x.parse::<u32>().ok()), attr(r, "ht").and_then(|x| x.parse::<f64>().ok())) else { continue };
             if attr(r, "customHeight").as_deref() == Some("1") && n > 0 { l.heights.insert(n - 1, ((h * 4.0 / 3.0).round() as u16).clamp(6, 600)); }
         }

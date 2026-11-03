@@ -475,7 +475,7 @@ fn sheets_go_to_a_workbook_and_back() {
         .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     let sheet = SheetData { name: "Board".into(), cells: cells.into_iter().collect(), style: [("A1".to_string(), "b;c:#FFFFFF;f:#0B5CAD;a:c;bb:thick #C00000".to_string())].into(),
         fmt: [("D2".to_string(), "flag".to_string()), ("E2".to_string(), "money".to_string()), ("G2".to_string(), "@".to_string())].into(),
-        merges: vec!["A1:C1".into()], widths: [(0, 180)].into(), cond: vec![CondRule { range: "E2:E9".into(), op: "gt".into(), a: "1000".into(), style: "c:#9C0006;f:#FFC7CE".into(), ..Default::default() }, CondRule { range: "F2:F9".into(), op: "bar".into(), style: "#2F6FDE".into(), ..Default::default() }, CondRule { range: "A1".into(), op: "nonsense".into(), ..Default::default() }], heights: [(0, 40)].into(), color: "#00B050".into(),
+        hide_rows: vec![7], hide_cols: vec![8], merges: vec!["A1:C1".into()], widths: [(0, 180)].into(), cond: vec![CondRule { range: "E2:E9".into(), op: "gt".into(), a: "1000".into(), style: "c:#9C0006;f:#FFC7CE".into(), ..Default::default() }, CondRule { range: "F2:F9".into(), op: "bar".into(), style: "#2F6FDE".into(), ..Default::default() }, CondRule { range: "B2:B9".into(), op: "date".into(), a: "past".into(), style: "c:#C00000".into(), ..Default::default() }, CondRule { range: "A1".into(), op: "nonsense".into(), ..Default::default() }], heights: [(0, 40)].into(), color: "#00B050".into(),
         page: Some(SheetPage { paper: "A3".into(), orient: "landscape".into(), fit_w: 1, area: "A1:G9".into(), titles: "1:1".into(), no_hf: true, center: true, ..Default::default() }), ..Default::default() };
     op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet) });
     op(&mut doc, Op::Ui { key: "freeze".into(), value: serde_json::json!({ "Board": [1, 1] }) });
@@ -501,7 +501,8 @@ fn sheets_go_to_a_workbook_and_back() {
     let st = s.style.get("A1").cloned().unwrap_or_default();
     assert!(st.contains('b') && st.contains("f:#0B5CAD") && st.contains("c:#FFFFFF") && st.contains("a:c") && st.contains("bb:thick #C00000"), "styles come back: {st}");
     assert_eq!(s.merges, vec!["A1:C1".to_string()]);
-    assert_eq!(s.cond.iter().map(|c| c.op.as_str()).collect::<Vec<_>>(), ["gt", "bar"], "conditional formatting comes back (an unknown rule was dropped)");
+    assert_eq!((s.hide_rows.clone(), s.hide_cols.clone()), (vec![7], vec![8]), "hidden rows and columns come back");
+    assert_eq!(s.cond.iter().map(|c| c.op.as_str()).collect::<Vec<_>>(), ["gt", "bar", "date"], "conditional formatting comes back (an unknown rule was dropped)");
     assert_eq!((s.widths.get(&0).copied().map(|w| (w as i32 - 180).abs() <= 8), s.heights.get(&0).copied().map(|h| (h as i32 - 40).abs() <= 2)), (Some(true), Some(true)), "sizes: {:?} {:?}", s.widths, s.heights);
     assert_eq!(s.color, "#00B050");
     assert_eq!(back.freeze, vec![("Board".to_string(), 1, 1)]);

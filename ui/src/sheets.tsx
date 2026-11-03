@@ -90,13 +90,14 @@ export const Sheets = () => {
   // The grid reaches past the used cells, and grows as you go further (by keys or by scrolling).
   const [reach, setReach] = createSignal<[number, number]>([0, 0]);
   const nrows = () => Math.max(200, (data()?.rows ?? 0) + 30, reach()[0] + 40), ncols = () => Math.max(26, (data()?.cols ?? 0) + 6, reach()[1] + 8);
-  const width = (c: number) => (tw()?.[0] === c ? tw()![1] : sheet()?.widths?.[c] ?? CW);
+  const hidR = createMemo(() => new Set(sheet()?.hide_rows ?? [])), hidC = createMemo(() => new Set(sheet()?.hide_cols ?? []));
+  const width = (c: number) => (hidC().has(c) ? 0 : tw()?.[0] === c ? tw()![1] : sheet()?.widths?.[c] ?? CW);
   const lefts = createMemo(() => { let x = HW; return Array.from({ length: ncols() }, (_, c) => { const l = x; x += width(c); return l; }); });
   // Row heights: tops[r] is where row r starts (below the header); a row being dragged uses th.
   const [th, setTh] = createSignal<[number, number] | null>(null);
   // Rows grow to fit a bigger font or wrapped text, unless their height was set by hand.
   const auto = createMemo(() => autoHeights(sheet(), a => cells().get(a)?.[2] ?? ""));
-  const rh = (r: number) => (th()?.[0] === r ? th()![1] : sheet()?.heights?.[r] ?? auto().get(r) ?? RH);
+  const rh = (r: number) => (hidR().has(r) ? 0 : th()?.[0] === r ? th()![1] : sheet()?.heights?.[r] ?? auto().get(r) ?? RH);
   const tops = createMemo(() => { let y = 0; const t = new Array<number>(nrows() + 1); for (let r = 0; r <= nrows(); r++) { t[r] = y; y += rh(r); } return t; });
   const top_ = (r: number) => tops()[Math.min(r, nrows())] ?? r * RH;
   /** The row at y (px below the header). */
@@ -216,7 +217,10 @@ export const Sheets = () => {
     const mv = (dr: number, dc: number) => {
       e.preventDefault();
       const here = mergeAt(r, c), [fr, fc] = here ? [dr > 0 ? here.r1 : here.r0, dc > 0 ? here.c1 : here.c0] : [r, c];
-      const tr = Math.max(0, fr + dr), tc = Math.max(0, fc + dc), m = mergeAt(tr, tc);
+      let tr = Math.max(0, fr + dr), tc = Math.max(0, fc + dc);
+      // Hidden rows and columns are stepped over.
+      for (let n = 0; n < 5000 && (hidR().has(tr) || hidC().has(tc)) && tr + Math.sign(dr) >= 0 && tc + Math.sign(dc) >= 0 && (dr || dc); n++) { tr += Math.sign(dr); tc += Math.sign(dc); }
+      const m = mergeAt(tr, tc);
       if (m && !e.shiftKey) { go(m.r0, m.c0); setEnd([m.r1, m.c1]); } else go(tr, tc, e.shiftKey);
     };
     const ctrl = e.ctrlKey || e.metaKey;
@@ -575,6 +579,9 @@ export const Sheets = () => {
       { label: nc > 1 ? `Delete ${nc} Columns` : "Delete Column", run: () => insertCells(true, true) },
       { label: "Clear Contents", keys: "Delete", run: clear },
       "-",
+      { label: "Hide Rows", run: () => hideLines(false, true) }, { label: "Unhide Rows", off: !(sheet()?.hide_rows ?? []).length, run: () => hideLines(false, false) },
+      { label: "Hide Columns", run: () => hideLines(true, true) }, { label: "Unhide Columns", off: !(sheet()?.hide_cols ?? []).length, run: () => hideLines(true, false) },
+      "-",
       { label: "Number Format", sub: fmtItems() },
       { label: "AutoSum", sub: sumItems() },
       { label: "Insert Function…", run: insertFn },
@@ -708,6 +715,16 @@ export const Sheets = () => {
     ]);
   };
   const [dragTab, setDragTab] = createSignal(-1);
+  /** Hide or show the selected rows or columns (Unhide also shows hidden ones inside the selection). */
+  const hideLines = (cols: boolean, hide: boolean) => {
+    const b = bounds(), [a, z] = cols ? [b.c0, b.c1] : [b.r0, b.r1], key = cols ? "hide_cols" : "hide_rows";
+    const now = new Set((cols ? sheet()?.hide_cols : sheet()?.hide_rows) ?? []);
+    for (let i = a; i <= Math.min(z, a + 20000); i++) { if (hide) now.add(i); else now.delete(i); }
+    // Unhide with one line selected next to hidden ones: show the hidden run beside it.
+    if (!hide && a === z) { for (const d of [-1, 1]) { let i = a + d; while (now.has(i)) { now.delete(i); i += d; } } }
+    act({ Sheet: { k: k(), sheet: { ...sheet(), [key]: [...now].sort((x, y) => x - y) } } });
+  };
+  const unhideAll = () => act({ Sheet: { k: k(), sheet: { ...sheet(), hide_rows: [], hide_cols: [] } } });
   const condList = () => sheet()?.cond ?? [];
   const setCond = (l: CondRule[]) => act({ Sheet: { k: k(), sheet: { ...sheet(), cond: l } } });
   const selA1 = () => { const b = bounds(); return b.r0 === b.r1 && b.c0 === b.c1 ? a1(b.r0, b.c0) : `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`; };
@@ -752,7 +769,7 @@ export const Sheets = () => {
     copy: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); box?.focus(); }, cut: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); box?.focus(); },
     paste: async () => { await pasteAll(await clipText()); box?.focus(); },
     focus: () => { box?.focus(); F.setTarget(fmtTarget); },
-    page, setPage, areaFromSel, titlesFromSel, breakHere, unbreakHere, condMenu: condMenuAt, find: () => findDialog(false), replace: () => findDialog(true),
+    page, setPage, areaFromSel, titlesFromSel, breakHere, unbreakHere, condMenu: condMenuAt, hideLines, unhideAll, find: () => findDialog(false), replace: () => findDialog(true),
   };
   setSheetApi(api);
   onCleanup(() => { if (sheetApi() === api) setSheetApi(null); });
@@ -802,12 +819,12 @@ export const Sheets = () => {
                   ref={e => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); }} onMouseDown={e => e.stopPropagation()}
                   onFocus={() => { lastEl = "cell"; }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} />);
   const rowView = (r: number) => (
-    <div class="row" style={{ top: `${top_(r)}px`, height: `${rh(r)}px` }}>
+    <div class="row" classList={{ rhid: rh(r) === 0, rnext: hidR().has(r - 1) }} style={{ top: `${top_(r)}px`, height: `${rh(r)}px` }}>
       <div class="c idc rowh" classList={{ on: S.ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1)) }} style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 5, "text-align": "center", "line-height": `${rh(r) - 1}px` }}>{r + 1}<i class="rszr" title="Drag to change the row height; double-click for the standard height" onMouseDown={e => rowResize(e, r)} onDblClick={e => { e.stopPropagation(); saveHeights(r, null); }} /></div>
       <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => {
         const x = () => cells().get(a1(r, c));
         const err = () => ERRORS[x()?.[2] ?? ""];
-        return <div class="c" classList={{ r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "" }} title={err() ?? undefined}
+        return <div class="c" classList={{ chid: width(c) === 0, r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "" }} title={err() ?? undefined}
           style={{ width: `${width(c)}px`, ...cellCss(r, c, rh(r)), ...(c < frozen()[1] ? { position: "sticky", left: `${lefts()[c]}px`, "z-index": 3 } : {}), ...spill(r, c) }}>
           <Show when={!mergeAt(r, c)}><Show when={fmtOf(r, c) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></Show></div>;
       }}</For>
@@ -844,7 +861,7 @@ export const Sheets = () => {
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px` }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
               <div class="hc idc" style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 2 }} />
-              <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => <div class="hc colh" onMouseDown={e => colDown(e, c)} classList={{ on: S.ranges().some(g => c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1)) }} style={{ width: `${width(c)}px`, "justify-content": "center", "align-items": "center", position: "relative" }}>{colName(c)}<i class="rsz" title="Drag to resize; double-click to fit" onMouseDown={e => resize(e, c)} onDblClick={e => { e.stopPropagation(); autofit(c); }} /></div>}</For>
+              <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => <div class="hc colh" onMouseDown={e => colDown(e, c)} classList={{ chid: width(c) === 0, cnext: hidC().has(c - 1), on: S.ranges().some(g => c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1)) }} style={{ width: `${width(c)}px`, "justify-content": "center", "align-items": "center", position: "relative" }}>{colName(c)}<i class="rsz" title="Drag to resize; double-click to fit" onMouseDown={e => resize(e, c)} onDblClick={e => { e.stopPropagation(); autofit(c); }} /></div>}</For>
             </div>
             <Show when={frozen()[0] > 0}><div class="sfrozen" style={{ top: `${RH}px`, height: `${top_(frozen()[0])}px`, "margin-bottom": `${-top_(frozen()[0])}px` }}><For each={Array.from({ length: frozen()[0] }, (_, r) => r)}>{r => rowView(r)}</For>
               <For each={merges().filter(m => m.r0 < frozen()[0])}>{m => MergeView(m)}</For>

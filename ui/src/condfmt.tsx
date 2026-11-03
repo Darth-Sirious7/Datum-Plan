@@ -15,6 +15,20 @@ export const bounds = (range: string) => { const [a, b = a] = range.split(":"), 
 const hex = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0);
 const mix = (a: string, b: string, t: number) => "#" + hex(a).map((x, i) => Math.round(x + (hex(b)[i] - x) * t).toString(16).padStart(2, "0")).join("");
 
+/** Dates a rule can look for (days since 1970, local, as the cells hold them). Weeks start on Sunday, as in a workbook. */
+export const DATE_KINDS: [string, string][] = [["past", "Before today (overdue)"], ["today", "Today"], ["yesterday", "Yesterday"], ["tomorrow", "Tomorrow"], ["last7", "In the last 7 days"], ["next7", "In the next 7 days"],
+  ["lastweek", "Last week"], ["thisweek", "This week"], ["nextweek", "Next week"], ["lastmonth", "Last month"], ["thismonth", "This month"], ["nextmonth", "Next month"], ["future", "After today"]];
+const dateHit = (day: number, kind: string) => {
+  const now = new Date(), t = Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86400000), dow = new Date(t * 86400000).getUTCDay(), sun = t - dow;
+  const d = new Date(day * 86400000), ym = d.getUTCFullYear() * 12 + d.getUTCMonth(), tm = now.getFullYear() * 12 + now.getMonth();
+  switch (kind) {
+    case "past": return day < t; case "future": return day > t; case "today": return day === t; case "yesterday": return day === t - 1; case "tomorrow": return day === t + 1;
+    case "last7": return day <= t && day > t - 7; case "next7": return day >= t && day < t + 7;
+    case "thisweek": return day >= sun && day < sun + 7; case "lastweek": return day >= sun - 7 && day < sun; case "nextweek": return day >= sun + 7 && day < sun + 14;
+    case "thismonth": return ym === tm; case "lastmonth": return ym === tm - 1; case "nextmonth": return ym === tm + 1;
+  }
+  return false;
+};
 /** What every rule does to the cells it covers: a1 → look. */
 export const condLooks = (sh: SheetData | undefined, cells: Map<string, Cell>): Map<string, Look> => {
   const out = new Map<string, Look>();
@@ -44,6 +58,7 @@ export const condLooks = (sh: SheetData | undefined, cells: Map<string, Cell>): 
         case "top": return x !== null && x >= (sorted[Math.min(n, sorted.length) - 1] ?? Infinity);
         case "bottom": return x !== null && x <= (sorted[Math.max(0, sorted.length - n)] ?? -Infinity);
         case "above": return x !== null && x > avg; case "below": return x !== null && x < avg;
+        case "date": return x !== null && dateHit(Math.floor(x) - 25569, a);
       }
       return false;
     };
@@ -71,8 +86,8 @@ export const LOOKS: [string, string][] = [["Light red fill with dark red text", 
   ["Light red fill", "f:#FFC7CE"], ["Red text", "c:#C00000"], ["Bold", "b"], ["Blue fill with white text", "b;c:#FFFFFF;f:#0B5CAD"], ["Grey text", "c:#8A939E"], ["Strikethrough", "s;c:#8A939E"]];
 const OPS: [string, string, number][] = [["gt", "Greater than", 1], ["ge", "Greater than or equal to", 1], ["lt", "Less than", 1], ["le", "Less than or equal to", 1], ["eq", "Equal to", 1], ["ne", "Not equal to", 1],
   ["between", "Between", 2], ["notbetween", "Not between", 2], ["contains", "Text that contains", 1], ["notcontains", "Text that does not contain", 1], ["begins", "Text that begins with", 1], ["ends", "Text that ends with", 1],
-  ["blank", "Blank cells", 0], ["notblank", "Cells that are not blank", 0], ["dup", "Duplicate values", 0], ["unique", "Unique values", 0], ["top", "Top items", 1], ["bottom", "Bottom items", 1], ["above", "Above average", 0], ["below", "Below average", 0]];
-export const describe = (r: CondRule) => r.op === "bar" ? "Data bars" : r.op === "scale" ? "Colour scale" : `${OPS.find(o => o[0] === r.op)?.[1] ?? r.op}${(OPS.find(o => o[0] === r.op)?.[2] ?? 0) > 0 ? ` ${r.a}` : ""}${(OPS.find(o => o[0] === r.op)?.[2] ?? 0) > 1 ? ` and ${r.b}` : ""}`;
+  ["date", "A date occurring", 1], ["blank", "Blank cells", 0], ["notblank", "Cells that are not blank", 0], ["dup", "Duplicate values", 0], ["unique", "Unique values", 0], ["top", "Top items", 1], ["bottom", "Bottom items", 1], ["above", "Above average", 0], ["below", "Below average", 0]];
+export const describe = (r: CondRule) => r.op === "bar" ? "Data bars" : r.op === "scale" ? "Colour scale" : r.op === "date" ? `Date: ${DATE_KINDS.find(d => d[0] === r.a)?.[1] ?? r.a}` : `${OPS.find(o => o[0] === r.op)?.[1] ?? r.op}${(OPS.find(o => o[0] === r.op)?.[2] ?? 0) > 0 ? ` ${r.a}` : ""}${(OPS.find(o => o[0] === r.op)?.[2] ?? 0) > 1 ? ` and ${r.b}` : ""}`;
 
 /** The rule dialog: when, which value(s), which look, over which cells. */
 export const ruleDialog = (start: CondRule, save: (r: CondRule) => void) => openDialog(() => {
@@ -82,7 +97,8 @@ export const ruleDialog = (start: CondRule, save: (r: CondRule) => void) => open
     <div class="form">
       <Row label="Cells"><input value={r().range} onInput={e => setR({ ...r(), range: e.currentTarget.value.toUpperCase().replace(/\$/g, "") })} /></Row>
       <Row label="Format cells that are"><select onChange={e => setR({ ...r(), op: e.currentTarget.value })}><For each={OPS}>{o => <option value={o[0]} selected={o[0] === r().op}>{o[1]}</option>}</For></select></Row>
-      <Show when={k() > 0}><Row label={r().op === "top" || r().op === "bottom" ? "How many" : "Value"}><input value={r().a} onInput={e => setR({ ...r(), a: e.currentTarget.value })} /></Row></Show>
+      <Show when={r().op === "date"}><Row label="When"><select onChange={e => setR({ ...r(), a: e.currentTarget.value })}><For each={DATE_KINDS}>{([v, l]) => <option value={v} selected={v === r().a}>{l}</option>}</For></select></Row></Show>
+      <Show when={k() > 0 && r().op !== "date"}><Row label={r().op === "top" || r().op === "bottom" ? "How many" : "Value"}><input value={r().a} onInput={e => setR({ ...r(), a: e.currentTarget.value })} /></Row></Show>
       <Show when={k() > 1}><Row label="and"><input value={r().b} onInput={e => setR({ ...r(), b: e.currentTarget.value })} /></Row></Show>
       <Row label="With"><select onChange={e => setR({ ...r(), style: e.currentTarget.value })}><For each={LOOKS}>{([l, st]) => <option value={st} selected={st === r().style}>{l}</option>}</For></select>
         <span class="cfprev" style={F.css(r().style)}>AaBbCc 123</span></Row>
@@ -114,7 +130,7 @@ export const condMenu = (sel: string, list: () => CondRule[], set: (l: CondRule[
   const SCALES: [string, string, string, string][] = [["Green – yellow – red", "#63BE7B", "#FFEB84", "#F8696B"], ["Red – yellow – green", "#F8696B", "#FFEB84", "#63BE7B"], ["White – green", "#FFFFFF", "", "#63BE7B"], ["White – red", "#FFFFFF", "", "#F8696B"], ["Blue – white – red", "#5A8AC6", "#FFFFFF", "#F8696B"], ["White – blue", "#FFFFFF", "", "#5A8AC6"]];
   return [
     { label: "Highlight Cells", icon: "cfhi", sub: [{ label: "Greater Than…", run: ask("gt") }, { label: "Less Than…", run: ask("lt") }, { label: "Between…", run: ask("between") }, { label: "Equal To…", run: ask("eq") },
-      { label: "Text That Contains…", run: ask("contains") }, { label: "Blank Cells", run: () => add({ op: "blank", style: LOOKS[1][1] }) }, { label: "Duplicate Values", run: () => add({ op: "dup" }) }] },
+      { label: "Text That Contains…", run: ask("contains") }, { label: "A Date Occurring…", run: ask("date", "past") }, { label: "Blank Cells", run: () => add({ op: "blank", style: LOOKS[1][1] }) }, { label: "Duplicate Values", run: () => add({ op: "dup" }) }] },
     { label: "Top and Bottom", icon: "cftop", sub: [{ label: "Top 10 Items…", run: ask("top", "10") }, { label: "Bottom 10 Items…", run: ask("bottom", "10") }, { label: "Above Average", run: () => add({ op: "above", style: LOOKS[2][1] }) }, { label: "Below Average", run: () => add({ op: "below" }) }] },
     { label: "Data Bars", icon: "cfbar", sub: BARS.map(([l, c]) => ({ label: l, swatch: c, run: () => add({ op: "bar", style: c }) })) },
     { label: "Colour Scales", icon: "cfscale", sub: SCALES.map(([l, a, m, b]) => ({ label: l, swatch: m || b, run: () => add({ op: "scale", a, b, style: m }) })) },

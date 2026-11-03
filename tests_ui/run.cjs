@@ -575,6 +575,21 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".menu button:has-text('Manage Rules')"); await p.waitForTimeout(200);
   check("Manage Rules lists the sheet's rules", (await p.$$(".dlg .cftable tbody tr")).length === 2);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Conditional')"); await p.waitForTimeout(150);
+  await p.hover(".menu button:has-text('Highlight Cells')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('A Date Occurring')"); await p.waitForTimeout(200);
+  check("A Date Occurring… offers overdue, this week, next 7 days and more", (await p.$$(".dlg select >> nth=1 >> option")).length >= 12);
+  await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
+  check("a date rule is saved", (await lastCond()).includes('"op":"date"') && (await lastCond()).includes('"a":"past"'), await lastCond());
+  // Hide and unhide rows.
+  sq = await scell(2, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
+  await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Hide Rows')"); await p.waitForTimeout(300);
+  check("Hide Rows hides the selected row", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.hide_rows)) === "[2]" && (await p.$$(".sheetgrid .row.rhid")).length === 1);
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Size')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Unhide All Rows and Columns')"); await p.waitForTimeout(400);
+  check("Unhide All shows them again", (await p.$$(".sheetgrid .row.rhid")).length === 0);
   await p.click(".sheetgrid"); await p.keyboard.press("Control+f"); await p.waitForTimeout(200);
   check("Ctrl+F opens Find", ((await p.textContent(".dlg header")) ?? "").includes("Find"));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);

@@ -997,3 +997,7 @@ button.link { color: var(--blue); text-decoration: underline; padding: 0; }
 .cftable td { vertical-align: middle; }
 .cftable .cfbtns { white-space: nowrap; text-align: right; }
 .cftable .cfbtns .btn { margin-left: 4px; }
+.sheetgrid .row.rhid { display: none; }
+.sheetgrid .c.chid, .sheetgrid .hc.chid { display: none; }
+.sheetgrid .row.rnext .rowh { border-top: 3px double var(--line3); }
+.sheetgrid .hc.cnext { border-left: 3px double var(--line3); }
