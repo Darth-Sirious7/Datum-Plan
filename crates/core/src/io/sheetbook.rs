@@ -92,6 +92,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
                 s.images.push(SheetImage { pic: id, cell: cell.clone(), w: *w, h: *h, fit: meta["sheets"][name.as_str()]["fit"].as_array().is_some_and(|f| f.iter().any(|x| x.as_str() == Some(cell))) });
             }
         }
+        if let Ok(cond) = serde_json::from_value::<Vec<crate::model::CondRule>>(meta["sheets"][name.as_str()]["cond"].clone()) { s.cond = cond; }
         if meta["sheets"][name.as_str()]["no_hf"].as_bool() == Some(true) { s.page.get_or_insert_with(SheetPage::default).no_hf = true; }
         out.sheets.push(s);
     }

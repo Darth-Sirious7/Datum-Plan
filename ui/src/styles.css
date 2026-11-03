@@ -993,3 +993,7 @@ button.link { color: var(--blue); text-decoration: underline; padding: 0; }
 .sheetgrid .sfrozen { z-index: 4; }
 .sheetgrid .sfrozen .edit { z-index: 5; }
 .row2 { display: flex; gap: 8px; }
+.cfprev { display: inline-block; padding: 2px 10px; border: 1px solid var(--line); margin-left: 8px; background: #fff; color: #1B2733; font-size: 12px; }
+.cftable td { vertical-align: middle; }
+.cftable .cfbtns { white-space: nowrap; text-align: right; }
+.cftable .cfbtns .btn { margin-left: 4px; }

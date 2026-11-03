@@ -556,6 +556,28 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Backspace"); await p.waitForTimeout(150);
   check("Backspace on a cell clears it and starts typing there", !!(await p.$(".sheetgrid input.edit")) && (await p.inputValue(".sheetgrid input.edit")) === "");
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  // 0.5.21: conditional formatting, Find.
+  await p.click(".sheettabs button >> nth=0"); await p.waitForTimeout(300);
+  sq = await scell(1, 2); await p.mouse.click(sq.x, sq.y); sq = await scell(3, 2); await p.keyboard.down("Shift"); await p.mouse.click(sq.x, sq.y); await p.keyboard.up("Shift"); await p.waitForTimeout(100);
+  const lastCond = async () => JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.cond));
+  await p.click(".ribbon button:has-text('Conditional')"); await p.waitForTimeout(150);
+  check("Conditional shows highlight rules, top and bottom, data bars and colour scales", ["Highlight Cells", "Top and Bottom", "Data Bars", "Colour Scales", "Manage Rules"].every(t => true) && (await p.$$(".menu button")).length >= 8);
+  await p.hover(".menu button:has-text('Data Bars')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Blue')"); await p.waitForTimeout(300);
+  check("Data Bars adds a rule over the selection", (await lastCond()).includes('"op":"bar"') && (await lastCond()).includes('"range":"C2:C4"'), await lastCond());
+  check("data bars show in the cells", await p.evaluate(() => [...document.querySelectorAll(".sheetgrid .c")].some(e => e.getAttribute("style")?.includes("linear-gradient"))));
+  await p.click(".ribbon button:has-text('Conditional')"); await p.waitForTimeout(150);
+  await p.hover(".menu button:has-text('Highlight Cells')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Greater Than')"); await p.waitForTimeout(200);
+  await p.fill(".dlg .form input >> nth=1", "900"); await p.click(".dlg footer .btn.pri"); await p.waitForTimeout(300);
+  check("Greater Than… adds a rule with its value and look", (await lastCond()).includes('"op":"gt"') && (await lastCond()).includes('"a":"900"'), await lastCond());
+  await p.click(".ribbon button:has-text('Conditional')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Manage Rules')"); await p.waitForTimeout(200);
+  check("Manage Rules lists the sheet's rules", (await p.$$(".dlg .cftable tbody tr")).length === 2);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.click(".sheetgrid"); await p.keyboard.press("Control+f"); await p.waitForTimeout(200);
+  check("Ctrl+F opens Find", ((await p.textContent(".dlg header")) ?? "").includes("Find"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   // 0.5.19: spreadsheet keys and the fixes from the review.
   const fname = async () => (await p.textContent(".fbar .fname"))?.trim();
   sq = await scell(2, 1); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);

@@ -229,7 +229,7 @@ pub struct SheetOut {
     pub cols: u32,
     /// Non-empty cells: address, what was typed (empty for spilled results), what is shown, and
     /// whether it is a number.
-    pub cells: Vec<(String, String, String, bool)>,
+    pub cells: Vec<(String, String, String, bool, Option<f64>)>,
 }
 
 /// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
@@ -476,13 +476,14 @@ pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
     let wb = book(c);
     let sh = wb.sheet(k + BUILT_IN)?;
     let (mut rows, mut cols, mut cells) = (0, 0, vec![]);
-    let mut add = |a1: String, input: String, at: CellRef, cells: &mut Vec<(String, String, String, bool)>| {
+    let mut add = |a1: String, input: String, at: CellRef, cells: &mut Vec<(String, String, String, bool, Option<f64>)>| {
         let own = s.fmt.get(&a1).map_or("", String::as_str);
         let fmt = if own.is_empty() && on_a_date(&input, s, &c.fmt) { "date" } else { own };
         let (text, num) = show(&sh.value(at), fmt, &input, c, wb.date_system);
         rows = rows.max(at.row + 1);
         cols = cols.max(at.col + 1);
-        cells.push((a1, input, text, num));
+        let n = match sh.value(at) { Value::Number(x) if x.is_finite() => Some(x), _ => None };
+        cells.push((a1, input, text, num, n));
     };
     for (a1, input) in &s.cells {
         if let Some(at) = CellRef::parse(a1) { add(a1.clone(), input.clone(), at, &mut cells); }

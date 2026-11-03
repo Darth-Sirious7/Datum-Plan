@@ -97,7 +97,9 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[] }
+/** A conditional formatting rule (see condfmt.tsx). */
+export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */
 export interface SheetPage { paper?: string; orient?: string; margins?: number[] | null; scale?: number; fit_w?: number; fit_h?: number; area?: string; titles?: string; no_hf?: boolean; no_grid?: boolean; headings?: boolean; center?: boolean; breaks?: number[] }
 /** A picture in the plan's library (a party's logo or any image), as a data URL. */
@@ -106,7 +108,7 @@ export interface Picture { id: number; name: string; role: string; data: string 
 export interface SheetImage { pic: number; cell: string; w: number; h: number; fit?: boolean }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
-export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean][] }
+export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][] }
 export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
 export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
 export interface PeriodReport {

@@ -383,6 +383,18 @@ A picture on a sheet shows a small button at its top right when selected: **Plac
 
 Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+End]] to the last used cell, [[Page Up]] and [[Page Down]] by a screen, [[Ctrl+Enter]] puts what you typed in every selected cell, and [[Ctrl+D]] on one cell copies the cell above. Dates follow the plan's date format (Options), so 05/01/2026 is 5 January when the plan writes the day first; a formula on a date shows a date.
 
+### Conditional formatting
+
+Select the cells, then Sheet Tools › Cells › Look › **Conditional**:
+
+- **Highlight Cells:** greater than, less than, between, equal to, text that contains, blank cells, duplicate values;
+- **Top and Bottom:** top 10, bottom 10, above or below average;
+- **Data Bars** in six colours, and **Colour Scales** (green to red, red to green, white to green and more).
+
+**New Rule…** sets any rule by hand: the cells, the condition, the value and the look. **Manage Rules…** lists the sheet's rules in order; for each cell the first rule that matches gives its look, and data bars and colour scales show with it. The looks change as the values do, print, and go into an exported workbook as its own conditional formats.
+
+**Find and Replace:** [[Ctrl+F]] and [[Ctrl+H]] (or Data › Find) look in the values shown and in what was typed, formulas too.
+
 ### Sheets and Excel workbooks
 
 - **Bring a workbook in:** Sheet Tools › Cells › **Excel Workbook…** (or **Bring in an Excel workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:

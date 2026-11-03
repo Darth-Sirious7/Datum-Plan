@@ -455,12 +455,49 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             if let Some((r, k)) = a1_index(a1) { ws.write_blank(r, k, &styled(Format::new(), st)).map_err(e)?; }
         }
         for (k, w) in &s.widths { ws.set_column_width_pixels(*k as u16, *w as u32).map_err(e)?; }
+        // Conditional formatting as the workbook's own rules (the first that applies wins, as here).
+        for cf in &s.cond {
+            use rust_xlsxwriter::{ConditionalFormat2ColorScale as S2, ConditionalFormat3ColorScale as S3, ConditionalFormatAverage as Av, ConditionalFormatAverageRule as AvR, ConditionalFormatBlank as Bl, ConditionalFormatCell as Ce, ConditionalFormatCellRule as CR, ConditionalFormatDataBar as Bar, ConditionalFormatDuplicate as Du, ConditionalFormatText as Tx, ConditionalFormatTextRule as TR, ConditionalFormatTop as Tp, ConditionalFormatTopRule as TpR};
+            let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&cf.range) else { continue };
+            let (c0, c1) = (c0 as u16, c1 as u16);
+            let fm = styled(Format::new(), &cf.style);
+            // Numbers as numbers; anything else as text (the workbook quotes it).
+            let v = |x: &str| -> rust_xlsxwriter::ConditionalFormatValue { match x.trim().parse::<f64>() { Ok(n) => n.into(), Err(_) => x.trim().into() } };
+            let col = |x: &str| u32::from_str_radix(x.trim_start_matches('#'), 16).unwrap_or(0x63BE7B);
+            let r = match cf.op.as_str() {
+                "gt" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::GreaterThan(v(&cf.a))).set_format(fm)),
+                "ge" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::GreaterThanOrEqualTo(v(&cf.a))).set_format(fm)),
+                "lt" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::LessThan(v(&cf.a))).set_format(fm)),
+                "le" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::LessThanOrEqualTo(v(&cf.a))).set_format(fm)),
+                "eq" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::EqualTo(v(&cf.a))).set_format(fm)),
+                "ne" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::NotEqualTo(v(&cf.a))).set_format(fm)),
+                "between" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::Between(v(&cf.a), v(&cf.b))).set_format(fm)),
+                "notbetween" => ws.add_conditional_format(r0, c0, r1, c1, &Ce::new().set_rule(CR::NotBetween(v(&cf.a), v(&cf.b))).set_format(fm)),
+                "contains" => ws.add_conditional_format(r0, c0, r1, c1, &Tx::new().set_rule(TR::Contains(cf.a.clone())).set_format(fm)),
+                "notcontains" => ws.add_conditional_format(r0, c0, r1, c1, &Tx::new().set_rule(TR::DoesNotContain(cf.a.clone())).set_format(fm)),
+                "begins" => ws.add_conditional_format(r0, c0, r1, c1, &Tx::new().set_rule(TR::BeginsWith(cf.a.clone())).set_format(fm)),
+                "ends" => ws.add_conditional_format(r0, c0, r1, c1, &Tx::new().set_rule(TR::EndsWith(cf.a.clone())).set_format(fm)),
+                "blank" => ws.add_conditional_format(r0, c0, r1, c1, &Bl::new().set_format(fm)),
+                "notblank" => ws.add_conditional_format(r0, c0, r1, c1, &Bl::new().invert().set_format(fm)),
+                "dup" => ws.add_conditional_format(r0, c0, r1, c1, &Du::new().set_format(fm)),
+                "unique" => ws.add_conditional_format(r0, c0, r1, c1, &Du::new().invert().set_format(fm)),
+                "top" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Top(cf.a.trim().parse().unwrap_or(10))).set_format(fm)),
+                "bottom" => ws.add_conditional_format(r0, c0, r1, c1, &Tp::new().set_rule(TpR::Bottom(cf.a.trim().parse().unwrap_or(10))).set_format(fm)),
+                "above" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::AboveAverage).set_format(fm)),
+                "below" => ws.add_conditional_format(r0, c0, r1, c1, &Av::new().set_rule(AvR::BelowAverage).set_format(fm)),
+                "bar" => ws.add_conditional_format(r0, c0, r1, c1, &Bar::new().set_fill_color(col(&cf.style))),
+                "scale" if !cf.style.is_empty() => ws.add_conditional_format(r0, c0, r1, c1, &S3::new().set_minimum_color(col(&cf.a)).set_midpoint_color(col(&cf.style)).set_maximum_color(col(&cf.b))),
+                "scale" => ws.add_conditional_format(r0, c0, r1, c1, &S2::new().set_minimum_color(col(&cf.a)).set_maximum_color(col(&cf.b))),
+                _ => continue,
+            };
+            r.map_err(e)?;
+        }
         if let Ok(rgb) = u32::from_str_radix(s.color.trim_start_matches('#'), 16) { if s.color.len() == 7 { ws.set_tab_color(rgb); } }
         if let Some([fr, fc]) = c.p.ui.get("freeze").and_then(|f| f.get(&s.name)).and_then(|v| serde_json::from_value::<[u32; 2]>(v.clone()).ok()) { if fr > 0 || fc > 0 { ws.set_freeze_panes(fr, fc.min(16_000) as u16).map_err(e)?; } }
         if s.hidden && k > 0 { ws.set_hidden(true); }
         let fits: Vec<&str> = s.images.iter().filter(|i| i.fit).map(|i| i.cell.as_str()).collect();
-        if !flags.is_empty() || !fits.is_empty() || s.page.as_ref().is_some_and(|p| p.no_hf) {
-            meta.insert(s.name.clone(), serde_json::json!({ "flags": flags, "fit": fits, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf) }));
+        if !flags.is_empty() || !fits.is_empty() || !s.cond.is_empty() || s.page.as_ref().is_some_and(|p| p.no_hf) {
+            meta.insert(s.name.clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf) }));
         }
         // The sheet's page setup.
         if let Some(pg) = &s.page {

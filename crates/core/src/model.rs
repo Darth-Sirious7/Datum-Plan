@@ -470,6 +470,8 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     /// The tab's colour ("#RRGGBB", empty for none) and whether the tab is hidden.
     #[serde(default, skip_serializing_if = "String::is_empty")] pub color: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub hidden: bool,
+    /// Conditional formatting: rules over ranges, the first that applies to a cell wins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub cond: Vec<CondRule>,
     /// The sheet's own page setup for printing.
     #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<SheetPage> }
 
@@ -486,6 +488,15 @@ pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
 pub struct SheetImage { pub pic: u32, pub cell: String, pub w: u16, pub h: u16,
     /// Placed in its cell (or the merged range it starts): drawn to fit inside, centred, keeping its shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")] pub fit: bool }
+
+/// A conditional formatting rule. `op`: gt, ge, lt, le, eq, ne, between, notbetween (values `a`, `b`);
+/// contains, notcontains, begins, ends (text `a`); blank, notblank, dup, unique; top, bottom (`a` items);
+/// above, below (the average); bar (data bars, colour `style`); scale (colour scale from `a` to `b`,
+/// through `style` when set). `style` is the look a matching cell takes (the window's style string).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CondRule { pub range: String, pub op: String, pub a: String, pub b: String, pub style: String }
+pub const COND_OPS: [&str; 22] = ["gt", "ge", "lt", "le", "eq", "ne", "between", "notbetween", "contains", "notcontains", "begins", "ends", "blank", "notblank", "dup", "unique", "top", "bottom", "above", "below", "bar", "scale"];
 
 /// How a sheet prints, where it differs from the plan's page setup. Empty text and None follow the plan.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -767,6 +778,9 @@ impl Project {
             }).collect();
             s.heights.retain(|_, h| *h != 0);
             s.heights.values_mut().for_each(|h| *h = (*h).clamp(6, 600));
+            s.cond.retain(|c| COND_OPS.contains(&c.op.as_str()) && sheet_range(&c.range).is_some());
+            s.cond.truncate(500);
+            for c in &mut s.cond { c.a.truncate(500); c.b.truncate(500); c.style.truncate(500); }
             if let Some(pg) = &mut s.page {
                 pg.scale = if pg.scale == 0 { 0 } else { pg.scale.clamp(10, 400) };
                 pg.fit_w = pg.fit_w.min(50); pg.fit_h = pg.fit_h.min(50);

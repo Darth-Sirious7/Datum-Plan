@@ -10,6 +10,7 @@ import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS
 import { sheetK } from "./sheetlayout";
 import { picData } from "./pictures";
 import { FlagText } from "./flags";
+import { condLooks } from "./condfmt";
 import { sheetRowH, fitBox } from "./sheetlayout";
 import type { SheetPage } from "./api";
 import { gstyle, floorU, nextU, label, off, Unit } from "./gantt";
@@ -354,6 +355,9 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     const nr = r1 - r0 + 1, nc = c1 - c0 + 1, rows = Array.from({ length: nr }, (_, i) => r0 + i), cs = Array.from({ length: nc }, (_, j) => c0 + j);
     Object.assign(t, { r0, c0, head: ["", ...cs.map(col)], w: [34, ...cs.map(c => sh.widths?.[c] ?? 96)], right: [true, ...cs.map(() => false)], bare: !sp.headings, grid: !sp.no_grid, center: !!sp.center, font: 12,
       rows: rows.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
+    // Conditional formatting, as on screen.
+    const lk = condLooks(sh, cells as Map<string, [string, string, string, boolean, number | null]>);
+    t.rows.forEach((row, i) => cs.forEach((c, j) => { const l = lk.get(col(c) + (rows[i] + 1)); if (l) row.st![j + 1] = [row.st![j + 1], l.st, l.bg && `f:${l.bg}`].filter(Boolean).join(";"); }));
     // Row heights as on screen (bigger fonts and wrapped text make taller rows), merged cells, pictures.
     t.h = rows.map(r => sheetRowH(sh, r, cells));
     t.merges = (sh.merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = ref(a), p2 = ref(b); if (!p1 || !p2) return []; return [{ r: p1[0] - r0, c: p1[1] - c0 + 1, rs: p2[0] - p1[0] + 1, cs: p2[1] - p1[1] + 1 }]; }).filter(m => m.r + m.rs > 0 && m.r < nr && m.c + m.cs > 1 && m.c <= nc);

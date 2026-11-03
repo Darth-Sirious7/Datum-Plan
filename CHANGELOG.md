@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.21 — 2026-11-03
+
+Conditional formatting, Find and Replace, and more Sheets fixes.
+
+- **Conditional formatting on sheets:** Cells › Look › **Conditional**.
+  - **Highlight Cells:** greater than, less than, between, equal to, text that contains, blanks, duplicates.
+  - **Top and Bottom:** top 10, bottom 10, above or below average.
+  - **Data Bars** and **Colour Scales.**
+  - **New Rule…** and **Manage Rules…**: edit, reorder and delete rules; the first matching rule gives a cell its look.
+  - Rules print, go into exported workbooks as real conditional formats, and come back when the workbook is brought in again.
+- **Find and Replace:** [[Ctrl+F]] and [[Ctrl+H]], or Data › Find: match case, match the whole cell, Replace All.
+- **Fill handle:** fills up and to the left as well as down and right; series run backwards.
+- **Copy and paste:** a copied range takes its merged cells along.
+- **Format Painter:** also brings the number format.
+- **Fixed: Sort compared every number as equal;** it now sorts by the numbers themselves.
+- The guide covers conditional formatting and Find, in English and Chinese.
+
 ## 0.5.20 — 2026-11-03
 
 Sheets and Excel, both ways.
