@@ -235,7 +235,7 @@ impl<'a> Calc<'a> {
             let done = (0..p.tasks.len()).filter(|&i| self.pct[i] > 0 && !s.summary[i]).map(|i| {
                 let t = &p.tasks[i];
                 t.act_finish.or(if self.pct[i] < 100 { None } else { Some(date_of((s.ef[i] - 1).max(s.es[i]))) })
-                    .unwrap_or_else(|| date_of(s.es[i] + (s.ef[i] - s.es[i]) * self.pct[i] as i64 / 100)).max(t.act_start.unwrap_or_default())
+                    .unwrap_or_else(|| { let c = &s.cals[s.ci[i]]; date_of(c.add(s.es[i], c.between(s.es[i], s.ef[i]) * self.pct[i] as i64 / 100) - 1) }).max(t.act_start.unwrap_or_default())
             });
             done.fold(self.today, NaiveDate::max)
         })

@@ -17,6 +17,8 @@ export const r = (field: string, test: string, value = "", value2 = "", or = fal
 export const useRows = (key: () => any, query: () => object) => createResource(() => [tick(), JSON.stringify(key())], () => call<Grid>("query", { q: query() }));
 export const cum = (v: number[]) => { let s = 0; return v.map(x => (s += x)); };
 export const pct = (v: number) => `${v.toFixed(1)}%`;
+/** The bucket (first days in `b`) that holds `day`, for the status marker; null before the first. */
+export const bucketAt = (b: number[], day: number) => { const k = b.findIndex(x => x > day); return k < 0 ? b.length - 1 : k > 0 ? k - 1 : null; };
 export const label = (d: number, unit: string) => (unit === "month" ? fmtDay(d, "month") : fmtDay(d));
 const WEIGHTS: [string, string][] = [["duration", "Duration"], ["cost", "Cost"], ["work", "Hours"], ["physical", "Physical %"]];
 
@@ -138,7 +140,7 @@ const ProjectDashboard = () => {
         <Show when={on("phase") && rep()}>{x => <ChartBox title="Progress by phase" type="bar" horizontal fmt="pct" max={100} y="Complete" labels={x().wbs.map(w => w.name)}
           datasets={[bar("Planned", x().wbs.map(w => w.planned), COL.grey), bar("Actual", x().wbs.map(w => w.actual), COL.blue)]} />}</Show>
         <Show when={on("evm") && curve()}>{c => <ChartBox title="Cost and earned value" type="line" fmt="money" y={`Cumulative (${P().currency.code})`} days={c().buckets} labels={c().buckets.map(d => label(d, unit()))}
-          marker={c().buckets.findIndex(d => d >= (s().status_day ?? 0))}
+          marker={bucketAt(c().buckets, c().status_day)}
           datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show>
         <Show when={on("manpower") && use()}>{u => <ChartBox title="Manpower histogram" type="bar" fmt="hours" y="Hours" stacked days={u().buckets} labels={u().buckets.map(d => label(d, unit()))}
           datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>
@@ -319,7 +321,7 @@ const Report = (p: { kind: string; back: () => void }) => {
       </div>
       <Show when={(p.kind === "ev" || p.kind === "cost") && curve()}>{cv => {
         const c = cv();
-        const k = c.buckets.findIndex(d => d >= (s().status_day ?? 0));
+        const k = bucketAt(c.buckets, c.status_day);
         return <div class="charts">
           <ChartBox title={p.kind === "ev" ? "Earned value over time" : "Cumulative cost"} type="line" fmt="money" size="tall" days={c.buckets} labels={c.buckets.map(d => label(d, unit()))} marker={k}
             datasets={p.kind === "ev" ? [line("Planned value (PV)", cum(c.planned), COL.grey, [6, 4]), line("Earned value (EV)", cum(c.earned), COL.green), line("Actual cost (AC)", cum(c.actual), COL.red)]

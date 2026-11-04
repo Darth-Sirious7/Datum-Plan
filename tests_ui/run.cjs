@@ -34,12 +34,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   p.on("pageerror", e => { errors.push(e.message); if (process.env.DBG) console.log("PAGEERR", e.message, e.stack); });
-  await p.addInitScript(f => {
+  const mock = f => {
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "import_workbook") { const sh = [...f.state.project.sheets, { name: "Vendors list", cells: { A1: "Vendor", B1: "Country", A2: "Steel Co", B2: "Germany" }, fmt: { B2: "flag" }, widths: {}, style: { A1: "b;f:#DDEBF7" } }]; f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return [f.state, ["Vendors list"]]; } if (c === "export_sheets") return "C:/Plans/Plan - sheets.xlsx"; if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
-  }, fix);
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.slice(0, 200).map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "import_workbook") { const sh = [...f.state.project.sheets, { name: "Vendors list", cells: { A1: "Vendor", B1: "Country", A2: "Steel Co", B2: "Germany" }, fmt: { B2: "flag" }, widths: {}, style: { A1: "b;f:#DDEBF7" } }]; f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return [f.state, ["Vendors list"]]; } if (c === "export_sheets") return "C:/Plans/Plan - sheets.xlsx"; if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+  };
+  await p.addInitScript(mock, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
   await p.click(".bs aside .back");
@@ -793,6 +794,102 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.evaluate(() => { window.__calls.length = 0; }); await p.keyboard.press("Control+p"); await p.waitForTimeout(600);
   check("the printed look-ahead covers the weeks chosen on screen", await p.evaluate(() => window.__calls.filter(c => c[0] === "lookahead").every(c => c[1].weeks === 6)));
   await p.click(".bs aside .back"); await p.waitForTimeout(150); await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  // Reports and dashboards for a client: on the plan and on an EMPTY plan every report, dashboard,
+  // builder template and their prints open without script errors and never show NaN, Infinity or undefined.
+  const BAD = /\bNaN\b|Infinity|undefined|\[object Object\]/;
+  const sweep = async q => {
+    const found = [];
+    const look = async where => { const t = await q.evaluate(() => (document.querySelector(".content")?.innerText ?? "") + (document.querySelector(".pprev")?.innerText ?? "")); const m = t.match(BAD); if (m) found.push(`${where}: …${t.slice(Math.max(0, m.index - 50), m.index + 20)}…`); };
+    const prints = async where => {
+      await q.keyboard.press("Control+p"); await q.waitForTimeout(600);
+      if (!(await q.evaluate(() => document.querySelectorAll(".pprev .ppage, .pprev .pflow").length))) found.push(`${where}: no print pages`);
+      await look(`${where} (print)`); await q.click(".bs aside .back"); await q.waitForTimeout(150);
+    };
+    const go = async v => { await q.click(`.side button[title="${v}"]`); await q.waitForTimeout(400); };
+    for (const v of ["Dashboard", "Progress", "S-Curves", "Manpower", "Look-ahead", "Update"]) { await go(v); await look(v); await prints(v); }
+    await go("Dashboard");
+    for (const name of await q.$$eval(".dashtabs button:not(.add)", bs => bs.map(b => b.textContent))) { await q.click(`.dashtabs button:text-is("${name}")`); await q.waitForTimeout(600); await look(`dashboard ${name}`); await prints(`dashboard ${name}`); }
+    await q.click('.dashtabs button:text-is("Project")'); await q.waitForTimeout(200);
+    await go("Progress"); await q.click(".ptools .seg button:has-text('Monthly')"); await q.waitForTimeout(400); await look("monthly progress"); await prints("monthly progress"); await q.click(".ptools .seg button:has-text('Weekly')");
+    await go("S-Curves");
+    for (const w of ["Monthly", "Cost", "Hours", "Physical %", "Weekly", "Duration"]) { await q.click(`.ptools .seg button:has-text('${w}')`); await q.waitForTimeout(300); await look(`S-curves ${w}`); }
+    await go("Reports");
+    const n = (await q.$$(".tiles .tile")).length;
+    for (let i = 3; i < n; i++) {
+      await go("Reports"); if (await q.$(".ptools button:has-text('All reports')")) { await q.click(".ptools button:has-text('All reports')"); await q.waitForTimeout(200); }
+      await (await q.$$(".tiles .tile"))[i].click(); await q.waitForTimeout(400);
+      const name = await q.textContent(".content .page h1"); await look(`report ${name}`); await prints(`report ${name}`);
+    }
+    await go("Reports"); if (await q.$(".ptools button:has-text('All reports')")) await q.click(".ptools button:has-text('All reports')");
+    await go("Builder");
+    for (const t of ["Weekly management report", "Monthly client report", "Schedule health", "Cost report"]) {
+      await q.click(".ptools button:has-text('+ New report')"); await q.waitForTimeout(150); await q.click(`.menu button:has-text('From template: ${t}')`); await q.waitForTimeout(600);
+      await look(`builder ${t}`); await prints(`builder ${t}`);
+    }
+    return found;
+  };
+  await p.click('.side button[title="Dashboard"]'); await p.waitForTimeout(300); await p.click('.dashtabs button:text-is("Project")'); await p.waitForTimeout(500);
+  const evm = await p.evaluate(() => [...document.querySelectorAll(".chartbox")].find(c => c.querySelector("h3")?.textContent === "Cost and earned value")?.dataset.marker);
+  const evWant = fix.curve.buckets.filter(d => d <= fix.curve.status_day).length - 1;
+  check("the cost chart's status marker sits in the period of the status (or progress) date", evm === (evWant < 0 ? "" : String(evWant)), `${evm} vs ${evWant}`);
+  const onPlan = await sweep(p);
+  check("reports, dashboards and the builder never show NaN, Infinity or undefined (plan)", onPlan.length === 0, onPlan.join(" | "));
+  // A monthly section in a report built weekly: its S-curve is monthly (it showed weekly points under month names).
+  await p.click('.side button[title="Builder"]'); await p.waitForTimeout(300);
+  await p.evaluate(() => { window.__calls.length = 0; }); await p.selectOption(".ptools select", { label: "Monthly client report" }); await p.waitForTimeout(500);
+  check("a monthly section of a weekly report asks for monthly data", await p.evaluate(() => window.__calls.some(c => c[0] === "scurve" && c[1].unit === "month")));
+
+  // Page breaks in a built report: two in a row, or one at the end, must not print blank pages.
+  await p.click(".ptools button:has-text('+ New report')"); await p.click(".menu button:has-text('Blank report')"); await p.waitForTimeout(400);
+  for (const k of ["Page break", "Page break", "Text", "Page break"]) { await p.click(".ptools button:has-text('+ Add section')"); await p.click(`.menu button:has-text('${k}')`); await p.waitForTimeout(250); }
+  await p.keyboard.press("Control+p"); await p.waitForTimeout(600);
+  check("Builder prints the report that is open, not the first one", (await p.textContent(".pprev h1")) === "New report", await p.textContent(".pprev h1"));
+  await p.click(".bs aside .back"); await p.waitForTimeout(150);
+  const brk = await printView("Builder");
+  check("page breaks in a built report never print blank pages", brk.texts.length === 2 && brk.texts.every(n => n > 0), JSON.stringify(brk.texts));
+
+  const ep = await b.newPage({ viewport: { width: 1440, height: 900 } });
+  const qerr = [];
+  ep.on("pageerror", e => { qerr.push(e.message); if (process.env.DBG) console.log("PAGEERR (empty)", e.message, e.stack); });
+  await ep.addInitScript(mock, { ...fix, ...fix.empty });
+  await ep.goto(url); await ep.waitForTimeout(700); await ep.click(".bs aside .back"); await ep.waitForTimeout(300);
+  const onEmpty = await sweep(ep);
+  check("reports, dashboards and the builder never show NaN, Infinity or undefined (empty plan)", onEmpty.length === 0, onEmpty.join(" | "));
+  const vprint = [];
+  for (const v of ["Gantt", "Tracking", "Network", "Calendar", "Task Usage", "Resources", "Res. Usage", "Team", "Sheets"]) {
+    await ep.click(`.side button[title="${v}"]`); await ep.waitForTimeout(300); await ep.keyboard.press("Control+p"); await ep.waitForTimeout(700);
+    const t = await ep.evaluate(() => document.querySelector(".pprev")?.innerText ?? ""); if (BAD.test(t)) vprint.push(`${v}: ${t.match(BAD)[0]}`);
+    await ep.click(".bs aside .back"); await ep.waitForTimeout(150);
+  }
+  check("printing any view of an empty plan shows no NaN or undefined", vprint.length === 0 && qerr.length === 0, vprint.join(", ") + qerr.join(" | "));
+  for (const v of await ep.$$eval(".side button", bs => bs.map(x => x.title))) { await ep.click(`.side button[title="${v}"]`); await ep.waitForTimeout(250); }
+  check("every view of an empty plan opens without errors", qerr.length === 0, qerr.join(" | "));
+  // Awkward tiles: errors, a deleted sheet, text, pies of negatives and zeros, one point, none, a huge range.
+  await ep.click('.side button[title="Dashboard"]'); await ep.waitForTimeout(300); await ep.click('.dashtabs button:text-is("Edge cases")'); await ep.waitForTimeout(800);
+  const tile = t => ep.evaluate(t => { const h = [...document.querySelectorAll(".dtile")].find(x => x.querySelector("h3, .l")?.textContent === t); return h ? { text: h.innerText, canvas: !!h.querySelector(".cv:not(.blank) canvas"), rows: h.querySelectorAll("tbody tr").length } : null; }, t);
+  const ring = await tile("Ring error"), ringT = await tile("Ring text");
+  check("a ring tile on an error shows the error, not 0 %", !!ring && ring.text.includes("#DIV/0!") && !ring.text.includes("0%") && !ringT.text.includes("0%"), JSON.stringify([ring, ringT]));
+  const pie = await tile("Pie of negatives");
+  check("a pie of negative values says why instead of drawing a wrong pie", !!pie && !pie.canvas && /zero or more/.test(pie.text), JSON.stringify(pie));
+  check("a pie of zeros says there is nothing to show", (await tile("Pie of zeros")).text.includes("No data yet"));
+  check("a chart with one point draws it", (await tile("One point")).canvas);
+  check("a chart of an empty range says there is nothing to show", (await tile("No points")).text.includes("No data yet"));
+  const gone = await tile("Chart of a deleted sheet"), goneT = await tile("Table of a deleted sheet");
+  check("a chart or table of a deleted sheet explains the #REF! error", /#REF!.*deleted/.test(gone.text) && !gone.canvas && /#REF!.*deleted/.test(goneT.text) && goneT.rows === 0, JSON.stringify([gone, goneT]));
+  check("a huge range shows only the cells in use", (await tile("Huge range")).rows === 3, JSON.stringify(await tile("Huge range")));
+  check("number tiles on an error or on text show it, without a colour rule on text", (await tile("Divided by zero")).text.includes("#DIV/0!") && (await tile("Text")).text.includes("abc") && !(await ep.$eval(".dtile.k-number:nth-child(3) .dnum", e => e.classList.contains("bad") || e.classList.contains("good"))));
+  await ep.click('.dashtabs button:text-is("Many")'); await ep.waitForTimeout(800);
+  check("a board of more than 200 formulas shows every value", (await ep.$$eval(".dnum .v", v => v.map(x => x.textContent))).slice(-2).join() === "209,210");
+  await ep.click('.dashtabs button:text-is("Blank")'); await ep.waitForTimeout(300);
+  check("a dashboard with no tiles invites to add one", (await ep.textContent(".content")).includes("This dashboard is empty"));
+  await ep.click(".dashbar button:has-text('Dashboard ▾')"); await ep.click(".menu button:has-text('Rename…')"); await ep.waitForTimeout(150);
+  await ep.fill(".dlg input.asktext", "Board two"); await ep.click(".dlg .btn.pri"); await ep.waitForTimeout(300);
+  check("a dashboard can be renamed", (await ep.textContent(".dashtabs .on")) === "Board two");
+  await ep.click(".dashbar button:has-text('Dashboard ▾')"); await ep.click(".menu button:has-text('Delete…')"); await ep.waitForTimeout(150); await ep.click(".dlg .btn.pri"); await ep.waitForTimeout(400);
+  check("deleting a dashboard goes back to the project dashboard", (await ep.textContent(".dashtabs .on")) === "Project" && !(await ep.textContent(".dashtabs")).includes("Board two") && !!(await ep.$(".kpis")));
+  check("no errors on the empty plan's dashboards", qerr.length === 0, qerr.join(" | "));
+  await ep.close();
+
   // 6. Every view opens without script errors.
   for (const v of await p.$$eval(".side button", bs => bs.map(x => x.title))) {
     await p.click(`.side button[title="${v}"]`);

@@ -514,7 +514,7 @@ tr.behind td { background: var(--err-bg); }
 .rsec-bar input { font-weight: 600; width: 260px; }
 .rtext { width: 100%; min-height: 60px; margin-bottom: 4px; }
 .pagebreak { border-top: 1px dashed var(--line3); text-align: center; margin: 8px 0; }
-@media print { .rsec-bar { display: none !important; } .pagebreak { break-after: page; border: 0; } }
+@media print { .rsec-bar { display: none !important; } .pagebreak { break-after: page; border: 0; } .pagebreak.void { break-after: auto; margin: 0; } }
 
 /* Options page */
 .options { max-width: 880px; }

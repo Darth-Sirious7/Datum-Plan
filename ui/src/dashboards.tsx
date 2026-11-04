@@ -9,7 +9,7 @@ import { Curve, PeriodReport, SCurve, Usage } from "./api";
 import { pictures, picData, addPicture } from "./pictures";
 import { Dialog, Row } from "./ui";
 import { ChartBox, COL, bar, line } from "./charts";
-import { Brand, PeriodBars, Rows, SCurveChart, Table, cum, label, q, r, useRows } from "./reports";
+import { Brand, PeriodBars, Rows, SCurveChart, Table, bucketAt, cum, label, q, r, useRows } from "./reports";
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { ERRORS } from "./formulas";
 
@@ -76,7 +76,7 @@ const TEMPLATES: Dash[] = [
     T("table", "Starting next period", 6, 3, { plan: "upcoming" }),
   ] },
   { name: "Vendors and countries", tiles: [
-    T("number", "Vendors and crews", 3, 1, { formula: "=ROWS(Resources)" }),
+    T("number", "Vendors and crews", 3, 1, { formula: "=COUNTA(Resources[Name])" }),
     T("number", "Countries", 3, 1, { formula: '=IFERROR(ROWS(UNIQUE(FILTER(Resources[Country],Resources[Country]<>""))),0)' }),
     T("number", "Forecast cost", 3, 1, { formula: "=TotalCost", fmt: "money" }),
     T("number", "Critical tasks", 3, 1, { formula: "=CriticalCount" }),
@@ -112,13 +112,15 @@ const asks = (t: Tile): [string, string][] => {
 const key = (f: [string, string]) => `${f[1]}\u0001${f[0]}`;
 
 export const CustomDashboard = (p: { k: number }) => {
-  const d = () => dashboards()[p.k];
+  const d = () => { const x = dashboards()[p.k]; return x && !Array.isArray(x.tiles) ? { ...x, tiles: [] } : x; };
   const [edit, setEdit] = createSignal(false);
   const s = () => out()!.summary;
   const unit = () => (s().f - s().s > 240 ? "month" : "week");
   const items = createMemo(() => { const m = new Map<string, [string, string]>(); for (const t of d()?.tiles ?? []) for (const a of asks(t)) m.set(key(a), a); return [...m.values()]; });
   const [vals] = createResource(() => [tick(), JSON.stringify(items())], async () => {
-    const r = items().length ? await call<Shown[][][]>("dash_eval", { items: items() }) : [];
+    // The shell works out 200 formulas per call: a bigger board asks in parts.
+    const parts = Array.from({ length: Math.ceil(items().length / 200) }, (_, k) => items().slice(k * 200, k * 200 + 200));
+    const r = (await Promise.all(parts.map(x => call<Shown[][][]>("dash_eval", { items: x })))).flatMap((v, k) => v ?? parts[k].map(() => []));
     return new Map(items().map((a, i) => [key(a), r?.[i] ?? []]));
   });
   const val = (f: string | undefined, fmt = "") => (f ? vals()?.get(key([f, fmt])) : undefined);
@@ -197,13 +199,16 @@ const NumberTile = (p: TileProps) => {
 
 /** A percentage (0–100) as a ring with the figure in the middle. */
 const RingTile = (p: TileProps) => {
-  const n = () => Math.max(0, Math.min(100, one(p.val(p.t.formula, p.t.fmt ?? ""))?.[1] ?? 0));
+  const v = () => one(p.val(p.t.formula, p.t.fmt ?? ""));
+  const n = () => Math.max(0, Math.min(100, v()?.[1] ?? 0));
+  // An error or text is shown as it is (the ring stays empty), never as 0 %.
+  const shown = () => (typeof v()?.[1] === "number" ? `${Math.round(n())}%` : (v()?.[0] || "—").slice(0, 12));
   const R = 52, L = 2 * Math.PI * R;
   return (
     <div class="dring">
       <h3>{p.t.title}</h3>
       <svg viewBox="0 0 140 140"><circle cx="70" cy="70" r={R} class="track" /><circle cx="70" cy="70" r={R} class="val" opacity={n() > 0 ? 1 : 0} stroke-dasharray={`${(n() / 100) * L} ${L}`} transform="rotate(-90 70 70)" />
-        <text x="70" y="76" text-anchor="middle">{`${Math.round(n())}%`}</text></svg>
+        <text x="70" y="76" text-anchor="middle"><title>{ERRORS[v()?.[0] ?? ""] ?? ""}</title>{shown()}</text></svg>
       <Show when={subText(p)}><div class="sub">{subText(p)}</div></Show>
     </div>
   );
@@ -217,6 +222,8 @@ const series = (m: Shown[][]) => {
   const names = Array.from({ length: Math.max(1, n) }, (_, j) => (head ? m[0][j + 1]?.[0] : "") || `Series ${j + 1}`);
   return { labels: rows.map(r => r[0]?.[0] ?? ""), names, data: names.map((_, j) => rows.map(r => r[j + 1]?.[1] ?? null)) };
 };
+/** A range or formula that is one error (a deleted sheet: #REF!) explains itself instead of an empty chart or table. */
+const errorOf = (m: Shown[][]) => (m.length === 1 && m[0].length === 1 && ERRORS[m[0][0][0]] ? `${m[0][0][0]}: ${ERRORS[m[0][0][0]]}` : "");
 const ChartTile = (p: TileProps) => {
   const pal = Object.values(COL);
   return (
@@ -225,7 +232,7 @@ const ChartTile = (p: TileProps) => {
       <Match when={p.t.plan === "periodbars"}><Show when={p.sc}>{c => <PeriodBars c={c()} unit={p.unit} size="fill" bare />}</Show></Match>
       <Match when={p.t.plan === "phases"}><Show when={p.rep}>{x => <ChartBox title={p.t.title} type="bar" horizontal fmt="pct" max={100} size="fill" bare labels={x().wbs.map(w => w.name)}
         datasets={[bar("Planned", x().wbs.map(w => w.planned), COL.grey), bar("Actual", x().wbs.map(w => w.actual), COL.blue)]} />}</Show></Match>
-      <Match when={p.t.plan === "costev"}><Show when={p.curve}>{c => <ChartBox title={p.t.title} type="line" fmt="money" size="fill" bare days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={c().buckets.findIndex(d => d >= (out()!.summary.status_day ?? 0))}
+      <Match when={p.t.plan === "costev"}><Show when={p.curve}>{c => <ChartBox title={p.t.title} type="line" fmt="money" size="fill" bare days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={bucketAt(c().buckets, c().status_day)}
         datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show></Match>
       <Match when={p.t.plan === "manpower"}><Show when={p.use}>{u => <ChartBox title={p.t.title} type="bar" fmt="hours" stacked size="fill" bare days={u().buckets} labels={u().buckets.map(d => label(d, p.unit))}
         datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, pal[i % 8], "h"))} />}</Show></Match>
@@ -235,12 +242,18 @@ const ChartTile = (p: TileProps) => {
 const RangeChart = (p: TileProps & { pal: string[] }) => {
   const s = createMemo(() => series(p.val(p.t.src) ?? []));
   const kind = () => p.t.chart ?? "bar";
+  const round = () => kind() === "doughnut" || kind() === "pie";
+  // A pie shows shares of a whole: a value below zero has no slice.
+  const below = () => (round() ? s().labels.find((_, i) => (s().data[0]?.[i] ?? 0) < 0) : undefined);
   return (
     <Show when={p.t.src} fallback={<p class="empty">Choose what to chart: ✎ in Edit layout.</p>}>
+      <Show when={!errorOf(p.val(p.t.src) ?? [])} fallback={<p class="empty">{errorOf(p.val(p.t.src) ?? [])}</p>}>
+      <Show when={below() === undefined} fallback={<p class="empty">A {kind()} chart shows shares, so every value must be zero or more ({below() || "a value"} is below zero). Choose columns or bars for values below zero.</p>}>
       <ChartBox title={p.t.title} size="fill" bare labels={s().labels} horizontal={kind() === "hbar"} stacked={kind() === "stacked"}
         type={kind() === "doughnut" || kind() === "pie" ? kind() as "pie" : kind() === "line" || kind() === "area" ? "line" : "bar"}
         datasets={kind() === "doughnut" || kind() === "pie" ? [{ label: s().names[0], data: s().data[0] ?? [] } as never]
           : s().names.map((n, j) => (kind() === "line" || kind() === "area" ? line(n, s().data[j], p.pal[j % 8], undefined, kind() === "area") : bar(n, s().data[j], p.pal[j % 8], kind() === "stacked" ? "s" : undefined)))} />
+      </Show></Show>
     </Show>
   );
 };
@@ -267,7 +280,7 @@ const RangeTable = (p: { m: Shown[][] }) => {
   const head = () => p.m.length > 1 && p.m[0].every(c => c[1] === null);
   const flags = createMemo(() => (p.m[0] ?? []).map((_, j) => flagCol(p.m, j, head())));
   return (
-    <Show when={p.m.length && p.m.some(r => r.some(c => c[0]))} fallback={<p class="empty">Nothing to show yet.</p>}>
+    <Show when={p.m.length && p.m.some(r => r.some(c => c[0])) && !errorOf(p.m)} fallback={<p class="empty">{errorOf(p.m) || "Nothing to show yet."}</p>}>
       <table class="tbl">
         <Show when={head()}><thead><tr><For each={p.m[0]}>{c => <th>{c[0]}</th>}</For></tr></thead></Show>
         <tbody><For each={(head() ? p.m.slice(1) : p.m).slice(0, 200)}>{row => <tr><For each={row}>{(c, j) => <td classList={{ r: c[1] !== null && c[2] !== "flag" }} title={ERRORS[c[0]]}>

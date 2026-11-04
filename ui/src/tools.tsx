@@ -6,7 +6,7 @@ import { act, call, curUid, out, P, tick, toast, fields, openMenu, setView, Item
 import { C, selectUid } from "./cmds";
 import { Seg, Icon } from "./ui";
 import * as D from "./dialogs";
-import { Brand, Kpi, Table, Rows, Tools, SCurveChart, PeriodBars, q, r, useRows, cum, pct, label } from "./reports";
+import { Brand, Kpi, Table, Rows, Tools, SCurveChart, PeriodBars, q, r, useRows, cum, pct, label, bucketAt } from "./reports";
 import { ChartBox, COL, line, bar } from "./charts";
 import { Help } from "./help";
 
@@ -104,39 +104,48 @@ export const TEMPLATES: Report[] = [
   { name: "Schedule health", sections: [sec("kpis"), sec("behind"), sec("table", "Critical tasks", { cols: ["code", "name", "start", "finish", "tf"], filter: "Critical" }), sec("table", "Negative float", { cols: ["code", "name", "finish", "tf"], filter: "Negative Float" })] },
   { name: "Cost report", sections: [sec("kpis"), sec("costev"), sec("table", "Cost by task", { cols: ["name", "cost", "b0cost", "vcost", "acost", "rcost"] }), sec("manpower")] },
 ];
-const SectionView = (p: { s: Section; unit: string; rep?: PeriodReport; sc?: SCurve; curve?: Curve; use?: Usage }): JSX.Element => {
+const SectionView = (p: { s: Section; unit: string; base: string; live: boolean; rep?: PeriodReport; sc?: SCurve; curve?: Curve; use?: Usage }): JSX.Element => {
   const s = () => out()!.summary;
+  // A section with its own period (a monthly S-curve in a weekly report) reads its own data.
+  const own = (...kinds: string[]) => !!p.s.unit && p.s.unit !== p.base && kinds.includes(p.s.kind) && [tick(), p.unit];
+  const [rep2] = createResource(() => own("kpis", "phases", "completed", "lookahead", "milestones", "behind", "notes"), () => call<PeriodReport>("period_report", { kind: p.unit, end: null }));
+  const [sc2] = createResource(() => own("scurve", "periodbars"), () => call<SCurve>("scurve", { unit: p.unit, how: P().periods.weight, scope: null }));
+  const [curve2] = createResource(() => own("costev"), () => call<Curve>("curve", { unit: p.unit }));
+  const [use2] = createResource(() => own("manpower"), () => call<Usage>("usage", { by: "resource", what: "work", unit: p.unit }));
+  const pick = <T,>(mine: T | undefined, shared?: T) => (p.s.unit && p.s.unit !== p.base ? mine : shared);
+  const src = { get rep() { return pick(rep2(), p.rep); }, get sc() { return pick(sc2(), p.sc); }, get curve() { return pick(curve2(), p.curve); }, get use() { return pick(use2(), p.use); } };
   const flt = () => fields().filters.find(f => f.name === p.s.filter)?.rules ?? [];
   const [g] = useRows(() => [p.s.cols, p.s.filter], () => q(p.s.cols?.length ? p.s.cols : ["code", "name", "start", "finish", "pct"], flt()));
-  const note = () => p.rep ? P().notes.find(n => n.kind === p.unit && n.end === iso(p.rep!.to)) : undefined;
+  const note = () => src.rep ? P().notes.find(n => n.kind === p.unit && n.end === iso(src.rep!.to)) : undefined;
   switch (p.s.kind) {
-    case "kpis": return <Show when={p.rep}>{x => <div class="kpis">
+    case "kpis": return <Show when={src.rep}>{x => <div class="kpis">
       <Kpi v={pct(x().actual)} l="Actual progress" d={x().actual - x().actual_prev} unit="%" /><Kpi v={pct(x().planned)} l="Planned progress" d={x().planned - x().planned_prev} unit="%" />
       <Kpi v={pct(x().actual - x().planned)} l="Variance" bad={x().actual < x().planned - 0.5} /><Kpi v={x().finish} l="Forecast finish" /><Kpi v={s().spi?.toFixed(2) ?? "—"} l="SPI" /><Kpi v={s().cpi?.toFixed(2) ?? "—"} l="CPI" /><Kpi v={s().cost} l="Cost" /><Kpi v={x().late} l="Late tasks" bad={x().late > 0} />
     </div>}</Show>;
-    case "scurve": return <Show when={p.sc}>{c => <SCurveChart c={c()} unit={p.unit} title={p.s.title} />}</Show>;
-    case "periodbars": return <Show when={p.sc}>{c => <PeriodBars c={c()} unit={p.unit} />}</Show>;
-    case "phases": return <Show when={p.rep}>{x => <ChartBox title={p.s.title} type="bar" horizontal fmt="pct" max={100} labels={x().wbs.map(w => w.name)} datasets={[bar("Previous", x().wbs.map(w => w.actual_prev), COL.sky), bar("Actual", x().wbs.map(w => w.actual), COL.blue), bar("Planned", x().wbs.map(w => w.planned), COL.grey)]} />}</Show>;
-    case "costev": return <Show when={p.curve}>{c => <ChartBox title={p.s.title} type="line" fmt="money" days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={c().buckets.findIndex(d => d >= (s().status_day ?? 0))}
+    case "scurve": return <Show when={src.sc}>{c => <SCurveChart c={c()} unit={p.unit} title={p.s.title} />}</Show>;
+    case "periodbars": return <Show when={src.sc}>{c => <PeriodBars c={c()} unit={p.unit} />}</Show>;
+    case "phases": return <Show when={src.rep}>{x => <ChartBox title={p.s.title} type="bar" horizontal fmt="pct" max={100} labels={x().wbs.map(w => w.name)} datasets={[bar("Previous", x().wbs.map(w => w.actual_prev), COL.sky), bar("Actual", x().wbs.map(w => w.actual), COL.blue), bar("Planned", x().wbs.map(w => w.planned), COL.grey)]} />}</Show>;
+    case "costev": return <Show when={src.curve}>{c => <ChartBox title={p.s.title} type="line" fmt="money" days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={bucketAt(c().buckets, c().status_day)}
       datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show>;
-    case "manpower": return <Show when={p.use}>{u => <ChartBox title={p.s.title} type="bar" fmt="hours" stacked days={u().buckets} labels={u().buckets.map(d => label(d, p.unit))} datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>;
+    case "manpower": return <Show when={src.use}>{u => <ChartBox title={p.s.title} type="bar" fmt="hours" stacked days={u().buckets} labels={u().buckets.map(d => label(d, p.unit))} datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>;
     case "table": return <div class="panel"><h2>{p.s.title}</h2><Table g={g()} empty="No tasks match." /></div>;
-    case "completed": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={p.rep?.completed ?? []} empty="Nothing finished in this period." /></div>;
-    case "lookahead": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={p.rep?.upcoming ?? []} empty="Nothing starts in the next period." /></div>;
-    case "milestones": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={p.rep?.milestones ?? []} note="Variance" empty="No milestones." /></div>;
-    case "behind": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={p.rep?.slipped ?? []} note="Baseline" empty="Nothing is behind its baseline." /></div>;
+    case "completed": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={src.rep?.completed ?? []} empty="Nothing finished in this period." /></div>;
+    case "lookahead": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={src.rep?.upcoming ?? []} empty="Nothing starts in the next period." /></div>;
+    case "milestones": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={src.rep?.milestones ?? []} note="Variance" empty="No milestones." /></div>;
+    case "behind": return <div class="panel"><h2>{p.s.title}</h2><Rows rows={src.rep?.slipped ?? []} note="Baseline" empty="Nothing is behind its baseline." /></div>;
     case "notes": return <div class="panel"><h2>{p.s.title}</h2><Show when={note()} fallback={<p class="empty">No notes for this period yet. Write them in the Progress report.</p>}>{n => <>
       <For each={[["Summary", n().summary], ["Progress", n().progress], ["Issues and risks", n().issues], ["Actions", n().actions], ["Look-ahead", n().look_ahead]].filter(x => x[1])}>{([t, v]) => <div class="notesec"><label>{t}</label><div class="notes-print" style={{ display: "block" }}>{v}</div></div>}</For>
       <div class="photos"><For each={n().photos}>{ph => <figure><img src={ph.data} alt={ph.caption} /><figcaption>{ph.caption}</figcaption></figure>}</For></div></>}</Show></div>;
     case "text": return <div class="panel"><h2>{p.s.title}</h2><div class="notes-print" style={{ display: "block" }}>{p.s.text}</div></div>;
-    case "break": return <div class="pagebreak"><span class="noprint muted">— page break —</span></div>;
+    case "break": return <div class="pagebreak" classList={{ void: !p.live }}><span class="noprint muted">{p.live ? "— page break —" : "— page break (not needed here) —"}</span></div>;
   }
   return null;
 };
+// The report and period chosen live outside the page: the printed copy is another instance and must show the same.
+const [bk, setK] = createSignal(0), [unit, setUnit] = createSignal("week");
 export const ReportBuilder = () => {
   const reports = () => (P().ui?.reports ?? []) as Report[];
-  const [k, setK] = createSignal(0);
-  const [unit, setUnit] = createSignal("week");
+  const k = () => Math.min(bk(), Math.max(0, reports().length - 1));
   const cur = () => reports()[k()];
   const save = (list: Report[]) => act({ Ui: { key: "reports", value: list } });
   const put = (rep: Report) => save(reports().map((x, i) => (i === k() ? rep : x)));
@@ -146,6 +155,8 @@ export const ReportBuilder = () => {
   const [sc] = createResource(() => [tick(), unit()], () => call<SCurve>("scurve", { unit: unit(), how: P().periods.weight, scope: null }));
   const [curve] = createResource(() => [tick(), unit()], () => call<Curve>("curve", { unit: unit() }));
   const [use] = createResource(() => [tick(), unit()], () => call<Usage>("usage", { by: "resource", what: "work", unit: unit() }));
+  // A page break counts between two parts of the report: not first, last, or one after another (blank pages).
+  const live = (i: number) => { const v = cur().sections, real = (x: Section) => x.kind !== "break"; return v.slice(0, i).some(real) && v.slice(i + 1).some(real) && v[i + 1]?.kind !== "break"; };
   const addMenu = (e: MouseEvent) => openMenu(e, KINDS.map(([kind, l]) => ({ label: l, run: () => put({ ...cur(), sections: [...cur().sections, sec(kind)] }) } as Item)));
   const colMenu = (e: MouseEvent, i: number, s: Section) => openMenu(e, fields().task.filter(f => !f.key.startsWith("c:") || P().fields.some(d => `c:${d.key}` === f.key)).slice(0, 200).map(f => ({ label: f.name, on: (s.cols ?? []).includes(f.key), run: () => editSec(i, { ...s, cols: (s.cols ?? []).includes(f.key) ? s.cols!.filter(x => x !== f.key) : [...(s.cols ?? ["name"]), f.key] }) })));
   return (
@@ -174,7 +185,7 @@ export const ReportBuilder = () => {
               <button class="x" title="Remove" onClick={() => put({ ...cur(), sections: cur().sections.filter((_, j) => j !== i()) })}>×</button>
             </div>
             <Show when={s.kind === "text"}><textarea class="noprint rtext" value={s.text ?? ""} placeholder="Type the text for this section" onChange={e => editSec(i(), { ...s, text: e.currentTarget.value })} /></Show>
-            <SectionView s={s} unit={s.unit ?? unit()} rep={rep()} sc={sc()} curve={curve()} use={use()} />
+            <SectionView s={s} unit={s.unit ?? unit()} base={unit()} live={live(i())} rep={rep()} sc={sc()} curve={curve()} use={use()} />
           </div>
         )}</For>
       </Show>
