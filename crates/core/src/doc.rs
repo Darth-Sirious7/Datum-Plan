@@ -58,7 +58,7 @@ pub enum Op {
     /// Many cell edits as one step (paste, fill, clear a range). Cells that cannot take the value
     /// are skipped; it fails only when none could be set.
     Cells { cells: Vec<(u32, String, String)> },
-    /// Inserts a recurring task: a summary with one occurrence every `interval` days, weeks or
+    /// Inserts a recurring task: a summary with one occurrence every `interval` working days, weeks or
     /// months from `start`, each held to its date by a Start No Earlier Than constraint.
     Recurring { at: usize, name: String, dur: String, every: String, interval: u32, count: u32, start: String },
     /// Renames a column (empty title restores the field's name).
@@ -962,12 +962,20 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let first = parse::date_in(&start, fmt).or_else(|_| parse::date(&start))?;
             let t = p.new_task(name.trim(), lv, d);
             p.tasks.insert(at, t);
+            // Daily occurrences fall on working days of the project calendar (not two on a Monday after a weekend).
+            let pc = crate::cal::WorkCal::new(p.calendars.iter().find(|c| c.name == p.calendar).unwrap_or(&p.calendars[0]));
+            let mut workday = first;
             for k in 0..count {
                 let n = interval.max(1) as u64 * k as u64;
                 let day = match every.as_str() {
                     "month" => u32::try_from(n).ok().and_then(|n| first.checked_add_months(chrono::Months::new(n))),
                     "week" => first.checked_add_days(chrono::Days::new(7 * n)),
-                    _ => first.checked_add_days(chrono::Days::new(n)),
+                    _ => {
+                        let work = |mut d: NaiveDate| { while !pc.is_work_day(d) && d < crate::cal::hi() { d = d.succ_opt().unwrap_or(d) } d };
+                        if k == 0 { workday = work(first) }
+                        for _ in 0..if k == 0 { 0 } else { interval.max(1) } { workday = work(workday.succ_opt().filter(|d| *d <= crate::cal::hi()).ok_or("The occurrences run past the dates a plan can hold (to 2600).")?) }
+                        Some(workday)
+                    }
                 }.filter(|d| *d <= crate::cal::hi()).ok_or("The occurrences run past the dates a plan can hold (to 2600).")?;
                 let mut t = p.new_task(&format!("{} {}", name.trim(), k + 1), lv + 1, d);
                 t.unit = unit;

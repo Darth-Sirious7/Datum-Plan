@@ -346,3 +346,16 @@ fn typing_or_dragging_the_dates_of_a_task_under_way_moves_its_actual_dates() {
     assert_eq!(&dates(&dc.p)[2][..11], "Nov05 08:00");
     assert!(dc.apply(Op::Set { uid: b, field: "start".into(), value: "05-Nov-26".into() }, F).is_err());
 }
+
+#[test]
+fn a_daily_meeting_falls_on_working_days() {
+    let mut dc = Doc::new(Project::new("R", d(2026, 11, 2)));
+    op(&mut dc, Op::Recurring { at: 0, name: "Stand-up".into(), dur: "15m".into(), every: "day".into(), interval: 1, count: 7, start: "02-Nov-26".into() });
+    let days: Vec<String> = dates(&dc.p)[1..].iter().map(|x| x[..5].to_string()).collect();
+    assert_eq!(days, ["Nov02", "Nov03", "Nov04", "Nov05", "Nov06", "Nov09", "Nov10"]);
+    // Every second working day.
+    let mut dc = Doc::new(Project::new("R", d(2026, 11, 2)));
+    op(&mut dc, Op::Recurring { at: 0, name: "Inspection".into(), dur: "1h".into(), every: "day".into(), interval: 2, count: 4, start: "05-Nov-26".into() });
+    let days: Vec<String> = dates(&dc.p)[1..].iter().map(|x| x[..5].to_string()).collect();
+    assert_eq!(days, ["Nov05", "Nov09", "Nov11", "Nov13"]);
+}
