@@ -60,6 +60,7 @@ fn hand_checked_figures_of_a_small_crew() {
     let cv = report::curve(&c, "week");
     let sum = |v: &[f64]| v.iter().sum::<f64>();
     assert!(close(sum(&cv.planned), 2080.0) && close(sum(&cv.forecast), 2080.0) && close(sum(&cv.earned), 640.0) && close(sum(&cv.actual), 640.0), "{:?} {:?} {:?} {:?}", cv.planned, cv.forecast, cv.earned, cv.actual);
+    assert_eq!(cv.status_day, crate::cal::at(d(2026, 11, 10)) / crate::cal::DAY);
     // Manpower in people per week (40 h each): week 1 T1 + T3 = 64 h = 1.6; week 2 T2 = 80 h = 2.
     let m = progress::manpower(&c, "week");
     let all = &m.trades[0];
@@ -146,6 +147,8 @@ fn progress_without_a_status_date_is_measured_in_working_time() {
     assert_eq!(c.progress_date(), d(2026, 11, 4), "30 % of Mon 2 – Fri 13 Nov is done on Wednesday evening");
     assert!(close(report::period_report(&c, "week", None).actual, 30.0));
     assert_eq!(names(&c)["PlannedPercent"], "30");
+    // The cost chart's status marker stands on the same day (it stood on the first period without a status date).
+    assert_eq!(report::curve(&c, "week").status_day, crate::cal::at(d(2026, 11, 4)) / crate::cal::DAY);
     let e = progress::earned_schedule(&c).unwrap();
     assert!(close(e.spi_t, 1.0), "{e:?}");
 }

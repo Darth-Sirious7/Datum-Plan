@@ -132,9 +132,10 @@ pub fn usage(c: &Calc, by: &str, what: &str, unit: &str) -> Usage {
     Usage { buckets: b, unit: unit.into(), rows, person }
 }
 
-/// Cash flow and S-curve data per bucket: baseline (planned value), current forecast and actual cost.
+/// Cash flow and S-curve data per bucket: baseline (planned value), current forecast and actual cost,
+/// and the day progress is measured at (the status date, or without one the progress date).
 #[derive(Serialize)]
-pub struct Curve { pub buckets: Vec<i64>, pub planned: Vec<f64>, pub forecast: Vec<f64>, pub actual: Vec<f64>, pub earned: Vec<f64> }
+pub struct Curve { pub buckets: Vec<i64>, pub planned: Vec<f64>, pub forecast: Vec<f64>, pub actual: Vec<f64>, pub earned: Vec<f64>, pub status_day: i64 }
 
 pub fn curve(c: &Calc, unit: &str) -> Curve {
     let (p, s, l) = (c.p, &c.s, &c.l);
@@ -198,7 +199,7 @@ pub fn curve(c: &Calc, unit: &str) -> Curve {
             }
         }
     }
-    Curve { buckets: b, planned, forecast, actual, earned }
+    Curve { buckets: b, planned, forecast, actual, earned, status_day: dd - 1 }
 }
 
 /// One task's difference between two versions of a plan (Compare Projects).

@@ -75,7 +75,7 @@ export interface SimResult { runs: number; planned: number; planned_chance: numb
 export interface LevelPreview { moved: { uid: number; name: string; start: number; new_start: number; finish: number; new_finish: number }[]; finish: number; new_finish: number; over_before: number; over_after: number }
 /** An instant (minutes) as a short date: finishes at midnight belong to the day before. */
 export const fmtAt = (t: number, fin = false) => fmtDay(Math.floor(((fin ? t - 1 : t)) / 1440));
-export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[] }
+export interface Curve { buckets: number[]; planned: number[]; forecast: number[]; actual: number[]; earned: number[]; status_day: number }
 export interface Check { key: string; name: string; about: string; count: number; total: number; value: number; limit: string; pass: boolean; uids: number[] }
 export interface Net { nodes: { uid: number; col: number; row: number }[]; links: { from: number; to: number; kind: LinkType; crit: boolean; driving: boolean; lag: string }[]; cols: number; rows: number; bands?: { name: string; row: number; rows: number }[] }
 export interface Diff { uid: number; name: string; change: string; was: string[]; now: string[]; finish_var: string }

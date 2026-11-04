@@ -820,6 +820,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     }
     return found;
   };
+  await p.click('.side button[title="Dashboard"]'); await p.waitForTimeout(300); await p.click('.dashtabs button:text-is("Project")'); await p.waitForTimeout(500);
+  const evm = await p.evaluate(() => [...document.querySelectorAll(".chartbox")].find(c => c.querySelector("h3")?.textContent === "Cost and earned value")?.dataset.marker);
+  const evWant = fix.curve.buckets.filter(d => d <= fix.curve.status_day).length - 1;
+  check("the cost chart's status marker sits in the period of the status (or progress) date", evm === (evWant < 0 ? "" : String(evWant)), `${evm} vs ${evWant}`);
   const onPlan = await sweep(p);
   check("reports, dashboards and the builder never show NaN, Infinity or undefined (plan)", onPlan.length === 0, onPlan.join(" | "));
   // A monthly section in a report built weekly: its S-curve is monthly (it showed weekly points under month names).

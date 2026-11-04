@@ -6,7 +6,7 @@ import { act, call, curUid, out, P, tick, toast, fields, openMenu, setView, Item
 import { C, selectUid } from "./cmds";
 import { Seg, Icon } from "./ui";
 import * as D from "./dialogs";
-import { Brand, Kpi, Table, Rows, Tools, SCurveChart, PeriodBars, q, r, useRows, cum, pct, label } from "./reports";
+import { Brand, Kpi, Table, Rows, Tools, SCurveChart, PeriodBars, q, r, useRows, cum, pct, label, bucketAt } from "./reports";
 import { ChartBox, COL, line, bar } from "./charts";
 import { Help } from "./help";
 
@@ -125,7 +125,7 @@ const SectionView = (p: { s: Section; unit: string; base: string; live: boolean;
     case "scurve": return <Show when={src.sc}>{c => <SCurveChart c={c()} unit={p.unit} title={p.s.title} />}</Show>;
     case "periodbars": return <Show when={src.sc}>{c => <PeriodBars c={c()} unit={p.unit} />}</Show>;
     case "phases": return <Show when={src.rep}>{x => <ChartBox title={p.s.title} type="bar" horizontal fmt="pct" max={100} labels={x().wbs.map(w => w.name)} datasets={[bar("Previous", x().wbs.map(w => w.actual_prev), COL.sky), bar("Actual", x().wbs.map(w => w.actual), COL.blue), bar("Planned", x().wbs.map(w => w.planned), COL.grey)]} />}</Show>;
-    case "costev": return <Show when={src.curve}>{c => <ChartBox title={p.s.title} type="line" fmt="money" days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={c().buckets.findIndex(d => d >= (s().status_day ?? 0))}
+    case "costev": return <Show when={src.curve}>{c => <ChartBox title={p.s.title} type="line" fmt="money" days={c().buckets} labels={c().buckets.map(d => label(d, p.unit))} marker={bucketAt(c().buckets, c().status_day)}
       datasets={[line("Planned value", cum(c().planned), COL.grey, [6, 4]), line("Earned value", cum(c().earned), COL.green), line("Actual cost", cum(c().actual), COL.red), line("Forecast", cum(c().forecast), COL.blue, [2, 3])]} />}</Show>;
     case "manpower": return <Show when={src.use}>{u => <ChartBox title={p.s.title} type="bar" fmt="hours" stacked days={u().buckets} labels={u().buckets.map(d => label(d, p.unit))} datasets={u().rows.filter(x => x.of === null).slice(0, 8).map((x, i) => bar(x.name, x.vals, Object.values(COL)[i % 8], "h"))} />}</Show>;
     case "table": return <div class="panel"><h2>{p.s.title}</h2><Table g={g()} empty="No tasks match." /></div>;
