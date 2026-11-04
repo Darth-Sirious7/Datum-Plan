@@ -12,6 +12,7 @@ import "./styles.css";
 import { invoke, listen, Out, FieldList, Options } from "./api";
 import { out, setOut, view, backstage, setBackstage, setFields, setOpts, opts, details, timeline, setSetupOpen, gridW, setGridW, dialogs, call, grid, filter, setFilter, ALL, zoom, setZoom, useTable, table, openDialog, closeDialog, P, View, toast, sel, act, loadOut, setThemeRaw, applyTheme } from "./store";
 import { C } from "./cmds";
+import { sheetZoom, setSheetZoom } from "./sheetlayout";
 import { TitleBar, Ribbon, palette } from "./ribbon";
 import { Grid, FormulaBar } from "./grid";
 import { Gantt, Timeline } from "./gantt";
@@ -79,7 +80,8 @@ const Status = () => {
         <button title="Gantt Chart" onClick={() => C.view("gantt")}><Icon n="gantt" /></button><button title="Task Usage" onClick={() => C.view("taskusage")}><Icon n="table" /></button>
         <button title="Team Planner" onClick={() => C.view("team")}><Icon n="team" /></button><button title="Resource Sheet" onClick={() => C.view("ressheet")}><Icon n="res" /></button><button title="Reports" onClick={() => C.view("reports")}><Icon n="report" /></button>
       </span>
-      <button onClick={C.zoomOut}>−</button><input class="zoom" type="range" min="0" max="100" value={Math.round(Math.log(zoom() / 0.3) / Math.log(400) * 100)} onInput={e => setZoom(0.3 * Math.pow(400, +e.currentTarget.value / 100))} /><button onClick={C.zoomIn}>+</button>
+      <button onClick={C.zoomOut} title="Zoom Out">−</button><Show when={view() === "sheets"} fallback={<input class="zoom" type="range" min="0" max="100" value={Math.round(Math.log(zoom() / 0.3) / Math.log(400) * 100)} onInput={e => setZoom(0.3 * Math.pow(400, +e.currentTarget.value / 100))} />}>
+        <input class="zoom szoom" type="range" min="10" max="400" step="5" title="Zoom the sheet (Ctrl+wheel)" value={Math.round(sheetZoom() * 100)} onInput={e => setSheetZoom(+e.currentTarget.value / 100)} /></Show><button onClick={C.zoomIn} title="Zoom In">+</button><Show when={view() === "sheets"}><button class="zpct" title="Back to 100 %" onClick={() => setSheetZoom(1)}>{Math.round(sheetZoom() * 100)}%</button></Show>
     </footer>
   );
 };

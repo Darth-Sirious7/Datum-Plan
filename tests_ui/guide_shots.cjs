@@ -78,14 +78,14 @@ const srv = http.createServer((q, r) => {
   // 2. The task sheet: duration and predecessors, and the Schedule group.
   const durHead = await p.$$eval(".ghead .hc", hs => { const h = hs.find(x => x.textContent.trim().startsWith("Durati")); const r = h.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: 400 }; });
   const preHead = await p.$$eval(".ghead .hc", hs => { const h = hs.find(x => x.textContent.trim().startsWith("Pre")); const r = h.getBoundingClientRect(); return { x: r.x, y: r.y, width: Math.min(r.width, 60), height: 400 }; });
-  await shot("sheet", [[".grid .gbody .row", 1, 9], [durHead, 2], [preHead, 3], ["grp:Insert", 4]]);
-  // 3. Schedule tab: links, outline, levelling, paths.
   await tab("Schedule");
-  await shot("schedule-tab", [["grp:Links", 1, 0, "below"], ["grp:Outline", 2], ["grp:Leveling", 3], ["grp:Paths", 4]], TOP);
+  await shot("sheet", [[".grid .gbody .row", 1, 9], [durHead, 2], [preHead, 3], ["grp:Insert", 4]]);
+  // 3. Schedule tab: links, outline, properties, paths.
+  await shot("schedule-tab", [["grp:Links", 1, 0, "below"], ["grp:Outline", 2], ["grp:Properties", 3], ["grp:Paths", 4]], TOP);
   // 4. Progress tab.
   await tab("Progress");
   await shot("progress-tab", [["grp:Update", 1], ["grp:Period", 2], ["grp:Baselines", 3], ["grp:Progress Reports", 4], ["grp:Measure", 5]], TOP);
-  await tab("Task");
+  await tab("Home");
   // 5. Views.
   await side("Tracking"); await shot("tracking", [[".chart", 1]]);
   await side("Network"); await shot("network");
@@ -123,7 +123,7 @@ const srv = http.createServer((q, r) => {
   await shot("guide-dialog", [[".guidecards", 1]], ".dlg");
   await p.keyboard.press("Escape"); await wait(200);
   await tab("Report"); await shot("report-tab", [["grp:View Reports", 1], ["grp:Health", 2], ["grp:Export", 3]], TOP);
-  await tab("Task");
+  await tab("Home");
   // 7. Print.
   await p.click(".tabs .file"); await wait(200);
   await p.click(".bs aside button:has-text('Print')"); await wait(1200);

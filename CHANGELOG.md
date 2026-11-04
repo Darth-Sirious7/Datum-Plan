@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.24 — 2026-11-04
+
+A cleaner ribbon, zoom for sheets, and fixes to Page Breaks view.
+
+- **Home tab:** the first tab now holds what the task sheet and the Sheets share: Clipboard, Font, Alignment and Editing (Find, Fill, Clear, Sort). Each tool acts on what is in view, so nothing is repeated.
+  - Building the schedule (Insert, Links, Outline, Properties, Tasks, Paths) is on the **Schedule** tab.
+  - Sheet Tools › **Cells** keeps only what a sheet has: Lines, Number, Look, Rows & Columns, Insert and Formulas.
+  - Sheets opens on Home.
+- **Zoom for sheets:** from 10 % to 400 %. Use the status bar slider and its − and +, View › Zoom, or Ctrl with the mouse wheel. Click the percentage to go back to 100 %. Page Layout view follows the zoom.
+- **Fixed:**
+  - in Page Breaks view, dragging a dashed (automatic) page break onto the print area's edge, or past it, now joins the two pages into one by lowering the sheet's scale. Before, nothing happened;
+  - a picture placed in its cell no longer shows a dotted blue outline; the outline shows only while the picture is selected.
+
 ## 0.5.23 — 2026-11-04
 
 Set the printed pages of a sheet by hand, in Page Breaks view.

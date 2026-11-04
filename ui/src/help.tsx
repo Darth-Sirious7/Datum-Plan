@@ -6,7 +6,7 @@ import { Dialog } from "./ui";
 
 type Topic = { t: string; what: string; how?: string[]; tip?: string };
 export const HELP: Record<string, Topic> = {
-  // Task tab
+  // Home tab (shared by the task sheet and the Sheets)
   view: { t: "Views", what: "Switches what the window shows: the Gantt chart, the Tracking Gantt, the Network Diagram, the calendar, usage, resources, sheets and reports.",
     how: ["Click Gantt Chart for the task sheet and bars; the arrow under it lists every view.", "The sidebar on the left switches views too."] },
   clipboard: { t: "Clipboard", what: "Cut, copy and paste cells, rows or formats, also to and from other spreadsheets.",
@@ -21,15 +21,14 @@ export const HELP: Record<string, Topic> = {
   sheetnumber: { t: "Number", what: "How numbers and dates show in the selected cells; the value itself does not change.", how: ["The list: General, Number, Whole number, Percent, Currency, Date, Month, Text, Country with flag, or a custom code.", "$ currency, % percent (28 shows as 28%), comma style (1,234.50).", ".0+ and .0− show one more or one fewer decimal."] },
   sheetstyles: { t: "Cell Styles", what: "Ready-made looks for cells: Good, Bad and Neutral, Calculation, Check Cell, Input, Output, Note, Title, Headings 1 to 4, Total and Accent.", how: ["Select cells and click a style; the arrow lists them all.", "A style sets the font, colour and fill (and its borders, where it has them); alignment and wrapping stay as they were.", "Normal takes the look off again."] },
   sheetcells: { t: "Cells", what: "Rows, columns and sheets, and their size.", how: ["Insert and Delete add or remove whole rows or columns where the selection is, or a whole sheet; formulas follow.", "Format: Row Height and Column Width (in pixels), AutoFit, Rename Sheet, Move or Copy Sheet, and the tab colour, Hide and Unhide.", "Drag the line under a row number to change the row's height; double-click it for the standard height."] },
-  sheetediting: { t: "Editing", what: "Totals, filling, clearing and sorting the selected cells.", how: ["AutoSum (Alt+=) adds up the numbers above; the arrow has Average, Count, Max and Min.", "Fill › Down (Ctrl+D) and Right (Ctrl+R) copy the first row or column across the selection.", "Clear › All, Formats or Contents.", "Sort A to Z and Z to A order the selected rows by their first column; each row's values and formatting move together."] },
-  alignment: { t: "Alignment", what: "Left, centre or right alignment of the selected cells, and Clear Formatting to put them back as they were." },
+  sheetediting: { t: "Formulas", what: "Totals of the selected cells.", how: ["AutoSum (Alt+=) adds up the numbers above; the arrow has Average, Count, Max and Min.", "Function and Plan Data are under Insert; Fill, Clear, Sort and Find are on Home › Editing."] },
+  alignment: { t: "Alignment", what: "Where the text sits in the selected cells. On a sheet: top, middle or bottom, left, centre or right, indent, Wrap Text and Merge & Center. On the task sheet the indent buttons outdent and indent the task. Clear Formatting puts the cells back as they were." },
   insert: { t: "Insert", what: "Adds rows to the plan: a task, a summary task (a phase that rolls up its subtasks), a milestone (a moment with no duration) or a recurring task.",
     how: ["Select a row: the new one goes above it.", "Type the name, a duration (“5d”, “2w”, “0” for a milestone) and predecessors (“3”, “4SS+2d”).", "Delete removes the selected rows."] },
   sched: { t: "Schedule", what: "The everyday progress and structure commands for the selected tasks.",
     how: ["0 % … 100 % marks how much of each selected task is done.", "Mark on Track sets the progress the plan expects at the status date.", "Link joins the selected tasks Finish-to-Start in order; Unlink removes their links.", "Indent makes the rows subtasks of the row above; Outdent moves them back up."] },
   properties: { t: "Properties", what: "Everything about the selected task: Information opens all its fields in tabs, Notes its notes, Details the pane under the chart, and Add to Timeline puts it on the timeline bar." },
-  editing: { t: "Editing", what: "Find a command or a task, scroll the chart to the selected task, and fill cells down.",
-    how: ["Find (Ctrl+K) searches commands and tasks by name.", "Scroll to Task brings the selected task's bar into view.", "Fill Down (Ctrl+D) copies the top cell of the selection into the cells below it."] },
+  editing: { t: "Editing", what: "Find, fill, clear and sort, for the task sheet or the sheet in view.", how: ["Find: on a sheet, Find (Ctrl+F) and Replace (Ctrl+H); on the task sheet, a task or a command (Ctrl+K) and Scroll to Task.", "Fill › Down (Ctrl+D) copies the top cell of the selection down; Right (Ctrl+R) on a sheet.", "Clear › All, Formats or Contents (sheets).", "Sort: on a sheet, the selected rows A to Z or Z to A by their first column; on the task sheet, the sort orders of the view."] },
   // Schedule tab
   links: { t: "Links", what: "Links (dependencies) say which task must finish or start before another. The plan's dates come from them.",
     how: ["Select tasks and click Link Tasks: each one follows the one above (Finish-to-Start).", "Type other kinds in the Predecessors column: 4SS (start together), 4FF, 4SF, with a lag such as 4FS+2d.", "Relationships shows a task with everything before and after it."] },

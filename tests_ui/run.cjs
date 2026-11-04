@@ -87,7 +87,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Escape");
 
   // 4. Ribbon: split buttons and the separate contextual Format tab.
-  check("Gantt Chart is a split button", (await p.$$(".splitbig")).length >= 2);
+  if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-ghome.png"), clip: { x: 0, y: 0, width: 1440, height: 180 } });
+  check("Paste is a split button", (await p.$$(".splitbig")).length >= 1);
   check("Format tab carries its Gantt Chart Tools label", (await p.textContent(".ctxgrp")).includes("Gantt Chart Tools"));
   await p.click(".ctxgrp button");
   check("Gantt Chart Style gallery", (await p.$$(".swatch")).length >= 8);
@@ -109,7 +110,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 5c. Text formatting: Ctrl+B on a cell sends a Style edit; the Font group is on the Task tab.
   const fc = await cellBox(3, 1); await p.mouse.click(fc.x, fc.y); await p.keyboard.press("Control+b"); await p.waitForTimeout(150);
   check("Ctrl+B formats the selected cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes('"Style"'));
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   check("Font group on the Task tab", (await p.$$(".fontg .fb")).length >= 8);
 
   // 5d. Print: Ctrl+P opens the print page with a preview; printing lays out the same pages with the paper size.
@@ -177,7 +178,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const heads = await p.$$eval(".pprev svg text", t => t.map(x => x.textContent));
   check("Print includes every column of the table", ["Task Name", "Duration", "Start", "Finish"].every(h => heads.includes(h)), heads.slice(0, 12).join("|"));
   await p.click(".bs aside .back"); await p.waitForTimeout(150);
-  for (const w of [1280, 1600]) { await p.setViewportSize({ width: w, height: 900 }); for (const t of ["Task", "Schedule", "Progress", "Report", "View", "Format"]) { await p.click(`.tabs button:text-is('${t}')`); await p.waitForTimeout(120); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); if (o > 1) check(`ribbon fits at ${w}px (${t})`, false, String(o)); } }
+  for (const w of [1280, 1600]) { await p.setViewportSize({ width: w, height: 900 }); for (const t of ["Home", "Schedule", "Progress", "Report", "View", "Format"]) { await p.click(`.tabs button:text-is('${t}')`); await p.waitForTimeout(120); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); if (o > 1) check(`ribbon fits at ${w}px (${t})`, false, String(o)); } }
   check("ribbon never scrolls sideways (1280/1600 px)", true);
   await p.setViewportSize({ width: 1440, height: 900 });
   await p.click('.side button[title="Setup"]'); await p.waitForTimeout(200);
@@ -207,7 +208,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.fill(".dlg .find", "start-to-start"); await p.waitForTimeout(100);
   check("Glossary explains link types", (await p.textContent(".dlg .gloss")).includes("Start-to-Start"));
   await p.keyboard.press("Escape");
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   check("Font list on the Task tab", (await p.$$eval(".ffam option", o => o.map(x => x.textContent))).includes("Times New Roman"));
 
   // 0.3.7: Tracking Gantt is its own view (banner + Tracking table), network WBS bands.
@@ -237,10 +238,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
 
   // 0.3.9: a "?" beside a tool opens its card; Help › What Is This Tool? lists every card.
   await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(100);
-  await p.click(".ribbon .grp .cap:text-is('Leveling') .help"); await p.waitForTimeout(150);
-  check("? beside Leveling opens its card", (await p.textContent(".dlg header")).includes("Leveling") && (await p.textContent(".dlg .helpcard")).includes("How to use it"));
+  await p.click(".ribbon .grp .cap:text-is('Links') .help"); await p.waitForTimeout(150);
+  check("? beside Links opens its card", (await p.textContent(".dlg header")).includes("Links") && (await p.textContent(".dlg .helpcard")).includes("How to use it"));
   await p.keyboard.press("Escape");
-  check("every ribbon group on the Task tab has a ?", await (async () => { await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100); return p.$$eval(".ribbon > .grp", gs => gs.every(g => g.querySelector(".cap .help"))); })());
+  check("every ribbon group on the Home tab has a ?", await (async () => { await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100); return p.$$eval(".ribbon > .grp", gs => gs.every(g => g.querySelector(".cap .help"))); })());
   await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title*='Every tool explained']"); await p.waitForTimeout(150);
   await p.getByText("Baselines", { exact: true }).click(); await p.waitForTimeout(150);
@@ -268,7 +269,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click('.side button[title="Risks"]'); await p.waitForTimeout(200);
   check("the risk register has a Delay (days) column", (await p.textContent(".page thead")).includes("Delay (days)"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
-  await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Resource')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Level All'], .ribbon button:has-text('Level All')"); await p.waitForTimeout(250);
   check("Level All with nobody overallocated says so and changes nothing", (await p.textContent("#toast")).includes("Nobody is overallocated") && !(await p.$(".dlg")));
   await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => c === "level_preview" ? { moved: [{ uid: 3, name: "Wire panel", start: 29990880, new_start: 29993760, finish: 29991900, new_finish: 29994780 }], finish: 30010000, new_finish: 30012000, over_before: 4, over_after: 0 } : c === "import" ? { plan: await inv("state"), notes: ["1 of 9 tasks get different dates in Datum Plan than in the file.", "  \"F Test\": file 2026-11-18 08:00 → 2026-11-18 17:00, Datum Plan 2026-11-17 08:00 → 2026-11-17 17:00"], table: null, fields: [] } : inv(c, a); });
@@ -333,7 +334,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".tabs .file"); await p.waitForTimeout(150);
   check("the File page has a Guide tile", !!(await p.$(".tile:has-text('Guide')")));
   await p.click(".bs aside .back"); await p.waitForTimeout(150);
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
 
   // 0.5.0: Sheets: flags, suggestions, clicking cells into a formula, Plan Data, inserting rows.
   const lastApply = () => p.evaluate(() => JSON.stringify(window.__calls.filter(c => c[0] === "apply").pop()));
@@ -437,7 +438,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.fill(".dlg input", "Civil"); await p.selectOption(".dlg select", { index: 1 }); await p.click(".dlg .btn.pri:text-is('Create')"); await p.waitForTimeout(200);
   check("New Subplan asks for a name and its place (under Engineering)", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "new_subplan").pop())).includes('"name":"Civil","level":1,"at":2'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   // The master's combined view: its subplans under its tasks, read-only.
   await p.evaluate(() => { window.__subsView = true; });
   await p.click(".tabs .ctxgrp button:text-is('Format')"); await p.waitForTimeout(100);
@@ -448,7 +449,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("double-clicking a subplan's task goes to it in its plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "goto_link").pop())).includes("Engineering.dplan") && !(await p.$(".dlg")) && !(await p.$("input.ed")));
   check("the combined view asks the shell for the expanded subplans", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "query").pop())).includes('"subs":{"show":true'));
   await p.evaluate(() => { window.__subsView = false; });
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   await p.click(".plantabs .plantab:nth-child(2)"); await p.waitForTimeout(200);
   check("clicking a tab shows that plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "switch_tab").pop())).includes('"k":1'));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
@@ -466,7 +467,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg button:has-text('Update All Open Plans')"); await p.waitForTimeout(200);
   check("Update All Open Plans asks the engine to update every open plan", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "update_links").pop())).includes('"all":true'));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
 
   // 0.5.16: the plan's picture library: logos by party, in the print header, on a dashboard and on a sheet.
   await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
@@ -476,6 +477,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Project › Pictures adds logos by party, kept in the plan", (await p.$$(".dlg .picrow")).length === 2 && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Picture).map(c => c[1].op.Picture.pic.role))) === '["Client","Sub-vendor"]');
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(300);
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ptools button:has-text('Picture'), .sheetbar button:has-text('Picture'), button:has-text('Picture ▾')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('(Sub-vendor)')"); await p.waitForTimeout(500);
   check("a library picture can be placed on a sheet cell", (await p.$$(".simg img")).length === 1);
@@ -492,18 +494,23 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Delete removes the selected picture from the sheet", (await p.$$(".simg")).length === 0);
   // 0.5.17: Sheet Tools > Home opens by itself in Sheets: borders, merge, wrap, cell styles; tabs rename in place.
   check("the ribbon shows Gantt Chart Tools first, then Sheet Tools", await p.evaluate(() => { const g = [...document.querySelectorAll(".tabs .ctxgrp")].map(x => x.querySelector("small")?.textContent); return g.indexOf("Gantt Chart Tools") >= 0 && g.indexOf("Gantt Chart Tools") < g.indexOf("Sheet Tools"); }));
-  check("Sheets opens the Sheet Tools Home tab", !!(await p.$(".ctxgrp.sheetctx button.on")) && !!(await p.$(".ribbon .cstyles")));
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200); await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(300);
+  if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-shome.png"), clip: { x: 0, y: 0, width: 1440, height: 180 } });
+  check("Sheets opens on Home, with the Sheet Tools beside it", (await p.textContent(".tabs > button.on")) === "Home" && !!(await p.$(".ctxgrp.sheetctx")) && !!(await p.$(".ribbon .ffam")) && !(await p.$(".ribbon .cstyles")));
   await p.evaluate(() => { window.prompt = () => { throw new Error("browser prompt used"); }; window.confirm = () => { throw new Error("browser confirm used"); }; });
   const scell = async (r, c) => { const b = await p.$$eval(".sheetgrid .gbody .row", (rows, rc) => { const row = rows.find(x => x.style.top === `${rc[2]}px`) ?? rows[rc[0]]; const el = row.children[rc[1] + 1].getBoundingClientRect(); return [el.x + 5, el.y + 5]; }, [r, c, r * 22]); return { x: b[0], y: b[1] }; };
   const lastStyle = async () => JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.SheetStyle).pop()?.[1].op.SheetStyle.cells));
   let sq = await scell(0, 0); await p.mouse.click(sq.x, sq.y); sq = await scell(0, 2); await p.keyboard.down("Shift"); await p.mouse.click(sq.x, sq.y); await p.keyboard.up("Shift"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Merge & Center']"); await p.waitForTimeout(300);
   check("Merge & Center merges the selected cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Batch && c[1].op.Batch[0].Sheet).pop()?.[1].op.Batch[0].Sheet.sheet.merges)) === '["A1:C1"]' && (await p.$$(".sheetgrid .mcell")).length === 1);
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('All Borders')"); await p.waitForTimeout(300);
   check("Borders > All Borders draws lines round the cells", (await lastStyle()).includes("bb:thin #000000"));
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Wrap Text']"); await p.waitForTimeout(300);
   check("Wrap Text wraps the cells", /(^|[";])w([";]|$)/.test(await lastStyle()));
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ribbon .cstyles .cst:has-text('Good')"); await p.waitForTimeout(300);
   check("a cell style (Good) colours the cells", (await lastStyle()).includes("f:#C6EFCE"));
   if (process.env.SHOT) { const z = await scell(6, 5); await p.mouse.click(z.x, z.y); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT }); await p.mouse.click(sq.x, sq.y); }
@@ -520,13 +527,16 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const tabSt = ((await p.getAttribute(".sheettabs button.on", "style")) ?? "").toLowerCase();
   check("Tab Color colours the tab", tabSt.includes("0, 176, 80") || tabSt.includes("#00b050"), tabSt);
   // 0.5.18: dropdown arrows are part of their button; the menus and colour choosers show what they do.
-  check("ribbon dropdown arrows are not drawn as pane dividers", (await p.$$(".ribbon .split")).length === 0 && (await p.$$(".ribbon .rbw.sp .sarr")).length >= 2);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
+  check("ribbon dropdown arrows are not drawn as pane dividers", (await p.$$(".ribbon .split")).length === 0 && (await p.$$(".ribbon .sarr")).length >= 2);
   const mbg = await p.$eval(".sheetgrid .mcell", e => getComputedStyle(e).backgroundColor), cbg = await p.$eval(".sheetgrid .gscroll, .sheetgrid", e => getComputedStyle(e).backgroundColor);
   check("a merged cell keeps the sheet's white background", mbg === cbg || mbg === "rgb(255, 255, 255)" || mbg.includes("198, 239, 206"), `${mbg} vs ${cbg}`);
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-borders.png"), clip: { x: 300, y: 40, width: 700, height: 520 } });
   check("each border choice has its picture", (await p.$$(".menu button .tick svg use[href^='#i-bd-']")).length === 12);
   await p.keyboard.press("Escape"); await p.mouse.click(5, 5); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Fill Color']"); await p.waitForTimeout(150);
   check("Fill Color opens a palette of colours under the button", (await p.$$(".cpop .csw")).length >= 70 && !!(await p.$(".cpop .cnone")));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-palette.png"), clip: { x: 150, y: 40, width: 600, height: 420 } });
@@ -549,6 +559,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Delete asks in the app's own dialog", ((await p.textContent(".dlg header")) ?? "").includes("Delete Sheet"));
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.5.20: workbooks in and out; Backspace edits.
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ribbon button:has-text('Excel Workbook')"); await p.waitForTimeout(400);
   check("Insert › Excel Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
   await p.click(".ctxgrp.sheetctx button:text-is('Page')"); await p.waitForTimeout(150);
@@ -608,16 +619,25 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Control+Home"); await p.waitForTimeout(150);
   await p.keyboard.press("ArrowDown"); await p.keyboard.press("Shift+ArrowDown"); await p.keyboard.press("Shift+ArrowRight"); await p.waitForTimeout(100);
   const nb = (await p.evaluate(() => window.__calls.length));
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(150);
-  await p.click(".ribbon button[title='Sort A to Z']"); await p.waitForTimeout(400);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Sort')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Sort A to Z')"); await p.waitForTimeout(400);
   const sortCalls = await p.evaluate(n => window.__calls.slice(n).map(c => c[0] === "apply" ? Object.keys(c[1].op.Batch?.[0] ?? c[1].op)[0] + ":" + JSON.stringify(c[1].op).length : c[0]), nb);
   check("Sort moves formulas with their rows and keeps formats (one step)", sortCalls.includes("formula_shift") && sortCalls.some(x => x.startsWith("SheetCells")) && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()?.[1].op)).includes("SheetStyle"), sortCalls.join(" "));
+  // 0.5.24: the sheet zooms (status bar, View › Zoom, Ctrl+wheel) and clicks still land on the right cell.
+  await p.click("footer button[title='Zoom In']"); await p.click("footer button[title='Zoom In']"); await p.waitForTimeout(200);
+  check("Zoom In enlarges the sheet and shows the percentage", (await p.textContent("footer .zpct")) === "125%" && (await p.$eval(".sheetgrid .gsheet", e => e.style.zoom)) === "1.25");
+  { const q = await scell(3, 2); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100); check("a click on a zoomed sheet selects the cell under the pointer", (await p.textContent(".fbar .fname")) === "C4", await p.textContent(".fbar .fname")); }
+  await p.mouse.move(400, 400); await p.keyboard.down("Control"); await p.mouse.wheel(0, 200); await p.keyboard.up("Control"); await p.waitForTimeout(150);
+  check("Ctrl+wheel zooms the sheet out", (await p.textContent("footer .zpct")) === "110%");
+  await p.click("footer .zpct"); await p.waitForTimeout(150);
   sq = await scell(0, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Control+c"); await p.waitForTimeout(100);
   sq = await scell(20, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Control+v"); await p.waitForTimeout(400);
   check("Paste brings the copied cell's look along, in one step", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()?.[1].op)).includes('"SheetStyle"'));
   // 0.5.19: the cell style gallery, Sheet Tools › Page, the page views and a sheet's own print setup.
+  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Cell Styles: the whole gallery']"); await p.waitForTimeout(200);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-gallery.png") });
   check("Cell Styles opens a gallery of styles in sections", (await p.$$(".sgal .cst")).length >= 40 && (await p.$$(".sgal section")).length >= 7);
@@ -642,16 +662,36 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".menu button:has-text('Insert Page Break')"); await p.waitForTimeout(300);
   { const pg = await lastPage(); check("Insert Page Break starts a new page above the row and left of the column", (pg?.breaks ?? []).length === 1 && (pg?.col_breaks ?? []).length === 1, JSON.stringify(pg)); }
   check("outside the print area is grey in Page Breaks view", await p.evaluate(() => { const g = document.querySelector(".sheetgrid.breaks"), cs = [...g.querySelectorAll(".gbody .row .c:not(.idc)")]; return getComputedStyle(g).backgroundColor !== "rgba(0, 0, 0, 0)" && cs.filter(c => getComputedStyle(c).backgroundColor === "rgba(0, 0, 0, 0)").length > cs.length / 2 && !!g.querySelector(".pbg"); }));
+  // 0.5.24: dragging an automatic break to the edge of the print area makes one page of the two, by shrinking the print.
+  await p.click(".sheetgrid .gbody .row:nth-child(8) .c:nth-child(3)", { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Reset All Page Breaks')"); await p.waitForTimeout(300);
+  { const e = (await p.$$eval(".sheetgrid .pedge.v", l => l.map(x => { const r = x.getBoundingClientRect(); return { x: r.x, y: r.y }; })))[1];
+    await p.mouse.move(e.x + 4, e.y + 40); await p.mouse.down(); await p.mouse.move(e.x + 700, e.y + 40, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(400); }
+  const cut = await p.$$eval(".sheetgrid .pcut.v", l => l.map(x => { const r = x.getBoundingClientRect(); return { x: r.x, y: r.y }; }));
+  const edge = (await p.$$eval(".sheetgrid .pedge.v", l => l.map(x => { const r = x.getBoundingClientRect(); return { x: r.x, y: r.y }; })))[1];
+  check("a print area wider than the paper shows a dashed page break to drag", cut.length >= 1 && !(await p.$(".sheetgrid .pcut.v.man")), JSON.stringify(cut));
+  if (cut.length) { await p.mouse.move(cut[0].x + 4, cut[0].y + 40); await p.mouse.down(); await p.mouse.move(edge.x + 30, cut[0].y + 40, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(400); }
+  { const pg = await lastPage(); check("dragging the dashed break onto the print area's edge shrinks the print to one page wide", pg?.scale > 0 && pg.scale < 100 && !(pg.col_breaks ?? []).length && (await p.$$(".sheetgrid .pcut.v")).length === 0, JSON.stringify(pg)); }
+  check("a picture placed in its cell has no outline unless selected", await p.evaluate(() => [...document.querySelectorAll(".simg.fit:not(.on)")].every(e => getComputedStyle(e).outlineStyle === "none" || getComputedStyle(e).outlineWidth === "0px")));
   await p.click(".ribbon button:has-text('Page Layout')"); await p.waitForTimeout(500);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-layout.png") });
   check("Page Layout view shows the pages as they print, without header and footer when unticked", (await p.$$(".slayout .ppage")).length >= 1 && (await p.$$(".slayout .ppage .phead")).length === 0);
   await p.click(".ribbon button:has-text('Normal')"); await p.waitForTimeout(200);
+  // Title rows above the print area print at the top of every page.
+  { const q = await scell(0, 0); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100); }
+  await p.click(".ctxgrp.sheetctx button:text-is('Page')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Titles')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Repeat the Selected Rows')"); await p.waitForTimeout(300);
+  { const pg = await lastPage(); check("title rows can sit above the print area", pg?.titles === "1:1" && /^A[2-9]/.test(pg?.area ?? ""), JSON.stringify(pg)); }
+  await p.keyboard.press("Control+p"); await p.waitForTimeout(600);
+  check("title rows above the print area print at the top of the page", ((await p.textContent(".pprev .ppage")) ?? "").includes("Vendor"));
+  await p.click(".bs aside .back"); await p.waitForTimeout(300);
   await p.keyboard.press("Control+p"); await p.waitForTimeout(500);
   check("a sheet prints without row numbers and column letters unless asked", (await p.$$(".pprev .ppage thead")).length === 0 && !!(await p.$(".psheet")));
   await p.click(".bs aside .back"); await p.waitForTimeout(300);
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
-  check("leaving Sheets goes back to the Task tab", (await p.textContent(".tabs > button.on")) === "Task");
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  check("leaving Sheets goes back to the Home tab", (await p.textContent(".tabs > button.on")) === "Home");
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
 
   // 0.5.13: the tutorial: a note per view, Back and Next through the views, × hides the notes.
   await p.click(".tabs > button:text-is('Help')"); await p.waitForTimeout(150);
@@ -664,7 +704,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('Tutorial Notes')"); await p.waitForTimeout(150);
   check("Help › Tutorial Notes shows them again", !!(await p.$(".tour")));
   await p.click(".tour .x"); await p.waitForTimeout(100);
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
 
   // 0.5.14: the plan tabs sit between the ribbon and the timeline, and show even for one plan.
   const tabsAt = await p.evaluate(() => { const r = s => document.querySelector(s)?.getBoundingClientRect(); const t = r(".plantabs"), rb = r(".ribbon"), c = r(".content"); return t && rb && c && t.height > 20 && t.top >= rb.bottom - 1 && t.bottom <= c.top + 1; });
@@ -684,10 +724,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Escape closes a dialog after a click on its title", !(await p.$(".ov .dlg")));
   if (await p.$(".ov .dlg")) await p.click(".ov .dlg header .x");
   await p.click(".tabs > button:text-is('Help')"); await p.click(".ribbon button:has-text('Tutorial Notes')"); await p.waitForTimeout(150);
-  await p.click(".gbody .row:nth-child(3) .c:nth-child(3)"); await p.click(".tabs > button:text-is('Task')"); await p.click(".ribbon button:has-text('Information')"); await p.waitForTimeout(250);
+  await p.click(".gbody .row:nth-child(3) .c:nth-child(3)"); await p.click(".tabs > button:text-is('Schedule')"); await p.click(".ribbon button:has-text('Information')"); await p.waitForTimeout(250);
   check("the tutorial notes stay under a dialog's buttons", await p.evaluate(() => [(document.querySelector(".tour").style.cssText += ";top:0;max-height:none;width:60%")][0] && [...document.querySelectorAll(".ov .dlg footer .btn")].every(b => { const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); })));
   await p.evaluate(() => document.querySelector(".ov .dlg header .x")?.click()); await p.waitForTimeout(100); if (await p.$(".tour .x")) await p.click(".tour .x");
-  await p.click(".tabs > button:text-is('Task')"); await p.waitForTimeout(100);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
 
   // 0.5.16: printing, hardened. Save as PDF is caught when the shell would print, and printed there.
   let job = null;

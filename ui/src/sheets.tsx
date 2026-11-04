@@ -13,7 +13,7 @@ import { CountryList, FlagText } from "./flags";
 import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
-import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode } from "./sheetlayout";
+import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode, sheetZoom, zoomSheet } from "./sheetlayout";
 import { sheetPages, SheetPagesView, pageRoom } from "./print";
 import { Icon } from "./ui";
 import { askText, askYes, Dialog, Row } from "./ui";
@@ -117,8 +117,9 @@ export const Sheets = () => {
     if (r > reach()[0] - 10 || c > reach()[1] - 4) setReach([Math.max(reach()[0], r), Math.max(reach()[1], c)]);
     if (!box) return;
     const [fr, fc] = frozen(), y0 = top_(fr), x0 = lefts()[fc] ?? HW;
-    if (r >= fr) { if (top_(r) - y0 < box.scrollTop) box.scrollTop = top_(r) - y0; else if (top_(r + 1) + RH > box.scrollTop + box.clientHeight - 24) box.scrollTop = top_(r + 1) + RH - box.clientHeight + 24; }
-    if (c >= fc) { const l = lefts()[c] ?? 0, w = width(c); if (l - x0 < box.scrollLeft) box.scrollLeft = l - x0; else if (l + w > box.scrollLeft + box.clientWidth - 16) box.scrollLeft = l + w - box.clientWidth + 16; }
+    const z = sheetZoom();
+    if (r >= fr) { if ((top_(r) - y0) * z < box.scrollTop) box.scrollTop = (top_(r) - y0) * z; else if ((top_(r + 1) + RH) * z > box.scrollTop + box.clientHeight - 24) box.scrollTop = (top_(r + 1) + RH) * z - box.clientHeight + 24; }
+    if (c >= fc) { const l = lefts()[c] ?? 0, w = width(c); if ((l - x0) * z < box.scrollLeft) box.scrollLeft = (l - x0) * z; else if ((l + w) * z > box.scrollLeft + box.clientWidth - 16) box.scrollLeft = (l + w) * z - box.clientWidth + 16; }
   };
   // The number format the Format Painter copied (with the style).
   let paintFmt: string | null = null;
@@ -237,7 +238,7 @@ export const Sheets = () => {
       go(Math.max(0, rr), Math.max(0, cc), e.shiftKey);
     };
     if (ctrl && e.key.startsWith("Arrow")) return jump(...(({ ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key]));
-    const page = Math.max(1, Math.floor((box?.clientHeight ?? 400) / RH) - 2);
+    const page = Math.max(1, Math.floor((box?.clientHeight ?? 400) / (RH * sheetZoom())) - 2);
     switch (e.key) {
       case "Home": e.preventDefault(); return ctrl ? go(0, 0, e.shiftKey) : go(r, 0, e.shiftKey);
       case "End": e.preventDefault(); return ctrl ? go(Math.max(0, (data()?.rows ?? 1) - 1), Math.max(0, (data()?.cols ?? 1) - 1), e.shiftKey) : go(r, Math.max(0, (data()?.cols ?? 1) - 1), e.shiftKey);
@@ -603,8 +604,8 @@ export const Sheets = () => {
   const freeze = (v: [number, number]) => act({ Ui: { key: "freeze", value: { ...(P().ui?.freeze ?? {}), [sheet().name]: v } } });
   /** The cell under a point; frozen rows and columns do not scroll. */
   const at = (cx: number, cy: number): [number, number] => {
-    const b = box.getBoundingClientRect(), [fr, fc] = frozen(), vy = cy - b.top - RH, vx = cx - b.left;
-    const y = vy < top_(fr) ? vy : vy + box.scrollTop, x = fc && vx < lefts()[fc] ? vx : vx + box.scrollLeft;
+    const b = box.getBoundingClientRect(), [fr, fc] = frozen(), z = sheetZoom(), vy = (cy - b.top) / z - RH, vx = (cx - b.left) / z;
+    const y = vy < top_(fr) ? vy : vy + box.scrollTop / z, x = fc && vx < lefts()[fc] ? vx : vx + box.scrollLeft / z;
     return [rowAt(y), lefts().findIndex((l, j) => x >= l && x < l + width(j))];
   };
   // Pictures on the sheet: anchored at a cell, dragged to another cell, resized from the corner.
@@ -628,7 +629,7 @@ export const Sheets = () => {
     const o = imgs()[i], x0 = e.clientX;
     let next = o;
     const mv = (m: MouseEvent) => {
-      if (resize) { const w = Math.max(16, o.w + m.clientX - x0); next = { ...o, w: Math.round(w), h: Math.max(8, Math.round(w * o.h / o.w)) }; }
+      if (resize) { const w = Math.max(16, o.w + (m.clientX - x0) / sheetZoom()); next = { ...o, w: Math.round(w), h: Math.max(8, Math.round(w * o.h / o.w)) }; }
       else { const [r, c] = at(m.clientX, m.clientY); if (r >= 0 && c >= 0) next = { ...o, cell: a1(r, c) }; }
       const el = document.querySelector<HTMLElement>(`.simg[data-i="${i}"]`);
       if (el) { const [r, c] = parseA1(next.cell); Object.assign(el.style, { left: `${lefts()[c]}px`, top: `${top_(r)}px`, width: `${next.w}px`, height: `${next.h}px` }); }
@@ -667,7 +668,7 @@ export const Sheets = () => {
   const resize = (e: MouseEvent, c: number) => {
     e.preventDefault(); e.stopPropagation();
     const x0 = e.clientX, w0 = width(c);
-    const mv = (m: MouseEvent) => setTw([c, Math.max(24, Math.round(w0 + m.clientX - x0))]);
+    const mv = (m: MouseEvent) => setTw([c, Math.max(24, Math.round(w0 + (m.clientX - x0) / sheetZoom()))]);
     const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); const t = tw(); if (t) saveWidths({ ...(sheet().widths ?? {}), [c]: t[1] }).then(() => setTw(null)); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
@@ -787,8 +788,9 @@ export const Sheets = () => {
   /** The row or column edge nearest the pointer. */
   const edgeAt = (e: MouseEvent, v: boolean) => {
     const b = box.getBoundingClientRect(), [r, c] = at(e.clientX, e.clientY);
-    if (v) { const x = e.clientX - b.left + box.scrollLeft; return Math.max(0, c < 0 ? 0 : x - colX(c) > width(c) / 2 ? c + 1 : c); }
-    const y = e.clientY - b.top - RH + box.scrollTop; return Math.max(0, r < 0 ? 0 : y - top_(r) > rh(r) / 2 ? r + 1 : r);
+    const z = sheetZoom();
+    if (v) { const x = (e.clientX - b.left + box.scrollLeft) / z; return Math.max(0, c < 0 ? 0 : x - colX(c) > width(c) / 2 ? c + 1 : c); }
+    const y = (e.clientY - b.top + box.scrollTop) / z - RH; return Math.max(0, r < 0 ? 0 : y - top_(r) > rh(r) / 2 ? r + 1 : r);
   };
   const pageDrag = (e: MouseEvent, kind: PDrag["kind"], from: number) => {
     e.preventDefault(); e.stopPropagation();
@@ -805,13 +807,13 @@ export const Sheets = () => {
     if (d.kind === "row" || d.kind === "col") {
       const row = d.kind === "row", [lo, hi] = row ? [b.r0, b.r1] : [b.c0, b.c1], key = row ? "breaks" : "col_breaks";
       const list = (pg[key] ?? []).filter(z => z !== d.from);
-      x[key] = d.to > lo && d.to <= hi ? addTo(list, d.to) : list;
-      if (d.to > lo && d.to <= hi) {
-        const cuts = (row ? rowCuts() : colCuts()).filter(z => z !== d.from), prev = Math.max(lo, ...cuts.filter(z => z < d.to)), next = Math.min(hi + 1, ...cuts.filter(z => z > d.to));
-        const room = pageRoom(), need = Math.max(row ? top_(d.to) - top_(prev) : colX(d.to) - colX(prev), row ? top_(next) - top_(d.to) : colX(next) - colX(d.to));
-        const have = row ? room.h : room.w;
-        if (need > have) { x.scale = Math.max(10, Math.floor((room.k * 100 * have) / need * 0.97)); x.fit_w = 0; x.fit_h = 0; }
-      }
+      const inside = d.to > lo && d.to <= hi, at = inside ? d.to : d.from;
+      x[key] = inside ? addTo(list, d.to) : list;
+      // The pages either side of the break (or the one page it leaves, when dragged out) must fit the paper: if not, the print shrinks to fit.
+      const cuts = (row ? rowCuts() : colCuts()).filter(z => z !== d.from), prev = Math.max(lo, ...cuts.filter(z => z < at)), next = Math.min(hi + 1, ...cuts.filter(z => z > at));
+      const span = (u: number, v: number) => (row ? top_(v) - top_(u) : colX(v) - colX(u)), room = pageRoom();
+      const need = inside ? Math.max(span(prev, d.to), span(d.to, next)) : span(prev, next), have = row ? room.h : room.w;
+      if (need > have) { x.scale = Math.max(10, Math.floor((room.k * 100 * have) / need * 0.97)); x.fit_w = 0; x.fit_h = 0; }
     } else {
       const r = { ...b };
       if (d.kind === "top") r.r0 = d.to; if (d.kind === "bottom") r.r1 = d.to - 1; if (d.kind === "left") r.c0 = d.to; if (d.kind === "right") r.c1 = d.to - 1;
@@ -836,7 +838,7 @@ export const Sheets = () => {
   onCleanup(() => { if (sheetApi() === api) setSheetApi(null); });
   // The tab shown is never a hidden one.
   createEffect(() => { const sh = P().sheets; if (sh[k()]?.hidden) { const v = sh.findIndex(x => !x.hidden); if (v >= 0) setK(v); } });
-  const vis = createMemo(() => { const f = Math.max(0, rowAt(top()) - 2), l = Math.min(nrows() - 1, rowAt(top() + h()) + 4); return Array.from({ length: Math.max(0, l - f + 1) }, (_, j) => f + j); });
+  const vis = createMemo(() => { const z = sheetZoom(), f = Math.max(0, rowAt(top() / z) - 2), l = Math.min(nrows() - 1, rowAt((top() + h()) / z) + 4); return Array.from({ length: Math.max(0, l - f + 1) }, (_, j) => f + j); });
   const curCell = () => cells().get(a1(...cur()));
   /** Coloured boxes round the references of the formula being typed (those on the tab shown). */
   const boxes = createMemo(() => {
@@ -871,7 +873,7 @@ export const Sheets = () => {
   const rowResize = (e: MouseEvent, r: number) => {
     e.preventDefault(); e.stopPropagation();
     const y0 = e.clientY, h0 = rh(r);
-    const mv = (m: MouseEvent) => setTh([r, Math.max(8, Math.round(h0 + m.clientY - y0))]);
+    const mv = (m: MouseEvent) => setTh([r, Math.max(8, Math.round(h0 + (m.clientY - y0) / sheetZoom()))]);
     const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); const t = th(); if (t) saveHeights(t[0], t[1]).then(() => setTh(null)); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
@@ -916,10 +918,10 @@ export const Sheets = () => {
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
           <input ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
             onFocus={() => { lastEl = "bar"; if (edit() === null) startEdit(input(k(), ...cur())); }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} /></div>
-        <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85} /></div></Show>
-        <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { setTop(box.scrollTop); if (box.scrollTop + box.clientHeight > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if (box.scrollLeft + box.clientWidth > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
+        <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85 * sheetZoom()} /></div></Show>
+        <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); el.addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); zoomSheet(e.deltaY < 0 ? 1 : -1); }, { passive: false }); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { const z = sheetZoom(); setTop(box.scrollTop); if ((box.scrollTop + box.clientHeight) / z > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if ((box.scrollLeft + box.clientWidth) / z > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
           onContextMenu={e => { e.preventDefault(); if (edit() === null) cellMenu(e); }} onDblClick={() => { if (edit() === null) startEdit(input(k(), ...cur())); }}>
-          <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px` }}>
+          <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px`, zoom: sheetZoom() }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
               <div class="hc idc" style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 2 }} />
               <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => <div class="hc colh" onMouseDown={e => colDown(e, c)} classList={{ chid: width(c) === 0, cnext: hidC().has(c - 1), on: S.ranges().some(g => c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1)) }} style={{ width: `${width(c)}px`, "justify-content": "center", "align-items": "center", position: "relative" }}>{colName(c)}<i class="rsz" title="Drag to resize; double-click to fit" onMouseDown={e => resize(e, c)} onDblClick={e => { e.stopPropagation(); autofit(c); }} /></div>}</For>

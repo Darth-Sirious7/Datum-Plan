@@ -1,6 +1,7 @@
 // Commands shared by the ribbon, menus, keys and Tell Me.
-import { table, useTable, act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
+import { table, useTable, act, call, cur, curRow, grid, loadOut, out, refresh, selRows, setBackstage, setCollapsed, setCur, setLevel, setOut, setSel, setView, setZoom, toast, zoom, view, View, setDetails, details, setTimeline, timeline, setupOpen, setSetupOpen, openDialog, collapsed } from "./store";
 import { Out } from "./api";
+import { zoomSheet } from "./sheetlayout";
 import * as D from "./dialogs";
 
 const uids = () => { const s = selRows().map(r => r.uid); return s.length ? s : curRow()?.uid > 0 ? [curRow()!.uid] : []; };
@@ -55,8 +56,8 @@ export const C = {
     else if (v !== "tracking" && table() === "Tracking" && ["gantt", "timeline"].includes(v)) useTable("Entry");
     setView(v);
   },
-  zoomIn: () => setZoom(Math.min(400, zoom() * 1.5)),
-  zoomOut: () => setZoom(Math.max(0.6, zoom() / 1.5)),
+  zoomIn: () => (view() === "sheets" ? zoomSheet(1) : setZoom(Math.min(400, zoom() * 1.5))),
+  zoomOut: () => (view() === "sheets" ? zoomSheet(-1) : setZoom(Math.max(0.6, zoom() / 1.5))),
   fit: () => document.dispatchEvent(new CustomEvent("gantt-fit")),
   outline: (n: number) => { setCollapsed([]); setLevel(n); },
   expandAll: () => { setLevel(0); setCollapsed([]); },

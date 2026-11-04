@@ -103,9 +103,9 @@ export const palette = () => openDialog(() => {
   );
 });
 
-// Sheets opens its own Home tab; leaving Sheets goes back to the Task tab.
+// Home serves the task sheet and the Sheets alike; leaving Sheets from its own tabs goes back to Home.
 let lastView = "";
-const followView = () => { const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets") setTab("sheet"); else if (was === "sheets" && (tab() === "sheet" || tab() === "sheetpage")) setTab("task"); };
+const followView = () => { const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() !== "sheet" && tab() !== "sheetpage") setTab("task"); else if (was === "sheets" && (tab() === "sheet" || tab() === "sheetpage")) setTab("task"); };
 export const TitleBar = (p: { update: string | null }) => (void createEffect(followView),
   <header class="top">
     <div class="bar">
@@ -123,7 +123,7 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
-      <For each={[["task", "Task"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Home"], ["help", "Help"]]}>{([k, l]) =>
+      <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Home"], ["help", "Help"]]}>{([k, l]) =>
         k === "sheet" ? <Show when={view() === "sheets"}><div class="ctxgrp sheetctx"><small>Sheet Tools</small><div class="ctxtabs"><button classList={{ on: tab() === "sheet" }} onClick={() => setTab("sheet")}>Cells</button><button classList={{ on: tab() === "sheetpage" }} onClick={() => setTab("sheetpage")}>Page</button></div></div></Show>
           : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
@@ -173,21 +173,33 @@ export const importWorkbook = async () => {
 /** Saves the plan's sheets as a workbook to share. */
 export const exportSheets = async () => { const p = await call<string | null>("export_sheets"); if (p) toast(`Saved ${p}`, true); };
 /** Sheet Tools › Cells: everything for the cells of a sheet. It opens by itself in Sheets. */
-const SheetCells = () => {
-  const A = () => sheetApi(), s = () => F.current(), run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
-  const AL = (p: { k: "a" | "v"; v: string; i: string; t: string }) => <button class="rb fb" classList={{ on: (s()[p.k] || "") === p.v }} title={p.t} onClick={() => F.setProp(p.k, p.v || undefined)}><Icon n={p.i} /></button>;
-  const QUICK = ["Good", "Bad", "Neutral", "Accent"];
+/** Home: the tools the task sheet and the Sheets share (clipboard, font, alignment, editing); each acts on the one in view. */
+const Home = () => {
+  const A = () => sheetApi(), s = () => F.current(), sh = () => view() === "sheets", run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
+  const AL = (p: { k: "a" | "v"; v: string; i: string; t: string }) => <button class="rb fb" classList={{ on: (s()[p.k] || "") === p.v }} disabled={p.k === "v" && !sh()} title={p.t} onClick={() => F.setProp(p.k, p.v || undefined)}><Icon n={p.i} /></button>;
+  const paste = () => (sh() ? A()?.paste() : C.paste());
+  const ctrlD = () => document.querySelector(".gscroll")?.dispatchEvent(new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true }));
   return <>
-    <G l="Clipboard" h="clipboard"><B big i="paste" l="Paste" run={run("paste")} dd={e => openMenu(e, [{ label: "Paste", icon: "paste", run: run("paste"), keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" }, "-", { label: "Paste Values", run: () => F.target()?.paste?.("values", false) }, { label: "Paste Formatting", icon: "paint", run: () => F.target()?.paste?.("formats", false) }, { label: "Transpose", run: () => F.target()?.paste?.("all", true) }])} />
-      <S><B i="cut" l="Cut" run={run("cut")} /><B i="copy" l="Copy" run={run("copy")} /><B i="paint" l="Format Painter" run={F.paint} /></S></G>
+    <G l="Clipboard" h="clipboard"><B big i="paste" l="Paste" run={paste} dd={e => openMenu(e, [{ label: "Paste", icon: "paste", run: paste, keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" }, "-", { label: "Paste Values", run: () => F.target()?.paste?.("values", false) }, { label: "Paste Formatting", icon: "paint", run: () => F.target()?.paste?.("formats", false) }, { label: "Transpose", run: () => F.target()?.paste?.("all", true) }])} />
+      <S><B i="cut" l="Cut" run={() => (sh() ? A()?.cut() : C.cut())} /><B i="copy" l="Copy" run={() => (sh() ? A()?.copy() : C.copy())} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
     <Font noAlign />
-    <G l="Align" h="sheetalign"><div class="fontg">
+    <G l="Alignment" h="alignment"><div class="fontg">
       <div><AL k="v" v="t" i="vt" t="Top Align" /><AL k="v" v="" i="vm" t="Middle Align" /><AL k="v" v="b" i="vb" t="Bottom Align" /><span class="vsep" />
-        <button class="rb fb" title="Decrease Indent" onClick={() => F.setProp("x", Math.max(0, (s().x || 0) - 1) || undefined)}><Icon n="outdent" /></button><button class="rb fb" title="Increase Indent" onClick={() => F.setProp("x", Math.min(15, (s().x || 0) + 1))}><Icon n="indent" /></button></div>
+        <button class="rb fb" title={sh() ? "Decrease Indent" : "Outdent the task"} onClick={() => (sh() ? F.setProp("x", Math.max(0, (s().x || 0) - 1) || undefined) : C.outdent())}><Icon n="outdent" /></button><button class="rb fb" title={sh() ? "Increase Indent" : "Indent the task"} onClick={() => (sh() ? F.setProp("x", Math.min(15, (s().x || 0) + 1)) : C.indent())}><Icon n="indent" /></button></div>
       <div><AL k="a" v="" i="al" t="Align Left" /><AL k="a" v="c" i="ac" t="Center" /><AL k="a" v="r" i="ar" t="Align Right" /><span class="vsep" />
         <button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div>
-      <S><B i="wrap" l="Wrap Text" on={!!s().w} run={() => F.setProp("w", !s().w || undefined)} />
-        <B i={A()?.merged() ? "unmerge" : "merge"} l={A()?.merged() ? "Unmerge Cells" : "Merge & Center"} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", icon: "merge", run: () => A()?.merge("center") }, { label: "Merge Across", icon: "mergeacross", run: () => A()?.merge("across") }, { label: "Merge Cells", icon: "merge", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", icon: "unmerge", run: () => A()?.merge("unmerge") }])} /></S></G>
+      <S><B i="wrap" l="Wrap Text" off={!sh()} on={sh() && !!s().w} run={() => F.setProp("w", !s().w || undefined)} />
+        <B i={A()?.merged() ? "unmerge" : "merge"} l={sh() && A()?.merged() ? "Unmerge Cells" : "Merge & Center"} off={!sh()} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", icon: "merge", run: () => A()?.merge("center") }, { label: "Merge Across", icon: "mergeacross", run: () => A()?.merge("across") }, { label: "Merge Cells", icon: "merge", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", icon: "unmerge", run: () => A()?.merge("unmerge") }])} /></S></G>
+    <G l="Editing" h="editing"><S><B i="find" l="Find" dd={e => openMenu(e, sh() ? [{ label: "Find…", keys: "Ctrl+F", run: () => A()?.find() }, { label: "Replace…", keys: "Ctrl+H", run: () => A()?.replace() }] : [{ label: "Find a Task or Command…", keys: "Ctrl+K", run: palette }, { label: "Scroll to Task", run: C.scrollTo }])} />
+        <B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: () => (sh() ? A()?.fillDown() : ctrlD()) }, { label: "Right", keys: "Ctrl+R", off: !sh(), run: run("fillRight") }])} />
+        <B i="clear" l="Clear" off={!sh()} dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
+      <S><B i="az" l="Sort" dd={e => openMenu(e, sh() ? [{ label: "Sort A to Z", run: () => A()?.sortRows(true) }, { label: "Sort Z to A", run: () => A()?.sortRows(false) }] : sortMenu())} /></S></G>
+  </>;
+};
+const SheetCells = () => {
+  const A = () => sheetApi(), run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
+  const QUICK = ["Good", "Bad", "Neutral", "Accent"];
+  return <>
     <G l="Lines" h="sheetalign"><B big i="bd-bottom" l="Borders" run={() => A()?.border("bottom")} dd={e => openMenu(e, (A()?.borderItems() ?? []) as Item[])} title="Bottom border (the arrow: every border, line colour and style)" />
       <S><B i="bd-all" l="All Borders" run={() => A()?.border("all")} /><B i="bd-outside" l="Outside" run={() => A()?.border("outside")} /><B i="bd-none" l="No Border" run={() => A()?.border("none")} /></S></G>
     <G l="Number" h="sheetnumber"><div class="fontg">
@@ -202,8 +214,7 @@ const SheetCells = () => {
         { label: "Hide Rows", run: () => A()?.hideLines(false, true) }, { label: "Hide Columns", run: () => A()?.hideLines(true, true) }, { label: "Unhide Rows", run: () => A()?.hideLines(false, false) }, { label: "Unhide Columns", run: () => A()?.hideLines(true, false) },
         { label: "Unhide All Rows and Columns", run: () => A()?.unhideAll() }, "-", { label: "Rename Sheet", run: run("rename") }, { label: "Move or Copy Sheet…", run: run("moveCopy") }, { label: "Tab Color, Hide and Unhide", run: run("tabMenu") }])} /></G>
     <G l="Insert" h="sheets"><B big i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
-    <G l="Data" h="sheetediting"><S><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /><B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: run("fillDown") }, { label: "Right", keys: "Ctrl+R", run: run("fillRight") }])} /><B i="clear" l="Clear" dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
-      <S><B i="az" l="Sort A to Z" run={() => A()?.sortRows(true)} /><B i="za" l="Sort Z to A" run={() => A()?.sortRows(false)} /><B i="find" l="Find" dd={e => openMenu(e, [{ label: "Find…", keys: "Ctrl+F", run: () => A()?.find() }, { label: "Replace…", keys: "Ctrl+H", run: () => A()?.replace() }])} /></S></G>
+    <G l="Formulas" h="sheetediting"><B big i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /></G>
   </>;
 };
 /** Sheet Tools › Page: how the sheet prints, and the page views. Each sheet keeps its own page setup. */
@@ -232,24 +243,16 @@ const SheetPageTab = () => {
 };
 export const Ribbon = () => (
   <section class="ribbon" ref={fitRibbon}>
-    <Show when={tab() === "task"}>
-      <G l="View" h="view"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /></G>
-      <G l="Clipboard" h="clipboard"><B big i="paste" l="Paste" run={C.paste} dd={e => openMenu(e, [{ label: "Paste", icon: "paste", run: C.paste, keys: "Ctrl+V" }, { label: "Paste Special…", icon: "paste", run: () => D.pasteSpecial(), keys: "Ctrl+Alt+V" }, "-", { label: "Paste Values", run: () => F.target()?.paste?.("values", false) }, { label: "Paste Formatting", icon: "paint", run: () => F.target()?.paste?.("formats", false) }, { label: "Transpose", run: () => F.target()?.paste?.("all", true) }])} /><S><B i="cut" l="Cut" run={C.cut} /><B i="copy" l="Copy" run={C.copy} /><B i="paint" l="Format Painter" run={F.paint} on={F.painter() !== null} /></S></G>
-      <Font />
+    <Show when={tab() === "task"}><Home /></Show>
+    <Show when={tab() === "schedule"}>
       <G l="Insert" h="insert"><B big i="task" l="Task" run={() => C.newTask()} dd={e => openMenu(e, [{ label: "Task", run: () => C.newTask() }, { label: "Blank Row", run: () => C.newTask() }, { label: "Summary Task", run: C.summary }, { label: "Milestone", run: () => C.newTask(true) }, { label: "Recurring Task…", icon: "repeat", run: C.recurring }])} />
         <S><B i="proj" l="Summary" run={C.summary} /><B i="ms" l="Milestone" run={() => C.newTask(true)} /><B i="repeat" l="Recurring" run={C.recurring} /></S><S><B i="del" l="Delete" run={C.del} /></S></G>
-      <G l="Schedule" h="sched"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`Mark the selected tasks ${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>
-        <S><B i="track" l="Mark on Track" run={C.onTrack} /><B i="link" l="Link" title="Link the selected tasks Finish-to-Start (Ctrl+F2)" run={C.link} /><B i="unlink" l="Unlink" run={C.unlink} /></S><S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /></S></G>
-      <G l="Properties" h="properties"><B big i="info" l="Information" run={C.info} /><S><B i="note" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
-      <G l="Editing" h="editing"><S><B i="find" l="Find" run={palette} /><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="filldown" l="Fill Down" title="Copy the top cell of the selection down (Ctrl+D)" run={() => document.querySelector(".gscroll")?.dispatchEvent(new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true }))} /></S></G>
-    </Show>
-    <Show when={tab() === "schedule"}>
       <G l="Links" h="links"><B big i="link" l="Link Tasks" run={C.link} /><S><B i="unlink" l="Unlink" run={C.unlink} /><B i="link" l="Relationships" run={() => C.view("relations")} /></S></G>
       <G l="Outline" h="outline"><S><B i="outdent" l="Outdent" run={C.outdent} /><B i="indent" l="Indent" run={C.indent} /><B i="list" l="Outline Level" dd={e => openMenu(e, outlineMenu())} /></S><S><B i="up" l="Move Up" run={() => C.move(true)} /><B i="down" l="Move Down" run={() => C.move(false)} /></S></G>
       <G l="Tasks" h="tasks"><B big i="manual" l="Manually Schedule" run={() => C.mode(true)} /><B big i="auto" l="Auto Schedule" run={() => C.mode(false)} /><S><B i="split" l="Split" run={C.split} /><B i="inact" l="Inactivate" run={C.inactive} /></S></G>
-      <G l="Leveling" h="leveling"><B big i="level" l="Level All" run={() => C.level()} /><S><B i="level" l="Level Selection" run={() => C.level(false)} /><B i="del" l="Clear Leveling" run={C.clearLevel} /></S></G>
+      <G l="Properties" h="properties"><B big i="info" l="Information" run={C.info} /><S><B i="note" l="Notes" run={C.notes} /><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Add to Timeline" run={C.timeline} /></S></G>
       <G l="Paths" h="paths"><S><B i="crit" l="Critical Path" run={() => { setShowCrit(true); setFilter(fields().filters.find(f => f.name === "Critical") ?? ALL); }} /><B i="crit" l="Longest Path" run={() => setFilter(fields().filters.find(f => f.name === "Longest Path") ?? ALL)} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
-      <G l="Editing" h="change"><S><B i="find" l="Find" run={palette} /><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="search" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
+      <G l="Change" h="change"><S><B i="scroll" l="Scroll to Task" run={C.scrollTo} /><B i="search" l="Inspect" run={() => D.inspect(C.ids()[0])} /></S><S><B i="change" l="Global Change" run={C.globalChange} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
     </Show>
     <Show when={tab() === "progress"}>
       <G l="Update" h="update"><div class="pcts"><For each={[0, 25, 50, 75, 100]}>{v => <button class="rb" title={`${v}% complete`} onClick={() => C.pct(v)}><Icon n="pct" /><span>{v}%</span></button>}</For></div>

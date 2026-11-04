@@ -70,8 +70,8 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 
 ![The Datum Plan window with the Gantt chart.](img/window.png)
 
-1. **File and the ribbon tabs.** **File** opens the File page. The tabs are **Task**, **Schedule**, **Progress**, **Resource**, **Report**, **Project**, **View**, **Format** and **Help**.
-2. **The ribbon.** The buttons of the chosen tab, in named groups. Each group has a **?**.
+1. **File and the ribbon tabs.** **File** opens the File page. The tabs are **Home**, **Schedule**, **Progress**, **Resource**, **Report**, **Project**, **View**, **Format** and **Help**.
+2. **The ribbon.** The buttons of the chosen tab, in named groups. Each group has a **?**. **Home** holds what the task sheet and the Sheets share: Clipboard, Font, Alignment and Editing (Find, Fill, Clear, Sort); each acts on what is in view. Building the schedule (insert tasks, links, outline, task information) is on **Schedule**.
 3. **The sidebar.** One click to each view: Setup, Gantt, Tracking, Network, Calendar, Task Usage, Resources, Res. Usage, Manpower, Team, Sheets, Update, Look-ahead, Dashboard, Progress, S-Curves, Reports, Builder, Checks, Risks, Sched. Risk and Portfolio.
 4. **The timeline.** The whole project on one line. Drag the blue box to scroll the Gantt chart; right-click a task and choose **Add to Timeline** to show it here.
 5. **The task sheet.** Works like a spreadsheet: type in the cells, select ranges, copy and paste with other spreadsheets, fill down.
@@ -87,24 +87,24 @@ The status bar at the bottom shows the number of tasks, the start and finish, th
 
 ![The task sheet: a task row, the Duration and Predecessors columns, and the Insert group.](img/sheet.png)
 
-1. **A task row.** Type the name in **Task Name**. Press [[Insert]] (or **Task › Task**) to insert a new task above the selected one.
+1. **A task row.** Type the name in **Task Name**. Press [[Insert]] (or **Schedule › Task**) to insert a new task above the selected one.
 2. **Duration.** Type a number and a unit: `5d` (days), `2w` (weeks), `1mo` (months), `4h` (hours), `30m` (minutes). `0` makes a milestone. `3ed` is an elapsed duration that runs day and night, weekends included.
 3. **Predecessors.** The tasks this one waits for, by their ID (the row number): `3`, or `3,4`, or with a link type and lag, `4SS+2d`.
-4. **Insert group.** **Task**, **Summary**, **Milestone**, **Recurring** and **Delete**.
+4. **Insert group** (on the **Schedule** tab). **Task**, **Summary**, **Milestone**, **Recurring** and **Delete**.
 
 Datum Plan schedules automatically: when you change a duration or a link, every date that depends on it moves.
 
 ### The outline (WBS)
 
-Indent tasks to put them under a summary task: select them and click **Indent** on the Task tab (or press [[Alt+Shift+→]]). The task above becomes a summary; its dates, work and cost add up from its tasks. **Outdent** ([[Alt+Shift+←]]) moves them back. Click the small triangle beside a summary to collapse it.
+Indent tasks to put them under a summary task: select them and click **Indent** on the Schedule tab or Home › Alignment (or press [[Alt+Shift+→]]). The task above becomes a summary; its dates, work and cost add up from its tasks. **Outdent** ([[Alt+Shift+←]]) moves them back. Click the small triangle beside a summary to collapse it.
 
 ### Links between tasks
 
-![The Schedule tab: Links, Outline, Leveling and Paths.](img/schedule-tab.png)
+![The Schedule tab: Links, Outline, Properties and Paths.](img/schedule-tab.png)
 
 1. **Links.** **Link Tasks** links the selected tasks in order ([[Ctrl+F2]]). **Unlink** removes their links. **Relationships** shows each task's links in a diagram.
 2. **Outline.** **Outdent**, **Indent**, **Outline Level** (show levels 1, 2, 3…), **Move Up** and **Move Down**.
-3. **Leveling.** Resolves overallocated people (see "People, man-hours and costs").
+3. **Properties.** **Information** opens all the fields of the selected task; **Notes**, **Details** (the pane under the chart) and **Add to Timeline**. Leveling, which resolves overallocated people, is on the **Resource** tab (see "People, man-hours and costs").
 4. **Paths.** **Critical Path** highlights the tasks that decide the finish date; **Longest Path** follows the chain of links to the last task; **Check Schedule** checks the plan's quality.
 
 There are four link types. Most links are Finish-to-Start.
@@ -356,19 +356,25 @@ Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan 
 
 ### Format and print a sheet: Sheet Tools
 
-When you open **Sheets**, the ribbon shows **Sheet Tools** with two tabs; it goes back to **Task** when you leave.
+When you open **Sheets**, the ribbon opens on **Home** and shows **Sheet Tools** beside it with two tabs; it goes back to **Home** when you leave.
 
-**Cells** holds everything for the cells:
+**Home** has the tools the task sheet and the Sheets share:
 
 - **Clipboard:** Paste (with Paste Special), Cut, Copy and Format Painter. A paste brings the copied cells' formulas, look and number formats in one step; one copied cell pasted on a larger selection fills all of it.
 - **Font:** font, size (up to 48), bold, italic, underline, strikethrough, font colour and fill. The colour arrows open a palette (theme colours with lighter and darker shades, standard and recent colours, **More Colors…**).
-- **Align:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells).
+- **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells).
+- **Editing:** **Find** (Find and Replace), **Fill** (Down and Right), **Clear** (All, Formats or Contents) and **Sort** A to Z or Z to A (formulas move with their rows, empty cells go last).
+
+**Cells** holds the tools only a sheet has:
+
 - **Lines:** **Borders**, each choice drawn beside its name, with line colour and style; **All Borders**, **Outside** and **No Border** at one click.
 - **Number:** the number format list, currency, percent, comma style and decimals.
 - **Look:** four quick cell styles, and the arrow opens the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
 - **Rows & Columns:** insert or delete rows, columns and sheets; **Size** for row height, column width, AutoFit, **Hide** and **Unhide** rows or columns, and the tab. Right-click the cells to hide or unhide them too; a double line marks where rows or columns are hidden. Hidden rows and columns don't print, and stay hidden in an exported workbook.
 - **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function and Plan Data.
-- **Data:** AutoSum, Fill, Clear and Sort A to Z or Z to A (formulas move with their rows, empty cells go last).
+- **Formulas:** AutoSum (the arrow: Average, Count, Max and Min).
+
+**Zoom:** the slider at the bottom right, its **−** and **+**, View › Zoom or [[Ctrl]] with the mouse wheel show the sheet from 10 % to 400 %; click the percentage to go back to 100 %.
 
 **Page** sets how this sheet prints; each sheet keeps its own setup and the plan's stays as it is:
 
@@ -400,7 +406,7 @@ Select the cells, then Sheet Tools › Cells › Look › **Conditional**:
 
 **New Rule…** sets any rule by hand: the cells, the condition, the value and the look. **Manage Rules…** lists the sheet's rules in order; for each cell the first rule that matches gives its look, and data bars and colour scales show with it. The looks change as the values do, print, and go into an exported workbook as its own conditional formats.
 
-**Find and Replace:** [[Ctrl+F]] and [[Ctrl+H]] (or Data › Find) look in the values shown and in what was typed, formulas too.
+**Find and Replace:** [[Ctrl+F]] and [[Ctrl+H]] (or Home › Editing › Find) look in the values shown and in what was typed, formulas too.
 
 ### Sheets and Excel workbooks
 

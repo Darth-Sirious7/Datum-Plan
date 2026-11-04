@@ -43,4 +43,8 @@ export const fitBox = (sh: SheetData, r: number, c: number, im: SheetImage, rowH
 /** The sheet tab shown (also what File › Print prints). */
 export const [sheetK, setSheetK] = createSignal(0);
 /** How the sheet is shown: as cells (normal), with its page breaks, or as the pages that will print. */
+/** How large the sheet is shown (1 = 100 %), 10 % to 400 %, as Ctrl+wheel, the status bar and View › Zoom set it. */
+export const [sheetZoom, setSheetZoom] = createSignal(1);
+const ZOOMS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+export const zoomSheet = (dir: 1 | -1) => setSheetZoom(z => (dir > 0 ? ZOOMS.find(x => x > z + 1e-6) ?? 4 : [...ZOOMS].reverse().find(x => x < z - 1e-6) ?? 0.1));
 export const [sheetMode, setSheetMode] = createSignal<"normal" | "breaks" | "layout">("normal");

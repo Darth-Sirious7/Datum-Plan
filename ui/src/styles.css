@@ -983,7 +983,7 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .smodes svg { width: 16px; height: 16px; }
 .simg .pinc { position: absolute; right: -30px; top: 0; width: 24px; height: 24px; display: grid; place-items: center; background: var(--bg2); border: 1px solid var(--line3); border-radius: 4px; box-shadow: 0 1px 4px #0002; }
 .simg .pinc svg { width: 16px; height: 16px; }
-.simg.fit { outline: 1px dotted #2F6FDE80; }
+.simg.fit:not(.on) { outline: 0; }
 .ptable.nogrid td, .ptable.nogrid th { border-color: transparent; }
 .ptwrap.pcenter { width: fit-content; margin: 0 auto; }
 .ctxtabs { display: flex; }
@@ -1014,3 +1014,4 @@ button.link { color: var(--blue); text-decoration: underline; padding: 0; }
 .sheetgrid .c.chid, .sheetgrid .hc.chid { display: none; }
 .sheetgrid .row.rnext .rowh { border-top: 3px double var(--line3); }
 .sheetgrid .hc.cnext { border-left: 3px double var(--line3); }
+.zpct { font: 500 11px var(--mono, monospace); min-width: 42px; }
