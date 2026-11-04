@@ -207,3 +207,19 @@ fn exchange_files_keep_every_date_link_and_progress() {
         assert_eq!(q.status, dc.p.status, "{ext}: status date");
     }
 }
+
+#[test]
+fn a_task_list_with_progress_starts_each_task_after_its_predecessors() {
+    let dir = std::env::temp_dir().join(format!("datum-plan-csv-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("list.csv");
+    std::fs::write(&f, "ID,Name,Duration,Predecessors,% Complete\n1,Dig,5d,,100\n2,Pour,5d,1,40\n3,Cure,3d,2FS-1d,0\n").unwrap();
+    let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!() };
+    std::fs::remove_dir_all(dir).ok();
+    let (p, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), F).unwrap();
+    assert_eq!(bad, 0);
+    assert_eq!((p.tasks[0].act_start, p.tasks[0].act_finish), (Some(d(2026, 11, 2)), Some(d(2026, 11, 6))));
+    // Pour began when Dig was done, not on the first day of the plan.
+    assert_eq!((p.tasks[1].act_start, p.tasks[1].pct), (Some(d(2026, 11, 9)), 40));
+    assert_eq!(p.tasks[2].preds[0].lag, -480);
+}
