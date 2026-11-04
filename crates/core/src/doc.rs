@@ -244,10 +244,15 @@ fn shift(p: &mut Project, uids: &[u32], by: i8) {
 }
 
 fn move_rows(p: &mut Project, uids: &[u32], up: bool) {
-    let mut v = idxs(p, uids);
+    // Rows under a selected summary move with it; a row next to a selected row that cannot move stays too.
+    let mut v: Vec<usize> = vec![];
+    for i in idxs(p, uids) {
+        if !v.last().is_some_and(|&j| p.subtree(j).contains(&i)) { v.push(i) }
+    }
     if !up {
         v.reverse();
     }
+    let sel: HashSet<u32> = v.iter().map(|&i| p.tasks[i].uid).collect();
     for uid in v.iter().map(|&i| p.tasks[i].uid).collect::<Vec<_>>() {
         let i = p.idx(uid).unwrap();
         let (r, lvl) = (p.subtree(i), p.tasks[i].level);
@@ -258,9 +263,11 @@ fn move_rows(p: &mut Project, uids: &[u32], up: bool) {
             }
             if k > 0 && p.tasks[k - 1].level == lvl {
                 let k = p.subtree(k - 1).start;
+                if sel.contains(&p.tasks[k].uid) { continue }
                 p.tasks[k..r.end].rotate_right(r.len());
             }
         } else if r.end < p.tasks.len() && p.tasks[r.end].level == lvl {
+            if sel.contains(&p.tasks[r.end].uid) { continue }
             let s = p.subtree(r.end);
             p.tasks[i..s.end].rotate_left(r.len());
         }
@@ -386,9 +393,19 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
             set_pct(p, i, (m.min(d) * 100 / d) as u8)?;
         }
         "rem" => {
+            // Within the duration it sets the progress; more remaining work than that never undoes the
+            // work done: the duration grows (a task not started just takes the new duration).
             let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
-            let d = p.tasks[i].dur.max(1);
-            set_pct(p, i, (100 - (m.min(d) * 100 / d)) as u8)?;
+            let t = &p.tasks[i];
+            let d = t.dur.max(1);
+            let pct = (100 - (m.min(d) * 100 / d)) as u8;
+            if m <= d && (pct >= t.pct || t.act_start.is_none()) {
+                return set_pct(p, i, pct);
+            }
+            let done = if t.act_start.is_some() { t.dur * t.pct as i64 / 100 } else { 0 };
+            let t = &mut p.tasks[i];
+            t.dur = done + m;
+            if t.act_start.is_some() { (t.pct, t.act_finish) = ((done * 100 / (done + m)).min(99) as u8, None) }
         }
         "start" => {
             let d = date(v)?;
