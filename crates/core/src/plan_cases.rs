@@ -359,3 +359,30 @@ fn a_daily_meeting_falls_on_working_days() {
     let days: Vec<String> = dates(&dc.p)[1..].iter().map(|x| x[..5].to_string()).collect();
     assert_eq!(days, ["Nov05", "Nov09", "Nov11", "Nov13"]);
 }
+
+#[test]
+fn a_csv_round_trip_keeps_the_outline_links_and_dates() {
+    let mut dc = doc(&["0||", "4d||", "3d|2FS+2d|", "2d|2SS+1d|", "5d|4FF,3FS-1d|", "1d|5SF+2d|", "0|5|", "2ed|7|", "1w|1|"]);
+    let u = uids(&dc, &[1, 2, 3, 4]);
+    op(&mut dc, Op::Indent { uids: u });
+    let dir = std::env::temp_dir().join(format!("datum-plan-csvrt-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("plan.csv");
+    crate::io::export(&dc.p, &f, F, d(2026, 11, 2), &[]).unwrap();
+    let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!() };
+    std::fs::remove_dir_all(dir).ok();
+    let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), F).unwrap();
+    assert_eq!(bad, 0);
+    assert_eq!(names(&Doc::new(q.clone())), names(&dc));
+    let ends = |p: &Project| dates(p).into_iter().map(|x| x[..23].to_string()).collect::<Vec<_>>();
+    assert_eq!(ends(&q), ends(&dc.p));
+}
+
+#[test]
+fn typing_a_finish_date_on_a_milestone_moves_it() {
+    let mut dc = doc(&["5d||", "0|1|"]);
+    let uid = dc.p.tasks[1].uid;
+    op(&mut dc, Op::Set { uid, field: "finish".into(), value: "11-Nov-26".into() });
+    assert_eq!(dc.p.tasks[1].dur, 0);
+    assert_eq!(dates(&dc.p)[1], "Nov11 17:00 Nov11 17:00 0");
+}

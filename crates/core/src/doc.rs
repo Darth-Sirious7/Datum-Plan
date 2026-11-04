@@ -429,6 +429,12 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
                 if p.tasks[i].act_start.is_some_and(|a| d < a) { return Err("That finish is before the task's actual start.".into()) }
                 p.tasks[i].act_finish = Some(d);
             }
+            // A milestone stays one: it moves to the end of that day.
+            let t = &mut p.tasks[i];
+            if t.dur == 0 && t.act_start.is_none() {
+                if t.manual { t.mstart = Some(d) } else { (t.constraint, t.cdate) = (Constraint::FNET, Some(d)) }
+                return Ok(());
+            }
             let s = sched::schedule(p)?;
             let c = &s.cals[s.ci[i]];
             p.tasks[i].dur = c.between(s.es[i], c.end_of(d)).max(0);
