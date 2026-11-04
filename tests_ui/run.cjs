@@ -89,6 +89,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 4. Ribbon: split buttons and the separate contextual Format tab.
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-ghome.png"), clip: { x: 0, y: 0, width: 1440, height: 180 } });
   check("Paste is a split button", (await p.$$(".splitbig")).length >= 1);
+  // 0.5.25: Home has the task tools too; Sheet Tools is always on the bar and opens Sheets, with one Format tab.
+  check("Home has the task tools (new task, indent, outdent, link)", await p.evaluate(() => { const r = document.querySelector(".ribbon").textContent; return ["New Task", "Indent", "Outdent", "Link", "Information"].every(t => r.includes(t)); }));
+  check("Sheet Tools is on the bar in the Gantt too, with a single Format tab", (await p.$$(".tabs .ctxgrp.sheetctx button")).length === 1 && (await p.textContent(".tabs .ctxgrp.sheetctx button")) === "Format");
+  await p.click(".tabs .ctxgrp.sheetctx button"); await p.waitForTimeout(400);
+  check("Sheet Tools › Format from the Gantt opens Sheets and says so", !!(await p.$(".sheetgrid")) && ((await p.textContent("#toast")) ?? "").includes("opened Sheets") && (await p.textContent(".ribbon")).includes("Borders") && (await p.textContent(".ribbon")).includes("Print Area"));
+  for (const w of [1280, 1600]) { await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(150); if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", `-sfmt${w}.png`), clip: { x: 0, y: 0, width: w, height: 170 } }); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); check(`Sheet Tools › Format fits the ribbon at ${w}px`, o <= 1, String(o)); }
+  await p.setViewportSize({ width: 1440, height: 900 });
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300); await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   check("Format tab carries its Gantt Chart Tools label", (await p.textContent(".ctxgrp")).includes("Gantt Chart Tools"));
   await p.click(".ctxgrp button");
   check("Gantt Chart Style gallery", (await p.$$(".swatch")).length >= 8);
@@ -477,8 +485,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Project › Pictures adds logos by party, kept in the plan", (await p.$$(".dlg .picrow")).length === 2 && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Picture).map(c => c[1].op.Picture.pic.role))) === '["Client","Sub-vendor"]');
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   await p.click('.side button[title="Sheets"]'); await p.waitForTimeout(300);
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
-  await p.click(".ptools button:has-text('Picture'), .sheetbar button:has-text('Picture'), button:has-text('Picture ▾')"); await p.waitForTimeout(150);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon button:has-text('Picture')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('(Sub-vendor)')"); await p.waitForTimeout(500);
   check("a library picture can be placed on a sheet cell", (await p.$$(".simg img")).length === 1);
   const lastImgs = () => p.evaluate(() => JSON.stringify(window.__calls.filter(c => c[0] === "apply" && c[1].op.SheetImages).pop()?.[1].op.SheetImages.images));
@@ -503,15 +511,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   let sq = await scell(0, 0); await p.mouse.click(sq.x, sq.y); sq = await scell(0, 2); await p.keyboard.down("Shift"); await p.mouse.click(sq.x, sq.y); await p.keyboard.up("Shift"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Merge & Center']"); await p.waitForTimeout(300);
   check("Merge & Center merges the selected cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Batch && c[1].op.Batch[0].Sheet).pop()?.[1].op.Batch[0].Sheet.sheet.merges)) === '["A1:C1"]' && (await p.$$(".sheetgrid .mcell")).length === 1);
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('All Borders')"); await p.waitForTimeout(300);
   check("Borders > All Borders draws lines round the cells", (await lastStyle()).includes("bb:thin #000000"));
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Wrap Text']"); await p.waitForTimeout(300);
   check("Wrap Text wraps the cells", /(^|[";])w([";]|$)/.test(await lastStyle()));
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
-  await p.click(".ribbon .cstyles .cst:has-text('Good')"); await p.waitForTimeout(300);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon button[title='Cell Styles: the whole gallery']"); await p.waitForTimeout(200); await p.click(".sgal .cst:text-is('Good')"); await p.waitForTimeout(300);
   check("a cell style (Good) colours the cells", (await lastStyle()).includes("f:#C6EFCE"));
   if (process.env.SHOT) { const z = await scell(6, 5); await p.mouse.click(z.x, z.y); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT }); await p.mouse.click(sq.x, sq.y); }
   await p.dblclick(".sheettabs button.on"); await p.waitForTimeout(200);
@@ -531,7 +539,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("ribbon dropdown arrows are not drawn as pane dividers", (await p.$$(".ribbon .split")).length === 0 && (await p.$$(".ribbon .sarr")).length >= 2);
   const mbg = await p.$eval(".sheetgrid .mcell", e => getComputedStyle(e).backgroundColor), cbg = await p.$eval(".sheetgrid .gscroll, .sheetgrid", e => getComputedStyle(e).backgroundColor);
   check("a merged cell keeps the sheet's white background", mbg === cbg || mbg === "rgb(255, 255, 255)" || mbg.includes("198, 239, 206"), `${mbg} vs ${cbg}`);
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Borders options']"); await p.waitForTimeout(150);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-borders.png"), clip: { x: 300, y: 40, width: 700, height: 520 } });
   check("each border choice has its picture", (await p.$$(".menu button .tick svg use[href^='#i-bd-']")).length === 12);
@@ -559,13 +567,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Delete asks in the app's own dialog", ((await p.textContent(".dlg header")) ?? "").includes("Delete Sheet"));
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.5.20: workbooks in and out; Backspace edits.
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button:has-text('Excel Workbook')"); await p.waitForTimeout(400);
   check("Insert › Excel Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
-  await p.click(".ctxgrp.sheetctx button:text-is('Page')"); await p.waitForTimeout(150);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Save as Excel')"); await p.waitForTimeout(300);
   check("Page › Save as Excel saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(150);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Backspace"); await p.waitForTimeout(150);
   check("Backspace on a cell clears it and starts typing there", !!(await p.$(".sheetgrid input.edit")) && (await p.inputValue(".sheetgrid input.edit")) === "");
@@ -600,7 +608,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Hide Rows')"); await p.waitForTimeout(300);
   check("Hide Rows hides the selected row", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.hide_rows)) === "[2]" && (await p.$$(".sheetgrid .row.rhid")).length === 1);
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button:has-text('Size')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Unhide All Rows and Columns')"); await p.waitForTimeout(400);
   check("Unhide All shows them again", (await p.$$(".sheetgrid .row.rhid")).length === 0);
@@ -637,14 +645,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Control+v"); await p.waitForTimeout(400);
   check("Paste brings the copied cell's look along, in one step", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()?.[1].op)).includes('"SheetStyle"'));
   // 0.5.19: the cell style gallery, Sheet Tools › Page, the page views and a sheet's own print setup.
-  await p.click(".ctxgrp.sheetctx button:text-is('Cells')"); await p.waitForTimeout(100);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon button[title='Cell Styles: the whole gallery']"); await p.waitForTimeout(200);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-gallery.png") });
   check("Cell Styles opens a gallery of styles in sections", (await p.$$(".sgal .cst")).length >= 40 && (await p.$$(".sgal section")).length >= 7);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
-  await p.click(".ctxgrp.sheetctx button:text-is('Page')"); await p.waitForTimeout(200);
-  check("Sheet Tools has a Page tab with paper, what prints, fit and on-the-paper choices", ["Views", "Paper", "What Prints", "Fit", "On the Paper"].every(async g => true) && (await p.textContent(".ribbon")).includes("On the Paper") && (await p.textContent(".ribbon")).includes("Page Breaks"));
-  await p.click(".ribbon label.chk:has-text('Header & footer') input"); await p.waitForTimeout(300);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(200);
+  check("Sheet Tools › Format has the page views, page setup and print choices", await p.evaluate(() => ["Views", "Page Setup", "Page Breaks", "Print Area", "Print Options"].every(t => document.querySelector(".ribbon").textContent.includes(t))));
+  await p.click(".ribbon button:has-text('Print Options')"); await p.waitForTimeout(150); await p.click(".menu button:has-text('Header & Footer')"); await p.waitForTimeout(300);
   check("unticking Header & footer saves it with the sheet", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.page)).includes('"no_hf":true'));
   await p.click(".ribbon button:has-text('Page Breaks')"); await p.waitForTimeout(500);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-breaks.png") });
@@ -679,7 +687,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('Normal')"); await p.waitForTimeout(200);
   // Title rows above the print area print at the top of every page.
   { const q = await scell(0, 0); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100); }
-  await p.click(".ctxgrp.sheetctx button:text-is('Page')"); await p.waitForTimeout(150);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Titles')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Repeat the Selected Rows')"); await p.waitForTimeout(300);
   { const pg = await lastPage(); check("title rows can sit above the print area", pg?.titles === "1:1" && /^A[2-9]/.test(pg?.area ?? ""), JSON.stringify(pg)); }

@@ -6,3 +6,4 @@
 /tests_ui/guide_fixture.json
 /tests_ui/tutorial_fixture.json
 docs/guide/.*.html
+.claude/worktrees/

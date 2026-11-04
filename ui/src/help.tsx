@@ -7,6 +7,7 @@ import { Dialog } from "./ui";
 type Topic = { t: string; what: string; how?: string[]; tip?: string };
 export const HELP: Record<string, Topic> = {
   // Home tab (shared by the task sheet and the Sheets)
+  hometasks: { t: "Tasks", what: "The everyday task commands, also on the Schedule tab: a new task (the arrow: summary, milestone, recurring, delete), outdent and indent, Information, link and unlink, and scroll to the task.", how: ["They act on the selected tasks of the Gantt. From another view, such as Sheets, a click opens the Gantt first."] },
   view: { t: "Views", what: "Switches what the window shows: the Gantt chart, the Tracking Gantt, the Network Diagram, the calendar, usage, resources, sheets and reports.",
     how: ["Click Gantt Chart for the task sheet and bars; the arrow under it lists every view.", "The sidebar on the left switches views too."] },
   clipboard: { t: "Clipboard", what: "Cut, copy and paste cells, rows or formats, also to and from other spreadsheets.",

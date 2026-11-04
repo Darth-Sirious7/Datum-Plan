@@ -11,7 +11,7 @@ import { showCrit, setShowCrit, showBase, setShowBase, showSlack, setShowSlack, 
 import { fieldMenu } from "./grid";
 import * as F from "./fmt";
 import { Help, helpCard, HELP } from "./help";
-import { sheetApi, CELL_STYLES, STYLE_SECTIONS } from "./sheets";
+import { sheetApi, STYLE_SECTIONS } from "./sheets";
 import { sheetMode, setSheetMode, setSheetK } from "./sheetlayout";
 import type { Out } from "./api";
 import { PAPERS, sheetPage } from "./print";
@@ -105,7 +105,9 @@ export const palette = () => openDialog(() => {
 
 // Home serves the task sheet and the Sheets alike; leaving Sheets from its own tabs goes back to Home.
 let lastView = "";
-const followView = () => { const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() !== "sheet" && tab() !== "sheetpage") setTab("task"); else if (was === "sheets" && (tab() === "sheet" || tab() === "sheetpage")) setTab("task"); };
+const followView = () => { const v = view(); if (v === lastView) return; const was = lastView; lastView = v; if (v === "sheets" && tab() === "format") setTab("sheet"); else if (was === "sheets" && tab() === "sheet") setTab("task"); };
+/** The contextual tabs are always there; opening one takes you to the view it works on. */
+const openCtx = (k: "format" | "sheet") => { if (k === "sheet" && view() !== "sheets") { C.view("sheets"); toast("Sheet Tools work on the Sheets: opened Sheets.", true); } else if (k === "format" && view() === "sheets") { C.view("gantt"); toast("Gantt Chart Tools work on the Gantt chart: opened the Gantt.", true); } setTab(k); };
 export const TitleBar = (p: { update: string | null }) => (void createEffect(followView),
   <header class="top">
     <div class="bar">
@@ -123,9 +125,9 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
     </div>
     <nav class="tabs">
       <button class="file" onClick={() => setBackstage("home")}>File</button>
-      <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Home"], ["help", "Help"]]}>{([k, l]) =>
-        k === "sheet" ? <Show when={view() === "sheets"}><div class="ctxgrp sheetctx"><small>Sheet Tools</small><div class="ctxtabs"><button classList={{ on: tab() === "sheet" }} onClick={() => setTab("sheet")}>Cells</button><button classList={{ on: tab() === "sheetpage" }} onClick={() => setTab("sheetpage")}>Page</button></div></div></Show>
-          : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button></div>
+      <For each={[["task", "Home"], ["schedule", "Schedule"], ["progress", "Progress"], ["resource", "Resource"], ["report", "Report"], ["project", "Project"], ["view", "View"], ["format", "Format"], ["sheet", "Format"], ["help", "Help"]]}>{([k, l]) =>
+        k === "sheet" ? <div class="ctxgrp sheetctx"><small>Sheet Tools</small><button classList={{ on: tab() === "sheet" }} title="Formatting, page setup and printing of the sheets (opens Sheets)" onClick={() => openCtx("sheet")}>{l}</button></div>
+          : k === "format" ? <div class="ctxgrp"><small>Gantt Chart Tools</small><button classList={{ on: tab() === k }} title="Bar styles, columns and the look of the Gantt chart (opens the Gantt)" onClick={() => openCtx("format")}>{l}</button></div>
           : <button classList={{ on: tab() === k }} onClick={() => setTab(k)}>{l}</button>}</For>
     </nav>
   </header>
@@ -173,6 +175,8 @@ export const importWorkbook = async () => {
 /** Saves the plan's sheets as a workbook to share. */
 export const exportSheets = async () => { const p = await call<string | null>("export_sheets"); if (p) toast(`Saved ${p}`, true); };
 /** Sheet Tools › Cells: everything for the cells of a sheet. It opens by itself in Sheets. */
+/** Task tools act on the Gantt; from another view they open it first and say so. */
+const onGantt = (f: () => unknown) => { if (["gantt", "tracking"].includes(view())) return f(); C.view("gantt"); toast("Task tools work on the Gantt: opened the Gantt.", true); };
 /** Home: the tools the task sheet and the Sheets share (clipboard, font, alignment, editing); each acts on the one in view. */
 const Home = () => {
   const A = () => sheetApi(), s = () => F.current(), sh = () => view() === "sheets", run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
@@ -190,6 +194,8 @@ const Home = () => {
         <button class="rb fb" title="Clear Formatting" onClick={F.clearFmt}><Icon n="clear" /></button></div></div>
       <S><B i="wrap" l="Wrap Text" off={!sh()} on={sh() && !!s().w} run={() => F.setProp("w", !s().w || undefined)} />
         <B i={A()?.merged() ? "unmerge" : "merge"} l={sh() && A()?.merged() ? "Unmerge Cells" : "Merge & Center"} off={!sh()} run={() => A()?.merge(A()?.merged() ? "unmerge" : "center")} dd={e => openMenu(e, [{ label: "Merge & Center", icon: "merge", run: () => A()?.merge("center") }, { label: "Merge Across", icon: "mergeacross", run: () => A()?.merge("across") }, { label: "Merge Cells", icon: "merge", run: () => A()?.merge("cells") }, { label: "Unmerge Cells", icon: "unmerge", run: () => A()?.merge("unmerge") }])} /></S></G>
+    <G l="Tasks" h="hometasks"><B big i="task" l="New Task" run={() => onGantt(() => C.newTask())} dd={e => openMenu(e, [{ label: "Task", run: () => onGantt(() => C.newTask()) }, { label: "Summary Task", run: () => onGantt(C.summary) }, { label: "Milestone", run: () => onGantt(() => C.newTask(true)) }, { label: "Recurring Task…", icon: "repeat", run: () => onGantt(C.recurring) }, "-", { label: "Delete Task", run: () => onGantt(C.del) }])} />
+      <S><B i="outdent" l="Outdent" run={() => onGantt(C.outdent)} /><B i="indent" l="Indent" run={() => onGantt(C.indent)} /><B i="info" l="Information" run={() => onGantt(C.info)} /></S><S><B i="link" l="Link" title="Link the selected tasks Finish-to-Start (Ctrl+F2)" run={() => onGantt(C.link)} /><B i="unlink" l="Unlink" run={() => onGantt(C.unlink)} /><B i="scroll" l="Scroll to Task" run={() => onGantt(C.scrollTo)} /></S></G>
     <G l="Editing" h="editing"><S><B i="find" l="Find" dd={e => openMenu(e, sh() ? [{ label: "Find…", keys: "Ctrl+F", run: () => A()?.find() }, { label: "Replace…", keys: "Ctrl+H", run: () => A()?.replace() }] : [{ label: "Find a Task or Command…", keys: "Ctrl+K", run: palette }, { label: "Scroll to Task", run: C.scrollTo }])} />
         <B i="filldown" l="Fill" dd={e => openMenu(e, [{ label: "Down", keys: "Ctrl+D", run: () => (sh() ? A()?.fillDown() : ctrlD()) }, { label: "Right", keys: "Ctrl+R", off: !sh(), run: run("fillRight") }])} />
         <B i="clear" l="Clear" off={!sh()} dd={e => openMenu(e, [{ label: "Clear All", run: () => A()?.clearKind("all") }, { label: "Clear Formats", run: () => A()?.clearKind("formats") }, { label: "Clear Contents", keys: "Delete", run: () => A()?.clearKind("contents") }])} /></S>
@@ -198,7 +204,6 @@ const Home = () => {
 };
 const SheetCells = () => {
   const A = () => sheetApi(), run = (n: string) => (e?: MouseEvent) => A()?.[n]?.(e);
-  const QUICK = ["Good", "Bad", "Neutral", "Accent"];
   return <>
     <G l="Lines" h="sheetalign"><B big i="bd-bottom" l="Borders" run={() => A()?.border("bottom")} dd={e => openMenu(e, (A()?.borderItems() ?? []) as Item[])} title="Bottom border (the arrow: every border, line colour and style)" />
       <S><B i="bd-all" l="All Borders" run={() => A()?.border("all")} /><B i="bd-outside" l="Outside" run={() => A()?.border("outside")} /><B i="bd-none" l="No Border" run={() => A()?.border("none")} /></S></G>
@@ -206,39 +211,34 @@ const SheetCells = () => {
       <div><button class="rb numfmt" title="Number format" onClick={e => openMenu(e, (A()?.fmtItems() ?? []) as Item[])}>{(A()?.fmtLabel() as string) ?? "General"} ▾</button></div>
       <div><button class="rb fb" title="Currency" onClick={() => A()?.setFmt("money")}>$</button><button class="rb fb" title="Percent Style (28 → 28%)" onClick={() => A()?.setFmt('0"%"')}>%</button><button class="rb fb" title="Comma Style (1,234.50)" onClick={() => A()?.setFmt("#,##0.00")}>,</button>
         <button class="rb fb" title="Increase Decimal" onClick={() => A()?.moreDecimals(1)}>.0+</button><button class="rb fb" title="Decrease Decimal" onClick={() => A()?.moreDecimals(-1)}>.0−</button></div></div></G>
-    <G l="Look" h="sheetstyles"><B big i="cond" l="Conditional" title="Conditional formatting: colour cells by their values, data bars, colour scales" dd={e => A()?.condMenu(e)} /><div class="cstyles"><For each={CELL_STYLES.filter(x => QUICK.includes(x[0]))}>{([l, st]) => <button class="cst" style={F.css(st)} title={`Cell style: ${l}`} onClick={() => A()?.cellStyle(st)}>{l}</button>}</For>
-      <button class="rb sarr" title="Cell Styles: the whole gallery" onClick={e => styleGallery(e, st => A()?.cellStyle(st))}>▾</button></div></G>
-    <G l="Rows & Columns" h="sheetcells"><B big i="task" l="Insert" dd={e => openMenu(e, [{ label: "Insert Rows Above", run: () => A()?.insertCells(false, false) }, { label: "Insert Columns Left", run: () => A()?.insertCells(false, true) }, "-", { label: "Insert Sheet", run: run("addSheet") }])} />
-      <B big i="del" l="Delete" dd={e => openMenu(e, [{ label: "Delete Rows", run: () => A()?.insertCells(true, false) }, { label: "Delete Columns", run: () => A()?.insertCells(true, true) }, "-", { label: "Delete Sheet", run: run("del") }])} />
-      <B big i="rowh" l="Size" dd={e => openMenu(e, [{ label: "Row Height…", run: run("rowHeight") }, { label: "AutoFit Row Height", run: run("autofitRows") }, { label: "Column Width…", run: run("colWidth") }, { label: "AutoFit Column Width", run: run("autofitCols") }, "-",
+    <G l="Look" h="sheetstyles"><B big i="cond" l="Conditional" title="Conditional formatting: colour cells by their values, data bars, colour scales" dd={e => A()?.condMenu(e)} /><B big i="style" l="Cell Styles" title="Cell Styles: the whole gallery" dd={e => styleGallery(e, st => A()?.cellStyle(st))} /></G>
+    <G l="Rows & Columns" h="sheetcells"><S><B i="task" l="Insert" dd={e => openMenu(e, [{ label: "Insert Rows Above", run: () => A()?.insertCells(false, false) }, { label: "Insert Columns Left", run: () => A()?.insertCells(false, true) }, "-", { label: "Insert Sheet", run: run("addSheet") }])} />
+      <B i="del" l="Delete" dd={e => openMenu(e, [{ label: "Delete Rows", run: () => A()?.insertCells(true, false) }, { label: "Delete Columns", run: () => A()?.insertCells(true, true) }, "-", { label: "Delete Sheet", run: run("del") }])} />
+      <B i="rowh" l="Size" dd={e => openMenu(e, [{ label: "Row Height…", run: run("rowHeight") }, { label: "AutoFit Row Height", run: run("autofitRows") }, { label: "Column Width…", run: run("colWidth") }, { label: "AutoFit Column Width", run: run("autofitCols") }, "-",
         { label: "Hide Rows", run: () => A()?.hideLines(false, true) }, { label: "Hide Columns", run: () => A()?.hideLines(true, true) }, { label: "Unhide Rows", run: () => A()?.hideLines(false, false) }, { label: "Unhide Columns", run: () => A()?.hideLines(true, false) },
-        { label: "Unhide All Rows and Columns", run: () => A()?.unhideAll() }, "-", { label: "Rename Sheet", run: run("rename") }, { label: "Move or Copy Sheet…", run: run("moveCopy") }, { label: "Tab Color, Hide and Unhide", run: run("tabMenu") }])} /></G>
-    <G l="Insert" h="sheets"><B big i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
-    <G l="Formulas" h="sheetediting"><B big i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /></G>
+        { label: "Unhide All Rows and Columns", run: () => A()?.unhideAll() }, "-", { label: "Rename Sheet", run: run("rename") }, { label: "Move or Copy Sheet…", run: run("moveCopy") }, { label: "Tab Color, Hide and Unhide", run: run("tabMenu") }])} /></S></G>
+    <G l="Insert" h="sheets"><S><B i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /></S><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
   </>;
 };
 /** Sheet Tools › Page: how the sheet prints, and the page views. Each sheet keeps its own page setup. */
 const SheetPageTab = () => {
   const A = () => sheetApi(), pg = () => A()?.page() ?? {}, set = (x: Partial<SheetPage>) => A()?.setPage(x);
   const eff = () => sheetPage();
-  const Ck = (p: { k: "no_hf" | "no_grid" | "headings" | "center"; l: string; inv?: boolean; t: string }) => <label class="chk" title={p.t}><input type="checkbox" checked={p.inv ? !pg()[p.k] : !!pg()[p.k]} onChange={e => set({ [p.k]: p.inv ? !e.currentTarget.checked : e.currentTarget.checked })} />{p.l}</label>;
   const MARGINS: [string, number[]][] = [["Normal (19 mm, 18 mm sides)", [19, 18, 19, 18]], ["Narrow (13 mm)", [13, 6, 13, 6]], ["Wide (25 mm)", [25, 25, 25, 25]], ["None (5 mm)", [5, 5, 5, 5]]];
   return <>
-    <G l="Views" h="sheetviews"><B big i="vnormal" l="Normal" on={sheetMode() === "normal"} run={() => setSheetMode("normal")} /><B big i="vlayout" l="Page Layout" on={sheetMode() === "layout"} run={() => setSheetMode("layout")} /><B big i="vbreaks" l="Page Breaks" on={sheetMode() === "breaks"} run={() => setSheetMode("breaks")} />
+    <G l="Views" h="sheetviews"><S><B i="vnormal" l="Normal" on={sheetMode() === "normal"} run={() => setSheetMode("normal")} /><B i="vlayout" l="Page Layout" on={sheetMode() === "layout"} run={() => setSheetMode("layout")} /><B i="vbreaks" l="Page Breaks" on={sheetMode() === "breaks"} run={() => setSheetMode("breaks")} /></S>
       <S><B i="fill" l={A()?.frozen() ? "Unfreeze Panes" : "Freeze Panes"} run={() => A()?.freeze()} /></S></G>
-    <G l="Paper" h="sheetviews"><B big i="pagesetup" l={`Size: ${eff()?.paper || P().ui?.page?.paper || "A4"}`} dd={e => openMenu(e, [{ label: "As the plan", on: !pg().paper, run: () => set({ paper: "" }) }, ...PAPERS.map(([n, w, h]) => ({ label: `${n} (${w} × ${h} mm)`, on: pg().paper === n, run: () => set({ paper: n }) }))])} />
-      <B big i="vlayout" l={pg().orient === "landscape" ? "Landscape" : pg().orient === "portrait" ? "Portrait" : "Orientation"} dd={e => openMenu(e, [{ label: "As the plan", on: !pg().orient, run: () => set({ orient: "" }) }, { label: "Portrait", on: pg().orient === "portrait", run: () => set({ orient: "portrait" }) }, { label: "Landscape", on: pg().orient === "landscape", run: () => set({ orient: "landscape" }) }])} />
-      <B big i="cols" l="Margins" dd={e => openMenu(e, [{ label: "As the plan", on: !pg().margins, run: () => set({ margins: null }) }, ...MARGINS.map(([l, m]) => ({ label: l, on: JSON.stringify(pg().margins) === JSON.stringify(m), run: () => set({ margins: m }) })), "-", { label: "Custom Margins…", run: async () => { const v = await askText("Margins", "Top, right, bottom, left (mm)", (pg().margins ?? [15, 12, 15, 12]).join(", ")); const m = v?.split(/[ ,;]+/).map(Number); if (m?.length === 4 && m.every(x => x >= 0 && x <= 100)) set({ margins: m }); } }])} /></G>
-    <G l="What Prints" h="sheetviews"><S><B i="table" l="Print Area" dd={e => openMenu(e, [{ label: "Set to the Selection", run: () => A()?.areaFromSel() }, { label: "Clear Print Area", off: !pg().area, run: () => set({ area: "" }) }, ...(pg().area ? ["-" as const, { label: `Now: ${pg().area}`, off: true }] : [])])} />
+    <G l="Page Setup" h="sheetviews"><S><B i="pagesetup" l={`Size: ${eff()?.paper || P().ui?.page?.paper || "A4"}`} dd={e => openMenu(e, [{ label: "As the plan", on: !pg().paper, run: () => set({ paper: "" }) }, ...PAPERS.map(([n, w, h]) => ({ label: `${n} (${w} × ${h} mm)`, on: pg().paper === n, run: () => set({ paper: n }) }))])} />
+      <B i="vlayout" l={pg().orient === "landscape" ? "Landscape" : pg().orient === "portrait" ? "Portrait" : "Orientation"} dd={e => openMenu(e, [{ label: "As the plan", on: !pg().orient, run: () => set({ orient: "" }) }, { label: "Portrait", on: pg().orient === "portrait", run: () => set({ orient: "portrait" }) }, { label: "Landscape", on: pg().orient === "landscape", run: () => set({ orient: "landscape" }) }])} />
+      <B i="cols" l="Margins" dd={e => openMenu(e, [{ label: "As the plan", on: !pg().margins, run: () => set({ margins: null }) }, ...MARGINS.map(([l, m]) => ({ label: l, on: JSON.stringify(pg().margins) === JSON.stringify(m), run: () => set({ margins: m }) })), "-", { label: "Custom Margins…", run: async () => { const v = await askText("Margins", "Top, right, bottom, left (mm)", (pg().margins ?? [15, 12, 15, 12]).join(", ")); const m = v?.split(/[ ,;]+/).map(Number); if (m?.length === 4 && m.every(x => x >= 0 && x <= 100)) set({ margins: m }); } }])} /></S>
+      <S><B i="table" l="Print Area" dd={e => openMenu(e, [{ label: "Set to the Selection", run: () => A()?.areaFromSel() }, { label: "Clear Print Area", off: !pg().area, run: () => set({ area: "" }) }, ...(pg().area ? ["-" as const, { label: `Now: ${pg().area}`, off: true }] : [])])} />
       <B i="repeat" l="Titles" title="Rows printed at the top of every page" dd={e => openMenu(e, [{ label: "Repeat the Selected Rows on Every Page", run: () => A()?.titlesFromSel() }, { label: "No Title Rows", off: !pg().titles, run: () => set({ titles: "" }) }, ...(pg().titles ? ["-" as const, { label: `Now: rows ${pg().titles}`, off: true }] : [])])} />
-      <B i="vbreaks" l="Breaks" dd={e => openMenu(e, [{ label: "Insert Page Break", run: () => A()?.breakHere() }, { label: "New Page at This Row", run: () => A()?.breakHere("row") }, { label: "New Page at This Column", run: () => A()?.breakHere("col") }, { label: "Remove Page Break", run: () => A()?.unbreakHere() }, { label: "Reset All Page Breaks", off: !pg().breaks?.length && !pg().col_breaks?.length, run: () => set({ breaks: [], col_breaks: [] }) }])} /></S></G>
-    <G l="Fit" h="sheetviews"><S>
+      <B i="vbreaks" l="Breaks" dd={e => openMenu(e, [{ label: "Insert Page Break", run: () => A()?.breakHere() }, { label: "New Page at This Row", run: () => A()?.breakHere("row") }, { label: "New Page at This Column", run: () => A()?.breakHere("col") }, { label: "Remove Page Break", run: () => A()?.unbreakHere() }, { label: "Reset All Page Breaks", off: !pg().breaks?.length && !pg().col_breaks?.length, run: () => set({ breaks: [], col_breaks: [] }) }])} /></S>
+      <S>
       <B i="fit" l={`Width: ${pg().fit_w ? `${pg().fit_w} page${pg().fit_w! > 1 ? "s" : ""}` : "Automatic"}`} dd={e => openMenu(e, [{ label: "Automatic", on: !pg().fit_w, run: () => set({ fit_w: 0 }) }, ...[1, 2, 3, 4].map(n => ({ label: `${n} page${n > 1 ? "s" : ""}`, on: pg().fit_w === n, run: () => set({ fit_w: n }) }))])} />
       <B i="fit" l={`Height: ${pg().fit_h ? `${pg().fit_h} page${pg().fit_h! > 1 ? "s" : ""}` : "Automatic"}`} dd={e => openMenu(e, [{ label: "Automatic", on: !pg().fit_h, run: () => set({ fit_h: 0 }) }, ...[1, 2, 3, 4].map(n => ({ label: `${n} page${n > 1 ? "s" : ""}`, on: pg().fit_h === n, run: () => set({ fit_h: n }) }))])} />
       <B i="zin" l={`Scale: ${pg().scale || 100} %`} off={!!(pg().fit_w || pg().fit_h)} dd={e => openMenu(e, [50, 70, 80, 90, 100, 110, 125, 150].map(n => ({ label: `${n} %`, on: (pg().scale || 100) === n, run: () => set({ scale: n === 100 ? 0 : n }) })))} /></S></G>
-    <G l="On the Paper" h="sheetviews"><div class="chkcol"><Ck k="no_hf" inv l="Header & footer" t="The plan's header (logos, title) and footer on each page; untick to print the cells only" /><Ck k="no_grid" inv l="Gridlines" t="Light lines round every cell" /></div>
-      <div class="chkcol"><Ck k="headings" l="Row & column labels" t="Row numbers and column letters" /><Ck k="center" l="Centre on page" t="Centre the cells across the paper" /></div></G>
-    <G l="Print & Share" h="report"><B big i="print" l="Print Preview" run={C.print} /><B big i="export" l="Save as Excel" title="Save the sheets as an Excel workbook to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></G>
+    <G l="Print" h="report"><S><B i="grid" l="Print Options" title="What goes on the paper: header and footer, gridlines, row and column labels, centring" dd={e => openMenu(e, [{ label: "Header & Footer", on: !pg().no_hf, run: () => set({ no_hf: !pg().no_hf }) }, { label: "Gridlines", on: !pg().no_grid, run: () => set({ no_grid: !pg().no_grid }) }, { label: "Row & Column Labels", on: !!pg().headings, run: () => set({ headings: !pg().headings }) }, { label: "Centre on Page", on: !!pg().center, run: () => set({ center: !pg().center }) }])} /><B i="print" l="Print Preview" run={C.print} /><B i="export" l="Save as Excel" title="Save the sheets as an Excel workbook to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></S></G>
   </>;
 };
 export const Ribbon = () => (
@@ -292,8 +292,7 @@ export const Ribbon = () => (
       <G l="Zoom" h="zoom"><B big i="zin" l="Timescale" dd={e => openMenu(e, zoomMenu())} /><S><B i="zin" l="Zoom In" run={C.zoomIn} /><B i="zout" l="Zoom Out" run={C.zoomOut} /><B i="fit" l="Entire Project" run={C.fit} /></S></G>
       <G l="Split View" h="split"><S><B i="detail" l="Details" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
     </Show>
-    <Show when={tab() === "sheet"}><SheetCells /></Show>
-    <Show when={tab() === "sheetpage"}><SheetPageTab /></Show>
+    <Show when={tab() === "sheet"}><SheetCells /><SheetPageTab /></Show>
     <Show when={tab() === "format"}>
       <G l="Format" h="format"><B big i="style" l="Bar Styles" run={() => D.barStyles()} /><B big i="grid" l="Conditional Formatting" run={() => D.condFormat()} /><S><label class="chk"><input type="checkbox" checked={gstyle().grid} onChange={e => act({ Ui: { key: "gantt", value: { ...gstyle(), grid: e.currentTarget.checked } } })} />Gridlines</label><B i="detail" l="Details Pane" run={C.details} on={details()} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
       <G l="Columns" h="columns"><B big i="fx" l="Formula Column" run={() => D.formulaColumn()} /><B big i="cols" l="Insert Column" dd={e => openMenu(e, fieldMenu(k => saveCols([...cols(), [k, 90]])))} /><S><B i="table" l="Columns…" run={() => D.columnsDialog()} /><B i="fields" l="Custom Fields" run={() => D.customFields()} /></S></G>
