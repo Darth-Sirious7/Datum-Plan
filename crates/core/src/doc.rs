@@ -389,6 +389,8 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "pct" => set_pct_by(p, i, v.trim_end_matches('%').trim().parse().ok().filter(|n| *n <= 100).ok_or("Enter a number from 0 to 100.")?, s)?,
         "adur" => {
             let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
+            // More actual work than planned: the task took that long.
+            if m > p.tasks[i].dur && p.tasks[i].dur > 0 { p.tasks[i].dur = m }
             let d = p.tasks[i].dur.max(1);
             set_pct(p, i, (m.min(d) * 100 / d) as u8)?;
         }

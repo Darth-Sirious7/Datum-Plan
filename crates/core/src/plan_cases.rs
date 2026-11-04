@@ -386,3 +386,13 @@ fn typing_a_finish_date_on_a_milestone_moves_it() {
     assert_eq!(dc.p.tasks[1].dur, 0);
     assert_eq!(dates(&dc.p)[1], "Nov11 17:00 Nov11 17:00 0");
 }
+
+#[test]
+fn an_actual_duration_longer_than_planned_is_how_long_the_task_took() {
+    let mut dc = doc(&["5d||", "1d|1|"]);
+    let uid = dc.p.tasks[0].uid;
+    op(&mut dc, Op::Set { uid, field: "adur".into(), value: "7d".into() });
+    let t = &dc.p.tasks[0];
+    assert_eq!((t.dur, t.pct, t.act_start, t.act_finish), (7 * 480, 100, Some(d(2026, 11, 2)), Some(d(2026, 11, 10))));
+    assert_eq!(&dates(&dc.p)[1][..11], "Nov11 08:00");
+}
