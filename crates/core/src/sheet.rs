@@ -230,6 +230,9 @@ pub struct SheetOut {
     /// Non-empty cells: address, what was typed (empty for spilled results), what is shown, and
     /// whether it is a number.
     pub cells: Vec<(String, String, String, bool, Option<f64>)>,
+    /// Rows the AutoFilter hides, and the values of each drop-down list (see `sheetx`).
+    pub filtered: Vec<u32>,
+    pub lists: Vec<Vec<String>>,
 }
 
 /// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
@@ -500,7 +503,8 @@ pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
             }
         }
     }
-    Some(SheetOut { name: s.name.clone(), rows, cols, cells })
+    let (filtered, lists) = crate::sheetx::for_view(s, &cells, |n, r, k| Some(wb.sheet(wb.sheet_index(n)?)?.value(CellRef::new(r, k)).display()));
+    Some(SheetOut { name: s.name.clone(), rows, cols, cells, filtered, lists })
 }
 
 /// Every worksheet function: name, signature, one-line description and category.

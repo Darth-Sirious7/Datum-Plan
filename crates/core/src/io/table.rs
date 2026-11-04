@@ -514,8 +514,33 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         if s.hidden && k > 0 { ws.set_hidden(true); }
         for r in &s.hide_rows { ws.set_row_hidden(*r).map_err(e)?; }
         for c2 in &s.hide_cols { if *c2 < 16_384 { ws.set_column_hidden(*c2 as u16).map_err(e)?; } }
+        // Notes, drop-down lists and the AutoFilter (its hidden rows as Datum Plan worked them out).
+        for (a1, t) in &s.notes { if let Some((r, k)) = a1_index(a1) { ws.insert_note(r, k, &rust_xlsxwriter::Note::new(t).add_author_prefix(false)).map_err(e)?; } }
+        for v in &s.valid {
+            let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&v.range) else { continue };
+            let dv = rust_xlsxwriter::DataValidation::new();
+            let dv = if v.src.trim().is_empty() { match dv.allow_list_strings(&v.list.iter().map(String::as_str).collect::<Vec<_>>()) { Ok(x) => x, Err(_) => continue } }
+                else { dv.allow_list_formula(rust_xlsxwriter::Formula::new(format!("={}", v.src.trim().trim_start_matches('=')))) };
+            let dv = if v.warn { dv.set_error_style(rust_xlsxwriter::DataValidationErrorStyle::Warning) } else { dv };
+            ws.add_data_validation(r0, c0 as u16, r1, c1 as u16, &dv).map_err(e)?;
+        }
+        if let Some((f, (r0, c0, r1, c1))) = s.filter.as_ref().and_then(|f| Some((f, crate::model::sheet_range(&f.range)?))) {
+            use rust_xlsxwriter::{FilterCondition as FC, FilterCriteria as FCr};
+            ws.autofilter(r0, c0 as u16, r1, c1 as u16).map_err(e)?;
+            for cf in &f.cols {
+                let crit = match cf.op.as_str() { "eq" => Some(FCr::EqualTo), "ne" => Some(FCr::NotEqualTo), "gt" => Some(FCr::GreaterThan), "ge" => Some(FCr::GreaterThanOrEqualTo), "lt" => Some(FCr::LessThan), "le" => Some(FCr::LessThanOrEqualTo),
+                    "contains" => Some(FCr::Contains), "notcontains" => Some(FCr::DoesNotContain), "begins" => Some(FCr::BeginsWith), "ends" => Some(FCr::EndsWith), _ => None };
+                let mut fc = FC::new();
+                for x in cf.values.iter().flatten() { fc = if x.is_empty() { fc.add_list_blanks_filter() } else { fc.add_list_filter(x.as_str()) }; }
+                if let Some(cr) = crit { fc = match cf.a.trim().parse::<f64>() { Ok(n) => fc.add_custom_filter(cr, n), Err(_) => fc.add_custom_filter(cr, cf.a.as_str()) }; }
+                if cf.op == "between" { if let (Ok(a), Ok(b)) = (cf.a.trim().parse::<f64>(), cf.b.trim().parse::<f64>()) { fc = fc.add_custom_filter(FCr::GreaterThanOrEqualTo, a).add_custom_filter(FCr::LessThanOrEqualTo, b); } }
+                if cf.values.is_some() || crit.is_some() || cf.op == "between" { let _ = ws.filter_column(cf.col as u16, &fc); }
+            }
+            ws.filter_automatic_off();
+            if let Some(view) = crate::sheet::sheet_view(c, k) { for r in view.filtered { ws.set_row_hidden(r).map_err(e)?; } }
+        }
         let fits: Vec<&str> = s.images.iter().filter(|i| i.fit).map(|i| i.cell.as_str()).collect();
-        meta.insert(names[k].clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf), "page": s.page.is_some() }));
+        meta.insert(names[k].clone(), serde_json::json!({ "flags": flags, "fit": fits, "cond": s.cond, "no_hf": s.page.as_ref().is_some_and(|p| p.no_hf), "page": s.page.is_some(), "filter": s.filter, "valid": s.valid }));
         // The sheet's page setup.
         if let Some(pg) = &s.page {
             let paper = match pg.paper.as_str() { "Letter" => 1, "Legal" => 5, "A3" => 8, "A5" => 11, "Tabloid" => 3, "A4" => 9, _ => 0 };

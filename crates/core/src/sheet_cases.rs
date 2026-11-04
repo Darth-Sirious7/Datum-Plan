@@ -435,3 +435,66 @@ fn column_page_breaks_go_to_the_workbook_and_back() {
     op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 1, count: 2 });
     assert_eq!(doc.p.sheets[0].page.as_ref().unwrap().col_breaks, vec![5, 10]);
 }
+
+#[test]
+fn notes_filters_and_drop_down_lists_go_to_the_workbook_and_back() {
+    let mut doc = base();
+    let mut s = sheet("Vendors", &[("A1", "Vendor"), ("B1", "Country"), ("C1", "Value"), ("A2", "Steel Co"), ("B2", "Germany"), ("C2", "100"), ("A3", "Pipe Ltd"), ("B3", "Italy"), ("C3", "250"), ("A4", "Valve AG"), ("B4", "Germany"), ("C4", "40")]);
+    s.filter = Some(SheetFilter { range: "A1:C4".into(), cols: vec![ColFilter { col: 1, values: Some(vec!["Germany".into()]), ..Default::default() }, ColFilter { col: 9, op: "gt".into(), ..Default::default() }] });
+    s.valid = vec![Validation { range: "D2:D4".into(), list: vec!["Open".into(), "Closed".into()], ..Default::default() }, Validation { range: "E2:E4".into(), src: "$B$2:$B$4".into(), warn: true, ..Default::default() }, Validation { range: "bad".into(), list: vec!["x".into()], ..Default::default() }];
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    assert_eq!(doc.p.sheets[0].filter.as_ref().unwrap().cols.len(), 1, "a column outside the range goes");
+    assert_eq!(doc.p.sheets[0].valid.len(), 2, "a list on no range goes");
+    op(&mut doc, Op::SheetNotes { k: 0, cells: vec![("b2".into(), "Price confirmed\nby email".into()), ("C9".into(), " ".into())] });
+    assert_eq!(doc.p.sheets[0].notes.keys().collect::<Vec<_>>(), vec!["B2"]);
+    // A layout edit from the window keeps the notes (they have their own edit).
+    let mut copy = doc.p.sheets[0].clone();
+    copy.notes.clear();
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(copy) });
+    assert!(doc.p.sheets[0].notes.contains_key("B2"));
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    let v = crate::sheet::sheet_view(&c, 0).unwrap();
+    assert_eq!((v.filtered.clone(), v.lists.clone()), (vec![2], vec![vec!["Open".to_string(), "Closed".into()], vec!["Germany".into(), "Italy".into()]]));
+    let f = export_sheets(&doc.p).unwrap();
+    let x = part(&f, "xl/worksheets/sheet1.xml");
+    assert!(x.contains("<autoFilter ref=\"A1:C4\"") && x.contains("<dataValidation") && x.contains("hidden=\"1\""), "{x}");
+    assert!(part(&f, "xl/comments1.xml").contains("Price confirmed"));
+    let back = crate::io::sheetbook::import(&f).unwrap();
+    let b = &back.sheets[0];
+    assert_eq!((&b.filter, &b.valid), (&doc.p.sheets[0].filter, &doc.p.sheets[0].valid));
+    assert_eq!(b.notes.get("B2").map(String::as_str), Some("Price confirmed\nby email"));
+    // From the workbook's own parts, as one from another program (no Datum Plan sheet).
+    let g = patch(&f, "xl/workbook.xml", |x| x.replace("name=\"DatumPlan\"", "name=\"Other\""));
+    let b2 = crate::io::sheetbook::import(&g).unwrap();
+    let b2 = b2.sheets.iter().find(|s| s.name == "Vendors").unwrap();
+    assert_eq!(b2.filter.as_ref().map(|f| (f.range.clone(), f.cols[0].col, f.cols[0].values.clone())), Some(("A1:C4".into(), 1, Some(vec!["Germany".into()]))));
+    assert_eq!(b2.valid.iter().map(|v| (v.range.clone(), v.list.clone(), v.src.clone(), v.warn)).collect::<Vec<_>>(), vec![("D2:D4".into(), vec!["Open".to_string(), "Closed".into()], String::new(), false), ("E2:E4".into(), vec![], "$B$2:$B$4".into(), true)]);
+    assert_eq!(b2.notes.get("B2").map(String::as_str), Some("Price confirmed\nby email"));
+    // Inserting a column before B moves the filtered column, the lists and the note.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 1, count: 1 });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.filter.as_ref().map(|f| (f.range.clone(), f.cols[0].col)), s.valid[0].range.clone(), s.notes.contains_key("C2")), (Some(("A1:D4".into(), 2)), "E2:E4".into(), true));
+}
+
+#[test]
+fn inserting_and_deleting_cells_moves_only_their_columns() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("S", &[("A1", "a"), ("B1", "1"), ("B2", "2"), ("B3", "3"), ("C2", "x"), ("D1", "=SUM(B1:B3)"), ("D2", "=B3")])) });
+    op(&mut doc, Op::SheetNotes { k: 0, cells: vec![("B2".into(), "two".into())] });
+    op(&mut doc, Op::SheetShift { k: 0, range: "B2".into(), down: true, del: false });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.cells.get("B3").map(String::as_str), s.cells.get("B4").map(String::as_str), s.cells.get("B2"), s.cells.get("C2").map(String::as_str)), (Some("2"), Some("3"), None, Some("x")));
+    assert_eq!((s.cells["D1"].as_str(), s.cells["D2"].as_str(), s.notes.contains_key("B3")), ("=SUM(B1:B4)", "=B4", true));
+    op(&mut doc, Op::SheetShift { k: 0, range: "B2:B3".into(), down: true, del: true });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.cells.get("B2").map(String::as_str), s.cells.get("B3"), s.cells["D2"].as_str()), (Some("3"), None, "=B2"));
+    // Left: the cells to the right of A1 in row 1 move left.
+    op(&mut doc, Op::SheetShift { k: 0, range: "A1".into(), down: false, del: true });
+    assert_eq!(doc.p.sheets[0].cells.get("A1").map(String::as_str), Some("1"));
+    // Part of a merged cell cannot move.
+    let s = SheetData { merges: vec!["F1:G2".into()], ..doc.p.sheets[0].clone() };
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) });
+    assert!(doc.apply(Op::SheetShift { k: 0, range: "G1".into(), down: true, del: false }, "%d/%m/%Y").is_err());
+    assert!(doc.apply(Op::SheetShift { k: 0, range: "F1:G1".into(), down: true, del: false }, "%d/%m/%Y").is_ok(), "a whole merge moves");
+    assert_eq!(doc.p.sheets[0].merges, vec!["F2:G3"]);
+}

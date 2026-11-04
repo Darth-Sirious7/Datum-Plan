@@ -106,6 +106,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             s.color = p.color.clone();
             s.hidden = p.hidden;
             s.page = p.page.clone().map(Box::new);
+            (s.notes, s.filter, s.valid) = (p.notes.clone(), p.filter.clone(), p.valid.clone());
             if let Some((r, c)) = p.freeze { out.freeze.push((name.clone(), r, c)); }
             for (cell, w, h, data, mime) in &p.pictures {
                 let id = out.pictures.len() as u32 + 1;
@@ -114,6 +115,9 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             }
         }
         if let Ok(cond) = serde_json::from_value::<Vec<crate::model::CondRule>>(meta["sheets"][name.as_str()]["cond"].clone()) { s.cond = cond; }
+        // Datum Plan's own filter and lists, exactly (a workbook keeps only part of them).
+        if let Ok(f) = serde_json::from_value::<Option<crate::model::SheetFilter>>(meta["sheets"][name.as_str()]["filter"].clone()) { if f.is_some() { s.filter = f; } }
+        if let Ok(v) = serde_json::from_value::<Vec<crate::model::Validation>>(meta["sheets"][name.as_str()]["valid"].clone()) { if !v.is_empty() { s.valid = v; } }
         if meta["sheets"][name.as_str()]["page"].as_bool() == Some(false) { s.page = None; }
         if meta["sheets"][name.as_str()]["no_hf"].as_bool() == Some(true) { s.page.get_or_insert_with(Default::default).no_hf = true; }
         out.sheets.push(s);
@@ -179,7 +183,7 @@ fn style_text(st: &calamine::Style) -> String {
 
 /// The layout a workbook keeps outside the cells, read straight from its parts.
 #[derive(Default)]
-struct Layout { span: u64, hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
+struct Layout { notes: BTreeMap<String, String>, filter: Option<crate::model::SheetFilter>, valid: Vec<crate::model::Validation>, span: u64, hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
 struct Parts { sheets: HashMap<String, Layout> }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
@@ -274,8 +278,47 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         if let Some(a) = names.get(&(idx, "_xlnm.Print_Area".into())) { pg.area = a.rsplit('!').next().unwrap_or("").replace('$', "").split(',').next().unwrap_or("").to_string(); }
         if let Some(t) = names.get(&(idx, "_xlnm.Print_Titles".into())) { if let Some(rows) = t.split(',').map(|x| x.rsplit('!').next().unwrap_or("").replace('$', "")).find(|x| x.chars().all(|ch| ch.is_ascii_digit() || ch == ':') && !x.is_empty()) { pg.titles = rows; } }
         if pg != SheetPage::default() { l.page = Some(pg); }
-        // Pictures: the sheet's drawing, each picture's top-left cell and size.
+        // The AutoFilter (its range and the values of each filtered column) and drop-down lists.
+        if let Some(i) = xml.find("<autoFilter ") {
+            let el = &xml[i..i + xml[i..].find("</autoFilter>").unwrap_or_else(|| xml[i..].find("/>").unwrap_or(0))];
+            if let Some(rf) = tags(el, "autoFilter").next().and_then(|t| attr(t, "ref")).filter(|r| crate::model::sheet_range(r).is_some()) {
+                let c0 = crate::model::sheet_range(&rf).map_or(0, |g| g.1);
+                let cols = el.split("<filterColumn ").skip(1).filter_map(|fc| {
+                    let col = c0 + attr(&format!(" {fc}"), "colId")?.parse::<u32>().ok()?;
+                    let vals: Vec<String> = tags(fc, "filter").filter_map(|t| attr(t, "val")).chain(tags(fc, "filters").filter(|t| attr(t, "blank").as_deref() == Some("1")).map(|_| String::new())).collect();
+                    let (op, a) = tags(fc, "customFilter").next().map(|t| {
+                        let v = attr(t, "val").unwrap_or_default();
+                        let star = (v.starts_with('*'), v.ends_with('*'));
+                        let op = match (attr(t, "operator").as_deref(), star) { (Some("notEqual"), (true, true)) => "notcontains", (Some("notEqual"), _) => "ne", (Some("greaterThan"), _) => "gt", (Some("greaterThanOrEqual"), _) => "ge", (Some("lessThan"), _) => "lt", (Some("lessThanOrEqual"), _) => "le", (_, (true, true)) => "contains", (_, (false, true)) => "begins", (_, (true, false)) => "ends", _ => "eq" };
+                        (op.to_string(), v.trim_matches('*').to_string())
+                    }).unwrap_or_default();
+                    (!vals.is_empty() || !op.is_empty()).then(|| crate::model::ColFilter { col, values: (!vals.is_empty()).then_some(vals), op, a, b: String::new() })
+                }).collect();
+                l.filter = Some(crate::model::SheetFilter { range: rf, cols });
+            }
+        }
+        for dv in xml.split("<dataValidation ").skip(1).take(500) {
+            let head = format!(" {}", &dv[..dv.find('>').unwrap_or(0)]);
+            if attr(&head, "type").as_deref() != Some("list") { continue }
+            let Some(f1) = dv.find("<formula1>").and_then(|i| dv[i + 10..].find("</formula1>").map(|j| dv[i + 10..i + 10 + j].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&"))) else { continue };
+            let warn = attr(&head, "errorStyle").is_some_and(|x| x != "stop");
+            let (list, src) = match f1.strip_prefix('"').and_then(|x| x.strip_suffix('"')) { Some(t) => (t.split(',').map(|x| x.trim().to_string()).collect::<Vec<_>>(), String::new()), None => (vec![], f1.clone()) };
+            for rg in attr(&head, "sqref").unwrap_or_default().split_whitespace() {
+                l.valid.push(crate::model::Validation { range: rg.to_string(), list: list.clone(), src: src.clone(), warn });
+            }
+        }
+        // Notes: the sheet's comments part, by cell.
         let srel = text(read(&resolve(&part, &format!("_rels/{}.rels", part.rsplit('/').next().unwrap_or("")))));
+        if let Some(cm) = tags(&srel, "Relationship").find(|t| attr(t, "Type").is_some_and(|x| x.ends_with("/comments"))).and_then(|t| attr(t, "Target")) {
+            let cx = text(read(&resolve(&part, &cm)));
+            for c in cx.split("<comment ").skip(1).take(20_000) {
+                let Some(at) = attr(&format!(" {}", &c[..c.find('>').unwrap_or(0)]), "ref") else { continue };
+                let body: String = c.split("<t").skip(1).filter(|t| t.starts_with('>') || t.starts_with(' ')).filter_map(|t| { let t = &t[t.find('>')? + 1..]; Some(t[..t.find("</t>")?].to_string()) }).collect();
+                let body = body.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&");
+                if !body.trim().is_empty() { l.notes.insert(at, body.trim_end().to_string()); }
+            }
+        }
+        // Pictures: the sheet's drawing, each picture's top-left cell and size.
         if let Some(d) = tags(&srel, "Relationship").find(|t| attr(t, "Type").is_some_and(|x| x.ends_with("/drawing"))).and_then(|t| attr(t, "Target")) {
             let dpart = resolve(&part, &d);
             let dxml = text(read(&dpart));
