@@ -410,7 +410,11 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "start" => {
             let d = date(v)?;
             let t = &mut p.tasks[i];
-            if t.manual {
+            // A task under way started when it did: its start is the actual start.
+            if let (Some(_), Some(n)) = (t.act_start, d) {
+                if t.act_finish.is_some_and(|f| f < n) { return Err("That start is after the task's actual finish.".into()) }
+                t.act_start = d;
+            } else if t.manual {
                 t.mstart = d;
             } else if d.is_some() {
                 (t.constraint, t.cdate) = (Constraint::SNET, d);
@@ -420,6 +424,11 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         }
         "finish" => {
             let d = date(v)?.ok_or("Type a finish date.")?;
+            // A finished task's finish is its actual finish (and its duration follows).
+            if p.tasks[i].act_finish.is_some() {
+                if p.tasks[i].act_start.is_some_and(|a| d < a) { return Err("That finish is before the task's actual start.".into()) }
+                p.tasks[i].act_finish = Some(d);
+            }
             let s = sched::schedule(p)?;
             let c = &s.cals[s.ci[i]];
             p.tasks[i].dur = c.between(s.es[i], c.end_of(d)).max(0);

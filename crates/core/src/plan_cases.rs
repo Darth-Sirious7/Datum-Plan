@@ -332,3 +332,17 @@ fn an_xer_activity_measured_by_duration_takes_its_progress_from_the_remaining_du
     assert_eq!((q.tasks[0].pct, q.tasks[0].pct_type), (50, PctType::Duration));
     assert_eq!(dates(&q), dates(&p));
 }
+
+#[test]
+fn typing_or_dragging_the_dates_of_a_task_under_way_moves_its_actual_dates() {
+    // A started Mon 2 Nov (40 %), B finished Mon 2 – Tue 3. The Gantt sends "start" and "finish" when a bar is dragged.
+    let mut dc = doc(&["5d||astart=02-Nov-26; pct=40", "2d||astart=02-Nov-26; afinish=03-Nov-26", "1d|2|"]);
+    let (a, b) = (dc.p.tasks[0].uid, dc.p.tasks[1].uid);
+    op(&mut dc, Op::Set { uid: a, field: "start".into(), value: "03-Nov-26".into() });
+    assert_eq!((dc.p.tasks[0].act_start, dc.p.tasks[0].constraint), (Some(d(2026, 11, 3)), Constraint::ASAP));
+    assert_eq!(&dates(&dc.p)[0][..11], "Nov03 08:00");
+    op(&mut dc, Op::Set { uid: b, field: "finish".into(), value: "04-Nov-26".into() });
+    assert_eq!((dc.p.tasks[1].act_finish, dc.p.tasks[1].dur), (Some(d(2026, 11, 4)), 3 * 480));
+    assert_eq!(&dates(&dc.p)[2][..11], "Nov05 08:00");
+    assert!(dc.apply(Op::Set { uid: b, field: "start".into(), value: "05-Nov-26".into() }, F).is_err());
+}
