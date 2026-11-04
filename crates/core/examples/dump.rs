@@ -80,6 +80,41 @@ fn dash_map(c: &Calc) -> serde_json::Value {
     serde_json::Value::Object(items.iter().zip(r).map(|((f, fmt), v)| (format!("{fmt}\u{1}{f}"), serde_json::to_value(v).unwrap())).collect())
 }
 
+/// An empty plan (no tasks) with a sheet and a dashboard of awkward tiles: errors, a deleted
+/// sheet, text where a number goes, pies of negatives and zeros, one point, none, a huge range;
+/// and a dashboard with no tiles. The window tests open every report on it.
+fn empty_plan() -> serde_json::Value {
+    let mut p = Project::new("Empty plan", NaiveDate::from_ymd_opt(2026, 11, 2).unwrap());
+    let cells = [("A1", "Item"), ("B1", "Value"), ("A2", "Up"), ("B2", "5"), ("A3", "Down"), ("B3", "-3"), ("D1", "Zero"), ("E1", "0"), ("D2", "Nil"), ("E2", "0"), ("G1", "Only"), ("H1", "7")];
+    p.sheets.push(SheetData { name: "Data".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() });
+    let t = |kind: &str, title: &str, extra: serde_json::Value| { let mut t = serde_json::json!({ "id": title, "kind": kind, "title": title, "w": 4, "h": 2 }); t.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone()); t };
+    use serde_json::json as j;
+    let mut tiles = vec![
+        t("number", "Divided by zero", j!({ "formula": "=1/0" })), t("number", "Deleted sheet", j!({ "formula": "=Gone!A1" })), t("number", "Text", j!({ "formula": "=\"abc\"", "fmt": "money", "good": [">=", 1] })),
+        t("ring", "Ring error", j!({ "formula": "=1/0" })), t("ring", "Ring text", j!({ "formula": "=\"abc\"" })),
+        t("chart", "Pie of negatives", j!({ "src": "=Data!A2:B3", "chart": "pie" })), t("chart", "Pie of zeros", j!({ "src": "=Data!D1:E2", "chart": "doughnut" })),
+        t("chart", "One point", j!({ "src": "=Data!G1:H1", "chart": "line" })), t("chart", "No points", j!({ "src": "=Data!K40:L50" })), t("chart", "Chart of a deleted sheet", j!({ "src": "=Gone!A1:B3" })),
+        t("table", "Table of a deleted sheet", j!({ "src": "=Gone!A1:B3" })), t("table", "Huge range", j!({ "src": "=Data!A1:Z5000" })),
+        t("countries", "Countries", j!({ "formula": "=Resources[Country]" })), t("text", "Note", j!({ "text": "" })), t("image", "No picture", j!({})),
+    ];
+    for k in ["scurve", "periodbars", "phases", "costev", "manpower"] { tiles.push(t("chart", &format!("Plan chart {k}"), j!({ "plan": k }))) }
+    for k in ["milestones", "late", "critical", "upcoming", "completed"] { tiles.push(t("table", &format!("Plan list {k}"), j!({ "plan": k }))) }
+    let many: Vec<_> = (1..=210).map(|k| t("number", &format!("N{k}"), j!({ "formula": format!("={k}") }))).collect();
+    p.ui["dashboards"] = j!([{ "name": "Edge cases", "tiles": tiles }, { "name": "Blank", "tiles": [] }, { "name": "Many", "tiles": many }]);
+    let c = Calc::new(&p, "%d-%b-%y", NaiveDate::from_ymd_opt(2026, 11, 6).unwrap());
+    let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
+    let mut proj = serde_json::to_value(&p).unwrap();
+    proj.as_object_mut().unwrap().remove("tasks");
+    j!({
+        "state": { "tabs": [{ "name": p.name, "path": null, "dirty": false, "moved": 0, "role": "", "group": -1, "level": 0, "project": "" }], "tab": 0, "project": proj, "summary": c.summary(), "path": null, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
+        "query": c.grid(&q), "query:timeline": c.grid(&q), "query:tracking": c.grid(&q), "scurve": report::scurve(&c, "week", "duration", None), "period_report": report::period_report(&c, "week", None),
+        "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
+        "manpower": progress::manpower(&c, "week"), "earned_schedule": progress::earned_schedule(&c), "lookahead": progress::lookahead(&c, 3), "risk_run": null, "level_preview": level::preview(&p, &[]).ok(),
+        "sheet_view": sheet::sheet_view(&c, 0), "dash_map": dash_map(&c), "network": network::layout(&c, &[]), "link_targets": [], "link_go": [], "subplan_rows": [], "link_users": [], "link_states": [], "query_subs": c.grid(&q),
+        "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)),
+    })
+}
+
 fn main() {
     let arg = std::env::args().nth(1).unwrap_or_default();
     let tday = NaiveDate::from_ymd_opt(2026, 11, 18).unwrap();
@@ -144,6 +179,6 @@ fn main() {
         "link_users": [{ "uid": p.tasks[2].uid, "task": p.tasks[2].name, "tab": 1, "by": "Main schedule › A1040 Engineering complete (FS)" }],
         "link_states": [{ "uid": p.tasks[1].uid, "task": p.tasks[1].name, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
-        "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
+        "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "empty": if guide { serde_json::Value::Null } else { empty_plan() }, "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
     }));
 }

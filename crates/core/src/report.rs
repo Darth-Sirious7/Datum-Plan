@@ -490,10 +490,12 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
         let pa = |d: i64, which: usize| sub.iter().map(|&j| { let v = progress_at(c, j, (d + 1) * DAY, &h); w[j] * [v.0, v.1][which] }).sum::<f64>() / tw * 100.0;
         r.wbs.push(WbsRow { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), planned_prev: pa(prev, 0), planned: pa(now, 0), actual_prev: pa(prev, 1), actual: pa(to.min(dd), 1) });
     }
+    // Hours per day once, then per period (a long plan has thousands of periods).
+    let mut daily: BTreeMap<i64, f64> = BTreeMap::new();
+    for (&(_, d), &(m, _)) in &c.l.task_daily { *daily.entry(d).or_default() += m / 60.0 }
     let mut last = i64::MIN;
     for &e in &ends {
-        let h: f64 = c.l.task_daily.iter().filter(|((_, d), _)| *d > last && *d <= e).map(|(_, (m, _))| m / 60.0).sum();
-        r.hours.push((e, h));
+        r.hours.push((e, daily.range(last.saturating_add(1)..=e).map(|x| x.1).sum()));
         last = e;
     }
     r

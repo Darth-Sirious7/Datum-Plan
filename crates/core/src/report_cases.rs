@@ -54,6 +54,8 @@ fn hand_checked_figures_of_a_small_crew() {
     assert!(close(s.pct, 600.0 / 13.0), "{}", s.pct);
     let r = report::period_report(&c, "week", None);
     assert!(close(r.actual, 600.0 / 13.0) && close(r.planned, 1000.0 / 13.0) && close(r.actual_prev, 500.0 / 13.0), "{} {} {}", r.actual, r.planned, r.actual_prev);
+    // Hours per week on the current dates: T1's 40 in week 1, then T2 and T3 (not before the status date): 144 in all.
+    assert!(close(r.hours[0].1, 40.0) && close(r.hours.iter().map(|h| h.1).sum(), 144.0), "{:?}", r.hours);
     // Cost curve per week: the planned and forecast lines add up to the budget, earned and actual to EV and AC.
     let cv = report::curve(&c, "week");
     let sum = |v: &[f64]| v.iter().sum::<f64>();
@@ -213,6 +215,10 @@ fn dashboard_tiles_on_odd_formulas_and_ranges() {
     assert_eq!((r[9].len(), r[9][0].len()), (500, 40), "spills are capped at 500 × 40");
     assert!(r[10].is_empty(), "a range past the cells in use is empty: {:?}", r[10]);
     assert!(r.iter().flatten().flatten().all(|c| c.1.is_none_or(f64::is_finite)));
+    // The "Vendors and crews" tile of the template counts names: a table always keeps one (empty) row.
+    let count = |c: &Calc| crate::sheet::eval(c, &[("=COUNTA(Resources[Name])".into(), String::new())])[0][0][0].0.clone();
+    assert_eq!(count(&c), "0", "no resources");
+    assert_eq!(count(&calc(&crew(), d(2026, 11, 2))), "2");
 }
 
 // A phase that starts after the plan: its S-curve runs forward in time from the day before it starts.
