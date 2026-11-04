@@ -32,6 +32,7 @@ pub fn import(path: &Path) -> Result<Imported, String> {
     // Calamine builds the whole box around a sheet's cells: two far-apart cells would ask for
     // hundreds of gigabytes (an abort, not an error). Measure first, as the table import does.
     if matches!(ext.as_str(), "xls" | "ods") { super::table::sheet_size(path, &ext)?; }
+    if ext == "xlsb" { xlsb_size(path)?; }
     let parts = if matches!(ext.as_str(), "xlsx" | "xlsm") { xml_parts(path).ok() } else { None };
     let mut out = Imported::default();
     // Its own tabs, as the workbook lists them (older files: every sheet but the plan's).
@@ -268,6 +269,7 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         pg.no_grid = !on("gridLines");
         pg.headings = on("headings");
         pg.center = on("horizontalCentered");
+        if let Some(i) = xml.find("<colBreaks") { if let Some(j) = xml[i..].find("</colBreaks>") { pg.col_breaks = tags(&xml[i..i + j], "brk").filter_map(|b| attr(b, "id")?.parse().ok()).collect(); } }
         if let Some(i) = xml.find("<rowBreaks") { if let Some(j) = xml[i..].find("</rowBreaks>") { pg.breaks = tags(&xml[i..i + j], "brk").filter_map(|b| attr(b, "id")?.parse().ok()).collect(); } }
         if let Some(a) = names.get(&(idx, "_xlnm.Print_Area".into())) { pg.area = a.rsplit('!').next().unwrap_or("").replace('$', "").split(',').next().unwrap_or("").to_string(); }
         if let Some(t) = names.get(&(idx, "_xlnm.Print_Titles".into())) { if let Some(rows) = t.split(',').map(|x| x.rsplit('!').next().unwrap_or("").replace('$', "")).find(|x| x.chars().all(|ch| ch.is_ascii_digit() || ch == ':') && !x.is_empty()) { pg.titles = rows; } }
@@ -306,4 +308,39 @@ fn base64(b: &[u8]) -> String {
         for k in 0..4 { s.push(if k <= ch.len() { T[(n >> (18 - 6 * k) & 63) as usize] as char } else { '=' }); }
     }
     s
+}
+
+/// A binary workbook's sheets, measured from each sheet's dimension record before anything is built:
+/// a sheet spanning more than 10 million cells is refused (it would not fit in memory).
+fn xlsb_size(path: &Path) -> Result<(), String> {
+    let f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(f).map_err(|e| format!("Could not read the workbook: {e}"))?;
+    let names: Vec<String> = zip.file_names().filter_map(|n| n.ok().map(|n| n.to_string())).filter(|n| n.starts_with("xl/worksheets/") && n.ends_with(".bin")).collect();
+    for n in names {
+        let mut head = Vec::new();
+        zip.by_name(&n).map_err(|e| e.to_string())?.take(65_536).read_to_end(&mut head).map_err(|e| e.to_string())?;
+        if let Some((r0, r1, c0, c1)) = xlsb_dim(&head) {
+            if (r1.saturating_sub(r0) as u64 + 1) * (c1.saturating_sub(c0) as u64 + 1) > 10_000_000 {
+                return Err("A sheet in that workbook spans more than 10 million cells (something far to the right or at the bottom). Clear the far cells in the workbook and try again.".into());
+            }
+        }
+    }
+    Ok(())
+}
+/// The first rows and columns record (BrtWsDim) of a binary sheet: first and last row and column.
+pub(crate) fn xlsb_dim(b: &[u8]) -> Option<(u32, u32, u32, u32)> {
+    let mut i = 0;
+    while i < b.len() {
+        let mut t = (b[i] & 0x7F) as u32;
+        if b[i] & 0x80 != 0 { i += 1; t |= (*b.get(i)? as u32 & 0x7F) << 7; }
+        i += 1;
+        let (mut size, mut shift) = (0u32, 0);
+        for _ in 0..4 { let x = *b.get(i)?; i += 1; size |= ((x & 0x7F) as u32) << shift; shift += 7; if x & 0x80 == 0 { break } }
+        if t == 0x94 {
+            let u = |k: usize| b.get(i + k..i + k + 4).map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]));
+            return Some((u(0)?, u(4)?, u(8)?, u(12)?));
+        }
+        i += size as usize;
+    }
+    None
 }

@@ -407,3 +407,31 @@ fn h_bad_names_refused() {
     let mut doc = base();
     for n in ["'Q1'", "Tasks", "datumplan", &"x".repeat(32), "a/b", " "] { assert!(doc.apply(Op::Sheet { k: None, sheet: Some(sheet(n, &[])) }, "%d/%m/%Y").is_err(), "{n}"); }
 }
+
+#[test]
+fn a_binary_sheets_size_is_read_before_anything_is_built() {
+    // A record before it (type 0x81, 0 bytes), then BrtWsDim: rows 0..1,048,575, columns 0..16,383.
+    let mut b = vec![0x81, 0x01, 0x00, 0x94, 0x01, 0x10];
+    for x in [0u32, 1_048_575, 0, 16_383] { b.extend_from_slice(&x.to_le_bytes()); }
+    assert_eq!(crate::io::sheetbook::xlsb_dim(&b), Some((0, 1_048_575, 0, 16_383)));
+    assert_eq!(crate::io::sheetbook::xlsb_dim(&[0x81, 0x01]), None, "cut short: nothing read");
+}
+
+#[test]
+fn column_page_breaks_go_to_the_workbook_and_back() {
+    let mut doc = base();
+    let mut s = sheet("Wide", &[("A1", "1"), ("Z1", "2")]);
+    s.page = Some(Box::new(SheetPage { breaks: vec![12, 4, 4], col_breaks: vec![8, 0, 3], ..Default::default() }));
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    assert_eq!(doc.p.sheets[0].page.as_ref().map(|p| (p.breaks.clone(), p.col_breaks.clone())), Some((vec![4, 12], vec![3, 8])), "sorted, no duplicates, none at the first row or column");
+    let f = export_sheets(&doc.p).unwrap();
+    let x = part(&f, "xl/worksheets/sheet1.xml");
+    assert!(x.contains("<colBreaks") && x.contains("<rowBreaks"), "{x}");
+    // Read from the sheet's own XML, as a workbook from another program would be.
+    let g = patch(&f, "xl/worksheets/sheet1.xml", |x| x);
+    let back = crate::io::sheetbook::import(&g).unwrap();
+    assert_eq!(back.sheets[0].page.as_ref().map(|p| (p.breaks.clone(), p.col_breaks.clone())), Some((vec![4, 12], vec![3, 8])));
+    // Inserting two columns before C moves both column breaks.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 1, count: 2 });
+    assert_eq!(doc.p.sheets[0].page.as_ref().unwrap().col_breaks, vec![5, 10]);
+}

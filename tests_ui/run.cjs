@@ -479,8 +479,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ptools button:has-text('Picture'), .sheetbar button:has-text('Picture'), button:has-text('Picture ▾')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('(Sub-vendor)')"); await p.waitForTimeout(500);
   check("a library picture can be placed on a sheet cell", (await p.$$(".simg img")).length === 1);
+  const lastImgs = () => p.evaluate(() => JSON.stringify(window.__calls.filter(c => c[0] === "apply" && c[1].op.SheetImages).pop()?.[1].op.SheetImages.images));
+  check("a new picture is placed in its cell, inside the cell's borders", (await lastImgs()).includes('"fit":true') && !!(await p.$(".simg.fit")));
   await p.click(".simg .pinc"); await p.waitForTimeout(300);
-  check("a picture can be placed in its cell (fitted to the cell)", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.SheetImages).pop()?.[1].op.SheetImages.images)).includes('"fit":true') && !!(await p.$(".simg.fit")));
+  check("the picture can float free of its cell", (await lastImgs()).includes('"fit":false') && !(await p.$(".simg.fit")));
+  await p.click(".simg .pinc"); await p.waitForTimeout(300);
   await p.keyboard.press("Control+p"); await p.waitForTimeout(500);
   check("a picture on a sheet prints with the sheet", (await p.$$(".pprev .ppage .psimg")).length === 1);
   await p.click(".bs aside .back"); await p.waitForTimeout(300);
@@ -626,6 +629,19 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('Page Breaks')"); await p.waitForTimeout(500);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-breaks.png") });
   check("Page Breaks view outlines each printed page", (await p.$$(".sheetgrid .pbreak")).length >= 1);
+  // 0.5.23: the print area's blue edge and the page breaks can be dragged; grey outside; a menu for breaks.
+  check("Page Breaks view draws the print area in blue with four edges to drag", !!(await p.$(".sheetgrid .parea")) && (await p.$$(".sheetgrid .pedge")).length === 4);
+  const lastPage = () => p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.page);
+  { const e = (await p.$$eval(".sheetgrid .pedge.h", l => l.map(x => { const r = x.getBoundingClientRect(); return { x: r.x, y: r.y }; })))[0];
+    await p.mouse.move(e.x + 40, e.y + 4); await p.mouse.down(); await p.mouse.move(e.x + 40, e.y + 50, { steps: 4 });
+    const ghost = !!(await p.$(".sheetgrid .pghost")); await p.mouse.up(); await p.waitForTimeout(300);
+    const pg = await lastPage();
+    check("dragging the print area's top edge sets the print area (a line shows where it goes)", ghost && /^A[2-9]:[A-Z]+\d+$/.test(pg?.area ?? ""), JSON.stringify(pg)); }
+  await p.click(".sheetgrid .gbody .row:nth-child(8) .c:nth-child(3)", { button: "right" }); await p.waitForTimeout(150);
+  check("right-click in Page Breaks view offers the page break and print area items", (await p.textContent(".menu")).includes("Insert Page Break") && (await p.textContent(".menu")).includes("Reset Print Area"));
+  await p.click(".menu button:has-text('Insert Page Break')"); await p.waitForTimeout(300);
+  { const pg = await lastPage(); check("Insert Page Break starts a new page above the row and left of the column", (pg?.breaks ?? []).length === 1 && (pg?.col_breaks ?? []).length === 1, JSON.stringify(pg)); }
+  check("outside the print area is grey in Page Breaks view", await p.evaluate(() => { const g = document.querySelector(".sheetgrid.breaks"), cs = [...g.querySelectorAll(".gbody .row .c:not(.idc)")]; return getComputedStyle(g).backgroundColor !== "rgba(0, 0, 0, 0)" && cs.filter(c => getComputedStyle(c).backgroundColor === "rgba(0, 0, 0, 0)").length > cs.length / 2 && !!g.querySelector(".pbg"); }));
   await p.click(".ribbon button:has-text('Page Layout')"); await p.waitForTimeout(500);
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-layout.png") });
   check("Page Layout view shows the pages as they print, without header and footer when unticked", (await p.$$(".slayout .ppage")).length >= 1 && (await p.$$(".slayout .ppage .phead")).length === 0);

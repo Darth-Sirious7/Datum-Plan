@@ -1039,6 +1039,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }).collect();
             if let Some(pg) = &mut s.page {
                 if !cols { pg.breaks = pg.breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); }
+                else { pg.col_breaks = pg.col_breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); }
                 // The print area and the title rows follow their cells too (they go when all their cells go).
                 pg.area = crate::model::sheet_range(&pg.area).and_then(|(r0, c0, r1, c1)| {
                     let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };

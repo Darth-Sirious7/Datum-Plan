@@ -315,7 +315,7 @@ const Sheet = (p: { pg: Page; pages: number }) => {
 export type PKind = "gantt" | "net" | "cal" | "table" | "flow";
 export const pkind = (): PKind => { const v = view(); return ["gantt", "tracking", "timeline"].includes(v) ? "gantt" : v === "network" ? "net" : v === "calendar" ? "cal" : ["ressheet", "taskusage", "resusage", "team", "sheets"].includes(v) ? "table" : "flow"; };
 const VIEW_NAMES: Record<string, string> = { network: "Network Diagram", calendar: "Calendar", ressheet: "Resource Sheet", taskusage: "Task Usage", resusage: "Resource Usage", team: "Team Planner", sheets: "Sheet", simrisk: "Schedule Risk", lookahead: "Look-ahead", manpower: "Manpower", dashboard: "Dashboard", scurve: "S-Curves", progress: "Progress Report" };
-type PT = { bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
+type PT = { rowAt?: number[]; colAt?: number[]; nrows?: number; titlesOut?: boolean; cbreaks?: number[]; bars?: Map<string, [number, string]>; flags?: Set<string>; r0?: number; c0?: number; head: string[]; w: number[]; right: boolean[]; h?: number[]; bare?: boolean; grid?: boolean; center?: boolean; titles?: [number, number]; breaks?: number[]; font?: number; merges?: { r: number; c: number; rs: number; cs: number }[]; imgs?: { src: string; r: number; c: number; w: number; h: number }[]; rows: { c: string[]; b?: boolean; ind?: number; st?: (string | undefined)[] }[] };
 type VPage = { n: number; rows?: [number, number]; cols?: number[]; win?: [number, number, number, number]; month?: number };
 const unitOf = () => (ps.unit === "auto" ? "week" : ps.unit);
 const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" ? null : [view(), tick(), unitOf(), sheetK(), netBox(), netSums(), netWbs()] as const), async ([v]) => {
@@ -350,11 +350,14 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     // Cells with only a style or a format (a border, a fill) print too.
     for (const a of [...Object.keys(sh.style ?? {}), ...Object.keys(sh.fmt ?? {})]) { const x = ref(a); if (x && (sh.style?.[a] || sh.fmt?.[a] === "flag") && x[0] < 5000) { r1 = Math.max(r1, x[0]); c1 = Math.max(c1, x[1]); } }
     for (const im of sh.images ?? []) { const a = ref(im.cell); if (a) { r1 = Math.max(r1, a[0] + Math.ceil(im.h / 22)); c1 = Math.max(c1, a[1]); } }
+    // Merges, pictures and formatting far away never stretch the print beyond 5,000 rows or 300 columns past the cells.
+    r1 = Math.min(r1, Math.max(0, (sv?.rows ?? 1) - 1) + 5000); c1 = Math.min(c1, Math.max(0, (sv?.cols ?? 1) - 1) + 300);
     const ar = sp.area ? sp.area.split(":").map(ref) : null;
     if (ar?.[0]) { const b = ar[1] ?? ar[0]; [r0, c0, r1, c1] = [Math.min(ar[0][0], b![0]), Math.min(ar[0][1], b![1]), Math.max(ar[0][0], b![0]), Math.max(ar[0][1], b![1])]; }
+    r1 = Math.min(r1, r0 + 20000); c1 = Math.min(c1, c0 + 500);
     const hr = new Set(sh.hide_rows ?? []), hc = new Set(sh.hide_cols ?? []);
     const rows = Array.from({ length: r1 - r0 + 1 }, (_, i) => r0 + i).filter(r => !hr.has(r)), cs = Array.from({ length: c1 - c0 + 1 }, (_, j) => c0 + j).filter(c => !hc.has(c)), nr = rows.length, nc = cs.length;
-    Object.assign(t, { r0, c0, head: ["", ...cs.map(col)], w: [34, ...cs.map(c => sh.widths?.[c] ?? 96)], right: [true, ...cs.map(() => false)], bare: !sp.headings, grid: !sp.no_grid, center: !!sp.center, font: 12,
+    Object.assign(t, { r0, c0, rowAt: rows, colAt: cs, nrows: nr, head: ["", ...cs.map(col)], w: [34, ...cs.map(c => sh.widths?.[c] ?? 96)], right: [true, ...cs.map(() => false)], bare: !sp.headings, grid: !sp.no_grid, center: !!sp.center, font: 12,
       rows: rows.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })) });
     // Conditional formatting, as on screen.
     const lk = condLooks(sh, cells as Map<string, [string, string, string, boolean, number | null]>);
@@ -364,8 +367,20 @@ const [vdata] = createResource(() => (pkind() === "gantt" || pkind() === "flow" 
     t.merges = (sh.merges ?? []).flatMap(m => { const [a, b = a] = m.split(":"), p1 = ref(a), p2 = ref(b); if (!p1 || !p2) return []; return [{ r: p1[0] - r0, c: p1[1] - c0 + 1, rs: p2[0] - p1[0] + 1, cs: p2[1] - p1[1] + 1 }]; }).filter(m => m.r + m.rs > 0 && m.r < nr && m.c + m.cs > 1 && m.c <= nc);
     t.imgs = (sh.images ?? []).flatMap(im => { const a = ref(im.cell), src = picData(im.pic); if (!a || !src || a[0] < r0 || a[0] > r1 || a[1] < c0 || a[1] > c1) return []; const [w, h] = im.fit ? fitBox(sh, a[0], a[1], im) : [im.w, im.h]; return [{ src, r: a[0] - r0, c: a[1] - c0 + 1, w, h }]; });
     t.flags = new Set(rows.flatMap((r, i) => cs.flatMap((c, j) => (sh.fmt?.[col(c) + (r + 1)] === "flag" ? [`${i},${j + 1}`] : []))));
-    if (sp.titles) { const [a, b = a] = sp.titles.split(":").map(x => +x - 1 - r0); if (a >= 0 && b >= a && b < nr) t.titles = [a, b]; }
-    t.breaks = (sp.breaks ?? []).map(b => b - r0).filter(b => b > 0 && b < nr);
+    // Title rows: inside the print area they repeat from page 2; above it they print at the top of every page.
+    if (sp.titles) {
+      const [a, b = a] = sp.titles.split(":").map(x => +x - 1), list = Array.from({ length: Math.max(0, Math.min(b, a + 50) - a + 1) }, (_, i) => a + i).filter(r => r >= 0 && !hr.has(r));
+      const at = list.map(r => rows.indexOf(r));
+      if (list.length && at.every(i => i >= 0)) t.titles = [at[0], at[at.length - 1]];
+      else if (list.length) {
+        t.rows.push(...list.map(r => ({ c: [String(r + 1), ...cs.map(c => cells.get(col(c) + (r + 1))?.[2] ?? "")], st: [undefined, ...cs.map(c => { const a1 = col(c) + (r + 1); return [cells.get(a1)?.[3] ? "a:r" : "", st[a1] ?? ""].filter(Boolean).join(";"); })] })));
+        t.h.push(...list.map(r => sheetRowH(sh, r, cells)));
+        t.titles = [nr, nr + list.length - 1]; t.titlesOut = true;
+      }
+    }
+    // Page breaks, as positions in the printed rows and columns (hidden ones left out).
+    t.breaks = (sp.breaks ?? []).map(b => rows.findIndex(r => r >= b)).filter(i => i > 0);
+    t.cbreaks = (sp.col_breaks ?? []).map(b => cs.findIndex(c => c >= b) + 1).filter(j => j > 1);
   }
   return { table: t };
 });
@@ -410,10 +425,11 @@ const vpages = createMemo((): VPage[] => {
     const head = (t.bare ? 0 : RH) + (t.titles ? (t.h ?? []).slice(t.titles[0], t.titles[1] + 1).reduce((a, b) => a + b, 0) : 0);
     // Pages of rows: a fixed count, or as many as fit when rows have their own heights; page breaks start a new page.
     const cuts: [number, number][] = [];
-    if (t.h) { let r0 = 0, y = 0; t.rows.forEach((_, r) => { const hh = t.h![r] ?? RH; if (r > r0 && (y + hh > room - head || t.breaks?.includes(r))) { cuts.push([r0, r]); r0 = r; y = 0; } y += hh; }); cuts.push([r0, Math.max(r0 + 1, t.rows.length)]); }
+    const nrows = t.nrows ?? t.rows.length;
+    if (t.h) { let r0 = 0, y = 0; t.rows.slice(0, nrows).forEach((_, r) => { const hh = t.h![r] ?? RH; if (r > r0 && (y + hh > room - head || t.breaks?.includes(r))) { cuts.push([r0, r]); r0 = r; y = 0; } y += hh; }); cuts.push([r0, Math.max(r0 + 1, nrows)]); }
     else for (let r = 0; r < Math.max(1, t.rows.length); r += per) cuts.push([r, Math.min(t.rows.length, r + per)]);
     const across: number[][] = []; let cur: number[] = [], w = key;
-    for (let c = 1; c < t.w.length; c++) { if (w + t.w[c] > G.W && cur.length) { across.push(cur); cur = []; w = key; } cur.push(c); w += t.w[c]; }
+    for (let c = 1; c < t.w.length; c++) { if ((w + t.w[c] > G.W || t.cbreaks?.includes(c)) && cur.length) { across.push(cur); cur = []; w = key; } cur.push(c); w += t.w[c]; }
     across.push(cur);
     for (const rr of cuts) for (const cols of across) out_.push({ n: out_.length + 1, rows: rr, cols: t.bare ? cols : [0, ...cols] });
   }
@@ -423,8 +439,11 @@ const vpages = createMemo((): VPage[] => {
 export const sheetPages = (): { r0: number; r1: number; c0: number; c1: number; n: number }[] => {
   const d = vdata(), t = d && "table" in d ? d.table : null;
   if (view() !== "sheets" || !t || t.r0 === undefined) return [];
-  return vpages().filter(pg => pg.rows && pg.cols).map(pg => { const cols = pg.cols!.filter(c => c > 0); return { n: pg.n, r0: t.r0! + pg.rows![0], r1: t.r0! + pg.rows![1] - 1, c0: t.c0! + cols[0] - 1, c1: t.c0! + cols[cols.length - 1] - 1 }; });
+  const ra = t.rowAt ?? [], ca = t.colAt ?? [];
+  return vpages().filter(pg => pg.rows && pg.cols).map(pg => { const cols = pg.cols!.filter(c => c > 0); return { n: pg.n, r0: ra[pg.rows![0]] ?? t.r0!, r1: ra[pg.rows![1] - 1] ?? t.r0!, c0: ca[cols[0] - 1] ?? t.c0!, c1: ca[cols[cols.length - 1] - 1] ?? t.c0! }; });
 };
+/** The room on one printed page of the sheet, in sheet pixels at the sheet's scale: width, and height for rows. */
+export const pageRoom = () => { const G = geom(), sp = sheetPage(); return { k: G.k, w: G.W - (sp?.headings ? 34 : 0), h: G.H - G.headH - G.footH - 6 - (sp?.headings ? 22 : 0) }; };
 /** The pages exactly as they will print, for the Page Layout view of a sheet. */
 export const SheetPagesView = (p: { zoom: number }) => (
   <div class="slayout"><div style={{ zoom: p.zoom }}><For each={vpages()}>{pg => <ViewPage pg={pg} pages={vpages().length} />}</For></div></div>
@@ -450,7 +469,7 @@ const ViewPage = (p: { pg: VPage; pages: number }) => {
 /** One page of a table: the rows of the page (after the title rows, when the sheet repeats some), merged cells as one, pictures over the cells. */
 const TablePage = (p: { t: PT; pg: VPage }) => {
   const t = p.t, [r0, r1] = p.pg.rows!, RH = t.font ? 22 : ps.rowH;
-  const title = t.titles && r0 > t.titles[1] ? Array.from({ length: t.titles[1] - t.titles[0] + 1 }, (_, i) => t.titles![0] + i) : [];
+  const title = t.titles && (t.titlesOut || r0 > t.titles[1]) ? Array.from({ length: t.titles[1] - t.titles[0] + 1 }, (_, i) => t.titles![0] + i) : [];
   const list = [...title, ...Array.from({ length: r1 - r0 }, (_, i) => r0 + i)];
   const hOf = (r: number) => t.h?.[r] ?? RH;
   const yOf = (r: number) => (t.bare ? 0 : RH) + title.reduce((a, x) => a + hOf(x), 0) + Array.from({ length: Math.max(0, r - r0) }, (_, i) => hOf(r0 + i)).reduce((a, b) => a + b, 0);

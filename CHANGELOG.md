@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.23 — 2026-11-04
+
+Set the printed pages of a sheet by hand, in Page Breaks view.
+
+- **Page Breaks view:**
+  - the print area has a solid blue edge, and everything outside it is grey;
+  - drag the edge to change the print area;
+  - drag a page break to move it; dashed lines are automatic breaks, solid lines are breaks you set;
+  - drag a break out of the print area to remove it;
+  - a page made bigger than the paper lowers the sheet's scale so it fits;
+  - right-click a cell for Insert Page Break, Remove Page Break, Reset All Page Breaks, Set Print Area and Reset Print Area.
+- **Column page breaks:** Insert Page Break starts a new page above the cell's row and left of its column. Page › Breaks also has a new page at only the row or only the column. Column breaks go into an exported workbook and come back from one.
+- **Fixed:**
+  - a new picture on a sheet sits inside its cell instead of over the cell's borders;
+  - title rows above the print area now print at the top of every page;
+  - merges, pictures or formatting far from the cells no longer stretch the print over thousands of empty rows or columns;
+  - page breaks stay in the right place when rows or columns are hidden;
+  - a very large .xlsb workbook is refused with a message, as .xlsx files already were.
+
 ## 0.5.22 — 2026-11-03
 
 The open Sheets items closed, and a hardening pass.

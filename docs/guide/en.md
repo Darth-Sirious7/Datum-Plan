@@ -372,14 +372,21 @@ When you open **Sheets**, the ribbon shows **Sheet Tools** with two tabs; it goe
 
 **Page** sets how this sheet prints; each sheet keeps its own setup and the plan's stays as it is:
 
-- **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page outlined over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
+- **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
 - **Paper:** size, orientation and margins (Normal, Narrow, Wide, None or your own).
-- **What Prints:** **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page) and **Breaks** (a new page starts at the selected row).
+- **What Prints:** **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page, also when they are above the print area) and **Breaks** (**Insert Page Break** starts a new page above the selected cell's row and left of its column; or only at the row or the column; **Reset All Page Breaks**).
 - **Fit:** fit to so many pages wide and tall, or a scale.
 - **On the Paper:** **Header & footer** (untick to print the cells only, without the plan's logos and title), **Gridlines**, **Row & column labels** and **Centre on page**.
 - **Print Preview** opens File › Print, where the same choices sit at the top.
 
-A picture on a sheet shows a small button at its top right when selected: **Place in cell** fits it inside its cell, or its merged cells, and it follows the cell's size; click again to let it float. Rows grow to fit a bigger font or wrapped text unless you set their height; drag the line under a row number to set it. Long text runs on over the empty cells to its right.
+In **Page Breaks** view you set the pages by hand, on the cells:
+
+- The **solid blue line** is the edge of the print area, and everything outside it is grey. Drag an edge to print more or fewer rows or columns.
+- The **dashed lines** are where a page ends by itself; a **solid line** is a break you set. Drag a break to move it; a dashed one becomes a break you set. Drag a break out of the print area to remove it.
+- If a page becomes bigger than the paper, the sheet's scale goes down so it fits, as **Fit** › **Scale** shows.
+- Right-click a cell for **Insert Page Break**, **Remove Page Break**, **Reset All Page Breaks**, **Set Print Area** and **Reset Print Area**.
+
+A new picture on a sheet sits inside its cell, or its merged cells, clear of the borders, and follows the cell's size. When it is selected, the small button at its top right lets it float over the cells at its own size; click again to place it back in the cell. Rows grow to fit a bigger font or wrapped text unless you set their height; drag the line under a row number to set it. Long text runs on over the empty cells to its right.
 
 Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+End]] to the last used cell, [[Page Up]] and [[Page Down]] by a screen, [[Ctrl+Enter]] puts what you typed in every selected cell, and [[Ctrl+D]] on one cell copies the cell above. Dates follow the plan's date format (Options), so 05/01/2026 is 5 January when the plan writes the day first; a formula on a date shows a date.
 

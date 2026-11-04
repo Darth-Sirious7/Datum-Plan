@@ -527,6 +527,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             if let Some((a, b)) = pg.titles.split_once(':').or(Some((pg.titles.as_str(), pg.titles.as_str()))).and_then(|(a, b)| Some((a.trim().parse::<u32>().ok()?, b.trim().parse::<u32>().ok()?))) { if a > 0 && b >= a { ws.set_repeat_rows(a - 1, b - 1).map_err(e)?; } }
             ws.set_print_gridlines(!pg.no_grid).set_print_headings(pg.headings).set_print_center_horizontally(pg.center);
             if !pg.breaks.is_empty() { ws.set_page_breaks(&pg.breaks).map_err(e)?; }
+            if !pg.col_breaks.is_empty() { ws.set_vertical_page_breaks(&pg.col_breaks).map_err(e)?; }
         }
         // Pictures placed on the sheet, at their cell and size (SVG pictures cannot go into a workbook).
         for im in &s.images {

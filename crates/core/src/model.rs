@@ -520,6 +520,8 @@ pub struct SheetPage {
     pub no_hf: bool, pub no_grid: bool, pub headings: bool, pub center: bool,
     /// Rows that start a new page (0-based).
     pub breaks: Vec<u32>,
+    /// Columns that start a new page (0-based).
+    pub col_breaks: Vec<u32>,
 }
 
 /// A picture kept in the plan file: a logo of a party to the project (the client, our company, a
@@ -792,7 +794,7 @@ impl Project {
                 if let Some(m) = &mut pg.margins { m.iter_mut().for_each(|x| *x = if x.is_finite() { x.clamp(0.0, 100.0) } else { 10.0 }); }
                 if sheet_range(&pg.area).is_none() { pg.area.clear() }
                 if !pg.titles.is_empty() && !pg.titles.split(':').all(|x| x.trim().parse::<u32>().is_ok_and(|n| n > 0)) { pg.titles.clear() }
-                pg.breaks.sort_unstable(); pg.breaks.dedup(); pg.breaks.retain(|r| *r > 0); pg.breaks.truncate(1000);
+                for b in [&mut pg.breaks, &mut pg.col_breaks] { b.sort_unstable(); b.dedup(); b.retain(|r| *r > 0); b.truncate(1000); }
                 pg.paper.truncate(20); pg.orient.truncate(20);
             }
             if !(s.color.len() == 7 && s.color.starts_with('#') && s.color[1..].chars().all(|c| c.is_ascii_hexdigit())) { s.color.clear() }

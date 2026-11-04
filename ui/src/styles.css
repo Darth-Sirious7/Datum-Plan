@@ -959,7 +959,20 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .sheetgrid.hidden { display: none; }
 .sheetgrid.breaks { background: #E9EBEE; }
 .sheetgrid .pbg { position: absolute; background: var(--bg2); }
-.sheetgrid .pbreak { position: absolute; z-index: 2; border: 2px dashed #2F6FDE; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+.sheetgrid .pbreak { position: absolute; z-index: 2; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+/* Page Breaks view: grey outside the print area; a solid blue edge to drag; dashed automatic breaks, solid manual ones. */
+.sheetgrid.breaks .gbody .row { background: transparent; }
+.sheetgrid.breaks .gbody .row .c:not(.idc) { background: transparent; }
+.sheetgrid .parea { position: absolute; z-index: 3; border: 3px solid #2F6FDE; pointer-events: none; box-sizing: border-box; }
+.sheetgrid .pedge, .sheetgrid .pcut { position: absolute; z-index: 4; }
+.sheetgrid .pedge.h, .sheetgrid .pcut.h { height: 9px; cursor: row-resize; }
+.sheetgrid .pedge.v, .sheetgrid .pcut.v { width: 9px; cursor: col-resize; }
+.sheetgrid .pcut.h { background: repeating-linear-gradient(90deg, #2F6FDE 0 8px, transparent 8px 13px) 0 3px / 100% 3px no-repeat; }
+.sheetgrid .pcut.v { background: repeating-linear-gradient(180deg, #2F6FDE 0 8px, transparent 8px 13px) 3px 0 / 3px 100% no-repeat; }
+.sheetgrid .pcut.h.man { background: linear-gradient(#2F6FDE, #2F6FDE) 0 3px / 100% 3px no-repeat; }
+.sheetgrid .pcut.v.man { background: linear-gradient(#2F6FDE, #2F6FDE) 3px 0 / 3px 100% no-repeat; }
+.sheetgrid .pghost { position: absolute; z-index: 5; background: #2F6FDE; opacity: .6; pointer-events: none; }
+.sheetgrid .pghost.h { height: 3px; } .sheetgrid .pghost.v { width: 3px; }
 .sheetgrid .pbreak span { font: 600 34px var(--sans, sans-serif); color: #2F6FDE22; }
 .slayoutwrap { flex: 1; overflow: auto; background: #E9EBEE; }
 .slayout { padding: 18px; display: flex; justify-content: center; }

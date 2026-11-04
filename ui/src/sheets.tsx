@@ -14,7 +14,7 @@ import { Help } from "./help";
 import { SheetImage } from "./api";
 import { pictureMenu, picData } from "./pictures";
 import { autoHeights, fitBox, sheetK, setSheetK, sheetMode, setSheetMode } from "./sheetlayout";
-import { sheetPages, SheetPagesView } from "./print";
+import { sheetPages, SheetPagesView, pageRoom } from "./print";
 import { Icon } from "./ui";
 import { askText, askYes, Dialog, Row } from "./ui";
 import { condLooks, lookCss, condMenu, bounds as cfBounds } from "./condfmt";
@@ -568,7 +568,14 @@ export const Sheets = () => {
     const [r, c] = at(e.clientX, e.clientY);
     if (r >= 0 && c >= 0 && !inR(r, c)) go(r, c);
     const g = S.last(), nr = g.r1 - g.r0 + 1, nc = g.c1 - g.c0 + 1;
+    const pg = page(), [cr, cc] = cur();
     openMenu(e, [
+      ...(sheetMode() === "breaks" ? [
+        { label: "Insert Page Break", run: () => breakHere() },
+        { label: "Remove Page Break", off: !(pg.breaks ?? []).includes(cr) && !(pg.col_breaks ?? []).includes(cc), run: unbreakHere },
+        { label: "Reset All Page Breaks", off: !(pg.breaks ?? []).length && !(pg.col_breaks ?? []).length, run: resetBreaks },
+        { label: "Set Print Area", run: areaFromSel },
+        { label: "Reset Print Area", off: !pg.area, run: () => setPage({ area: "" }) }, "-" as const] : []),
       { label: "Cut", keys: "Ctrl+X", run: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); } },
       { label: "Copy", keys: "Ctrl+C", run: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); } },
       { label: "Paste", keys: "Ctrl+V", run: async () => pasteAll(await clipText()) },
@@ -613,7 +620,7 @@ export const Sheets = () => {
   const putImgs = (images: SheetImage[]) => act({ SheetImages: { k: k(), images } });
   const placePic = (id: number) => {
     const im = new Image();
-    im.onload = () => { const w = Math.min(240, im.naturalWidth || 160), h = Math.max(8, Math.round(w * (im.naturalHeight || 80) / (im.naturalWidth || 160))); putImgs([...imgs(), { pic: id, cell: a1(...cur()), w, h }]).then(() => { setPicSel(imgs().length - 1); box.focus(); }); };
+    im.onload = () => { const w = Math.min(240, im.naturalWidth || 160), h = Math.max(8, Math.round(w * (im.naturalHeight || 80) / (im.naturalWidth || 160))); putImgs([...imgs(), { pic: id, cell: a1(...cur()), w, h, fit: true }]).then(() => { setPicSel(imgs().length - 1); box.focus(); }); };
     im.src = picData(id);
   };
   const picDrag = (e: MouseEvent, i: number, resize: boolean) => {
@@ -761,9 +768,60 @@ export const Sheets = () => {
   const setPage = (x: Partial<SheetPage>) => act({ Sheet: { k: k(), sheet: { ...sheet(), page: { ...page(), ...x } } } });
   const areaFromSel = () => { const b = bounds(); setPage({ area: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}` }); toast(`Print area: ${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}. Only these cells print.`, true); };
   const titlesFromSel = () => { const b = bounds(); setPage({ titles: `${b.r0 + 1}:${b.r1 + 1}` }); toast(`Rows ${b.r0 + 1}–${b.r1 + 1} print at the top of every page.`, true); };
-  const breakHere = () => { const r = cur()[0]; if (r < 1) return toast("Select a cell below the first row: the new page starts at its row."); setPage({ breaks: [...new Set([...(page().breaks ?? []), r])].sort((a, b) => a - b) }); setSheetMode("breaks"); };
-  const unbreakHere = () => setPage({ breaks: (page().breaks ?? []).filter(b => b !== cur()[0]) });
+  const addTo = (l: number[] | undefined, x: number) => [...new Set([...(l ?? []), x])].sort((a, b) => a - b);
+  /** A new page at the cursor: above its row and left of its column ("row" or "col" for only one of them). */
+  const breakHere = (only?: "row" | "col") => {
+    const [r, c] = cur(), row = only !== "col" && r > 0, cl = only !== "row" && c > 0;
+    if (!row && !cl) return toast(only === "col" ? "Select a cell right of column A: the new page starts at its column." : "Select a cell below the first row: the new page starts at its row.");
+    setPage({ ...(row ? { breaks: addTo(page().breaks, r) } : {}), ...(cl ? { col_breaks: addTo(page().col_breaks, c) } : {}) }); setSheetMode("breaks");
+  };
+  const unbreakHere = () => setPage({ breaks: (page().breaks ?? []).filter(b => b !== cur()[0]), col_breaks: (page().col_breaks ?? []).filter(b => b !== cur()[1]) });
+  const resetBreaks = () => setPage({ breaks: [], col_breaks: [] });
+  // ---------- Page Breaks view: drag the blue print-area edges and the page breaks ----------
+  const colX = (c: number) => (c < ncols() ? lefts()[c] : (lefts()[ncols() - 1] ?? HW) + width(ncols() - 1) + (c - ncols()) * CW);
+  const abox = createMemo(() => { const p = sheetMode() === "breaks" ? sheetPages() : []; if (!p.length) return null; return { r0: Math.min(...p.map(x => x.r0)), r1: Math.max(...p.map(x => x.r1)), c0: Math.min(...p.map(x => x.c0)), c1: Math.max(...p.map(x => x.c1)) }; });
+  const rowCuts = () => { const b = abox(); return b ? [...new Set(sheetPages().map(p => p.r0))].filter(r => r > b.r0).sort((x, y) => x - y) : []; };
+  const colCuts = () => { const b = abox(); return b ? [...new Set(sheetPages().map(p => p.c0))].filter(c => c > b.c0).sort((x, y) => x - y) : []; };
+  type PDrag = { kind: "top" | "bottom" | "left" | "right" | "row" | "col"; from: number; to: number };
+  const [pdrag, setPdrag] = createSignal<PDrag | null>(null);
+  /** The row or column edge nearest the pointer. */
+  const edgeAt = (e: MouseEvent, v: boolean) => {
+    const b = box.getBoundingClientRect(), [r, c] = at(e.clientX, e.clientY);
+    if (v) { const x = e.clientX - b.left + box.scrollLeft; return Math.max(0, c < 0 ? 0 : x - colX(c) > width(c) / 2 ? c + 1 : c); }
+    const y = e.clientY - b.top - RH + box.scrollTop; return Math.max(0, r < 0 ? 0 : y - top_(r) > rh(r) / 2 ? r + 1 : r);
+  };
+  const pageDrag = (e: MouseEvent, kind: PDrag["kind"], from: number) => {
+    e.preventDefault(); e.stopPropagation();
+    const v = kind === "left" || kind === "right" || kind === "col";
+    setPdrag({ kind, from, to: from });
+    const mv = (m: MouseEvent) => setPdrag({ kind, from, to: edgeAt(m, v) });
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); const d = pdrag(); setPdrag(null); if (d && d.to !== d.from) dropPage(d); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
+  /** A dragged edge: the print area's sides set the area; a break moved inside it becomes a manual one (dragged out, it goes). A page made larger than the paper shrinks the print to fit, as the page setup's scale. */
+  const dropPage = (d: PDrag) => {
+    const b = abox(); if (!b) return;
+    const pg = page(), x: Partial<SheetPage> = {};
+    if (d.kind === "row" || d.kind === "col") {
+      const row = d.kind === "row", [lo, hi] = row ? [b.r0, b.r1] : [b.c0, b.c1], key = row ? "breaks" : "col_breaks";
+      const list = (pg[key] ?? []).filter(z => z !== d.from);
+      x[key] = d.to > lo && d.to <= hi ? addTo(list, d.to) : list;
+      if (d.to > lo && d.to <= hi) {
+        const cuts = (row ? rowCuts() : colCuts()).filter(z => z !== d.from), prev = Math.max(lo, ...cuts.filter(z => z < d.to)), next = Math.min(hi + 1, ...cuts.filter(z => z > d.to));
+        const room = pageRoom(), need = Math.max(row ? top_(d.to) - top_(prev) : colX(d.to) - colX(prev), row ? top_(next) - top_(d.to) : colX(next) - colX(d.to));
+        const have = row ? room.h : room.w;
+        if (need > have) { x.scale = Math.max(10, Math.floor((room.k * 100 * have) / need * 0.97)); x.fit_w = 0; x.fit_h = 0; }
+      }
+    } else {
+      const r = { ...b };
+      if (d.kind === "top") r.r0 = d.to; if (d.kind === "bottom") r.r1 = d.to - 1; if (d.kind === "left") r.c0 = d.to; if (d.kind === "right") r.c1 = d.to - 1;
+      const [r0, r1, c0, c1] = [Math.min(r.r0, r.r1), Math.max(r.r0, r.r1), Math.min(r.c0, r.c1), Math.max(r.c0, r.c1)];
+      x.area = `${a1(r0, c0)}:${a1(r1, c1)}`;
+    }
+    setPage(x);
+  };
   const api: SheetApi = {
+    resetBreaks,
     frozen: () => !!(frozen()[0] || frozen()[1]), pen, merged,
     border, borderItems, merge, cellStyle, clearKind, fillDown, fillRight, sortRows, rowHeight, colWidth, autofitRows, autofitCols,
     autoSum, sumItems, insertFn, planData, fmtItems, setFmt, moreDecimals, insertCells, addSheet, rename: () => setRenaming(k()), del: () => delSheet(k()), moveCopy: () => moveCopy(k()), tabMenu: (e: MouseEvent) => tabMenu(e, k()),
@@ -873,6 +931,16 @@ export const Sheets = () => {
               <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbg" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }} />}</For></Show>
               <For each={vis().filter(r => r >= frozen()[0])}>{r => rowView(r)}</For>
               <For each={merges().filter(m => m.r0 >= frozen()[0] && m.r1 >= (vis()[0] ?? 0) && m.r0 <= (vis()[vis().length - 1] ?? 0))}>{m => MergeView(m)}</For>
+              <Show when={abox()}>{b => <>
+                <div class="parea" style={{ left: `${colX(b().c0)}px`, top: `${top_(b().r0)}px`, width: `${colX(b().c1 + 1) - colX(b().c0)}px`, height: `${top_(b().r1 + 1) - top_(b().r0)}px` }} />
+                <For each={rowCuts()}>{r => <div class="pcut h" classList={{ man: (page().breaks ?? []).includes(r) }} title="Drag to move this page break; drag it out of the print area to remove it" style={{ left: `${colX(b().c0)}px`, top: `${top_(r) - 4}px`, width: `${colX(b().c1 + 1) - colX(b().c0)}px` }} onMouseDown={e => pageDrag(e, "row", r)} />}</For>
+                <For each={colCuts()}>{c => <div class="pcut v" classList={{ man: (page().col_breaks ?? []).includes(c) }} title="Drag to move this page break; drag it out of the print area to remove it" style={{ left: `${colX(c) - 4}px`, top: `${top_(b().r0)}px`, height: `${top_(b().r1 + 1) - top_(b().r0)}px` }} onMouseDown={e => pageDrag(e, "col", c)} />}</For>
+                <div class="pedge h" title="Drag to change the print area" style={{ left: `${colX(b().c0)}px`, top: `${top_(b().r0) - 4}px`, width: `${colX(b().c1 + 1) - colX(b().c0)}px` }} onMouseDown={e => pageDrag(e, "top", b().r0)} />
+                <div class="pedge h" title="Drag to change the print area" style={{ left: `${colX(b().c0)}px`, top: `${top_(b().r1 + 1) - 4}px`, width: `${colX(b().c1 + 1) - colX(b().c0)}px` }} onMouseDown={e => pageDrag(e, "bottom", b().r1 + 1)} />
+                <div class="pedge v" title="Drag to change the print area" style={{ left: `${colX(b().c0) - 4}px`, top: `${top_(b().r0)}px`, height: `${top_(b().r1 + 1) - top_(b().r0)}px` }} onMouseDown={e => pageDrag(e, "left", b().c0)} />
+                <div class="pedge v" title="Drag to change the print area" style={{ left: `${colX(b().c1 + 1) - 4}px`, top: `${top_(b().r0)}px`, height: `${top_(b().r1 + 1) - top_(b().r0)}px` }} onMouseDown={e => pageDrag(e, "right", b().c1 + 1)} />
+                <Show when={pdrag()}>{d => { const v = ["left", "right", "col"].includes(d().kind); return <div class={`pghost ${v ? "v" : "h"}`} style={v ? { left: `${colX(d().to) - 1}px`, top: `${top_(b().r0)}px`, height: `${top_(b().r1 + 1) - top_(b().r0)}px` } : { left: `${colX(b().c0)}px`, top: `${top_(d().to) - 1}px`, width: `${colX(b().c1 + 1) - colX(b().c0)}px` }} />; }}</Show>
+              </>}</Show>
               <Show when={sheetMode() === "breaks"}><For each={sheetPages()}>{pg => <div class="pbreak" style={{ left: `${lefts()[pg.c0]}px`, top: `${top_(pg.r0)}px`, width: `${lefts()[pg.c1] + width(pg.c1) - lefts()[pg.c0]}px`, height: `${top_(pg.r1 + 1) - top_(pg.r0)}px` }}><span>Page {pg.n}</span></div>}</For></Show>
               <For each={boxes()}>{b => <div class="refbox" style={{ left: `${lefts()[b.c0]}px`, top: `${top_(b.r0)}px`, width: `${lefts()[b.c1] + width(b.c1) - lefts()[b.c0]}px`, height: `${top_(Math.min(b.r1, nrows() - 1) + 1) - top_(b.r0)}px`, "border-color": b.color, background: `${b.color}14` }} />}</For>
               <For each={imgs()}>{(im, i) => { const rc = () => parseA1(im.cell), box2 = () => picBox(im); return (

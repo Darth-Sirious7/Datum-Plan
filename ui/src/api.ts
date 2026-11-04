@@ -101,7 +101,7 @@ export interface SheetData { name: string; cells: Record<string, string>; fmt: R
 /** A conditional formatting rule (see condfmt.tsx). */
 export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */
-export interface SheetPage { paper?: string; orient?: string; margins?: number[] | null; scale?: number; fit_w?: number; fit_h?: number; area?: string; titles?: string; no_hf?: boolean; no_grid?: boolean; headings?: boolean; center?: boolean; breaks?: number[] }
+export interface SheetPage { paper?: string; orient?: string; margins?: number[] | null; scale?: number; fit_w?: number; fit_h?: number; area?: string; titles?: string; no_hf?: boolean; no_grid?: boolean; headings?: boolean; center?: boolean; breaks?: number[]; col_breaks?: number[] }
 /** A picture in the plan's library (a party's logo or any image), as a data URL. */
 export interface Picture { id: number; name: string; role: string; data: string }
 /** A library picture placed on a sheet at a cell, with its size in px. */
