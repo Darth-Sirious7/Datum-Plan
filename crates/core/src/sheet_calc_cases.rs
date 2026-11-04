@@ -187,6 +187,22 @@ fn plan_names_on_a_small_plan() {
 }
 
 #[test]
+fn earned_value_names_agree_with_the_task_columns() {
+    let mut p = small_plan().p;
+    p.tasks[0].fixed_cost = 1000.0;
+    p.tasks[1].fixed_cost = 500.0;
+    let mut doc = Doc::new(p);
+    let uids = doc.p.tasks.iter().map(|t| t.uid).collect();
+    doc.apply(Op::Baseline { uids, clear: false, n: 0 }, "%d/%m/%Y").unwrap();
+    add(&mut doc, "EV", &[("A1", "=TotalCost"), ("A2", "=PlannedValue"), ("A3", "=EarnedValue"), ("A4", "=SPI"), ("A5", "=CPI"), ("A6", "=SUM(Tasks[Earned Value])=EarnedValue"),
+        ("A7", "=SUM(Tasks[Planned Value])=PlannedValue"), ("A8", "=ROUND(EarnedValue/PlannedValue,2)=ROUND(SPI,2)"), ("A9", "=SUM(Tasks[Cost])")]);
+    let v = shown_in(&doc, 0, "%d/%m/%Y");
+    let t = |a: &str| v[a].0.clone();
+    assert_eq!((t("A1"), t("A2"), t("A3"), t("A4"), t("A9")), ("1500".into(), "500".into(), "500".into(), "1".into(), "1500".into()), "half of Design (1,000) planned and earned by 6 Nov");
+    assert_eq!((t("A6"), t("A7"), t("A8")), ("TRUE".into(), "TRUE".into(), "TRUE".into()));
+}
+
+#[test]
 fn date_arithmetic_on_plan_dates_shows_a_date() {
     let v = sheet("%d/%m/%Y", &[("A1", "=ProjectFinish+7"), ("A2", "=Plan!H2+1"), ("A3", "=XLOOKUP(\"Design\",Tasks[Name],Tasks[Finish])-XLOOKUP(\"Design\",Tasks[Name],Tasks[Start])"),
         ("A4", "=INDEX(Tasks[Duration],MATCH(MAX(Tasks[Finish]),Tasks[Finish],0))"), ("A5", "=(ProjectFinish)-14"), ("A6", "=StatusDate-ProjectStart"), ("A7", "=IF(TRUE,ProjectFinish+1,0)"), ("A8", "=MAX(Tasks[Finish])+1")]);
@@ -398,6 +414,20 @@ fn excel_round_trip_keeps_formulas_values_and_formats() {
 }
 
 #[test]
+fn imported_formulas_keep_reading_their_own_sheets_when_tabs_are_renamed() {
+    // The plan has a Sheet1 already; a workbook brings its own Sheet1, Plan and Sheet1 (2).
+    let mut doc = small_plan();
+    add(&mut doc, "Sheet1", &[("A1", "999")]);
+    let s = |n: &str, cells: &[(&str, &str)]| SheetData { name: n.into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() };
+    let sheets = vec![s("Sheet1", &[("A1", "5")]), s("Plan", &[("A1", "7")]), s("Sheet1 (2)", &[("A1", "11")]), s("Sum", &[("A1", "=Sheet1!A1+Plan!A1"), ("A2", "='Sheet1 (2)'!A1"), ("A3", "=SUM(Sheet1:Plan!A1)")])];
+    doc.apply(Op::AddSheets { sheets, pictures: vec![], freeze: vec![] }, "%d/%m/%Y").unwrap();
+    let names: Vec<_> = doc.p.sheets.iter().map(|s| s.name.as_str()).collect();
+    let k = names.iter().position(|n| *n == "Sum").unwrap();
+    let v = shown_in(&doc, k, "%d/%m/%Y");
+    assert_eq!((v["A1"].0.as_str(), v["A2"].0.as_str(), v["A3"].0.as_str()), ("12", "11", "12"), "tabs {names:?}, formulas {:?}", doc.p.sheets[k].cells);
+}
+
+#[test]
 fn excel_export_gives_the_same_figures_when_the_workbook_recalculates() {
     let mut doc = small_plan();
     add(&mut doc, "S", &[("A1", "=SUM(Tasks[Total Slack])"), ("A2", "=XLOOKUP(\"Design\",Tasks[Task Name],Tasks[Finish])"), ("A3", "=PercentComplete"), ("A4", "=ROUND(PercentComplete,1)"), ("A5", "€12")]);
@@ -417,3 +447,23 @@ fn excel_export_gives_the_same_figures_when_the_workbook_recalculates() {
 
 
 
+
+
+#[test]
+fn money_in_the_workbook_looks_as_in_the_plan() {
+    // Euros with no decimals, written after the amount: 1,235 € in the plan is #,##0 "€" in the file.
+    let mut doc = small_plan();
+    doc.p.currency = Currency { code: "EUR".into(), symbol: "€".into(), decimals: 0, after: true };
+    doc.p.tasks[0].fixed_cost = 1234.5;
+    add(&mut doc, "M", &[("A1", "1234.5")]);
+    set_fmt(&mut doc, 0, "A1", "money");
+    assert_eq!(shown_in(&doc, 0, "%d/%m/%Y")["A1"].0, "1,235 €", "a half rounds up, as a spreadsheet shows it");
+    let usd = Currency::default();
+    assert_eq!((crate::fields::money(2.5, &Currency { decimals: 0, ..usd.clone() }), crate::fields::money(1.005, &usd), crate::fields::money(-0.125, &usd), crate::fields::money(0.004, &usd)), ("$3".into(), "$1.01".into(), "-$0.13".into(), "$0.00".into()));
+    let st = part(&export(&doc), "xl/styles.xml");
+    assert!(st.contains("formatCode=\"#,##0 &quot;€&quot;\"") && !st.contains("0.&quot;") && !st.contains("#,##0.\""), "{st}");
+    let f = std::env::temp_dir().join(format!("calc-full-{}.xlsx", std::process::id()));
+    crate::io::table::write_xlsx(&Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2)), &["name".to_string(), "cost".to_string()], &f).unwrap();
+    let st = part(&f, "xl/styles.xml");
+    assert!(!st.contains("#,##0.\"") && st.contains("#,##0 &quot;€&quot;"), "the task list's cost column: {st}");
+}

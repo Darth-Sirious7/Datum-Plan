@@ -354,11 +354,19 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
 /// read on hidden sheets.
 pub fn write_sheets_xlsx(c: &Calc, path: &Path) -> Result<(), String> { write_book(c, &[], path, true) }
 
+/// The plan's currency as a workbook number format: "$"#,##0.00, or #,##0 "€" with no decimals and the
+/// symbol after, as the plan shows money.
+fn money_code(c: &crate::model::Currency) -> String {
+    let num = format!("#,##0{}{}", if c.decimals > 0 { "." } else { "" }, "0".repeat(c.decimals.min(10) as usize));
+    let sym = format!("\"{}\"", c.symbol.replace('"', ""));
+    if c.after { format!("{num} {sym}") } else { format!("{sym}{num}") }
+}
+
 /// A sheet number format as a workbook number format (None: General).
 fn xl_numfmt(c: &Calc, fm: &str) -> Option<String> {
     match fm {
         "" | "flag" => None,
-        "money" => Some(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\"").trim_end_matches('.').to_string()),
+        "money" => Some(money_code(&c.p.currency)),
         "date" => Some(crate::sheet::excel_date(&c.fmt)),
         "pct" => Some("0.0%".into()),
         f => Some(f.to_string()),
@@ -372,7 +380,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     let head_fmt = Format::new().set_bold().set_background_color(0xE6F0FC);
     let date_fmt = Format::new().set_num_format("dd-mmm-yy");
     let days_fmt = Format::new().set_num_format("0.0# \"d\"");
-    let money_fmt = Format::new().set_num_format(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\""));
+    let money_fmt = Format::new().set_num_format(money_code(&c.p.currency));
     // One typed cell: dates as workbook dates, durations in days, money as numbers.
     let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool, st: &str| -> Result<(), String> {
         let kind = c.kind(key);
