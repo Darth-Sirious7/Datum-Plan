@@ -847,6 +847,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await ep.goto(url); await ep.waitForTimeout(700); await ep.click(".bs aside .back"); await ep.waitForTimeout(300);
   const onEmpty = await sweep(ep);
   check("reports, dashboards and the builder never show NaN, Infinity or undefined (empty plan)", onEmpty.length === 0, onEmpty.join(" | "));
+  const vprint = [];
+  for (const v of ["Gantt", "Tracking", "Network", "Calendar", "Task Usage", "Resources", "Res. Usage", "Team", "Sheets"]) {
+    await ep.click(`.side button[title="${v}"]`); await ep.waitForTimeout(300); await ep.keyboard.press("Control+p"); await ep.waitForTimeout(700);
+    const t = await ep.evaluate(() => document.querySelector(".pprev")?.innerText ?? ""); if (BAD.test(t)) vprint.push(`${v}: ${t.match(BAD)[0]}`);
+    await ep.click(".bs aside .back"); await ep.waitForTimeout(150);
+  }
+  check("printing any view of an empty plan shows no NaN or undefined", vprint.length === 0 && qerr.length === 0, vprint.join(", ") + qerr.join(" | "));
   for (const v of await ep.$$eval(".side button", bs => bs.map(x => x.title))) { await ep.click(`.side button[title="${v}"]`); await ep.waitForTimeout(250); }
   check("every view of an empty plan opens without errors", qerr.length === 0, qerr.join(" | "));
   // Awkward tiles: errors, a deleted sheet, text, pies of negatives and zeros, one point, none, a huge range.
