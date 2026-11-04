@@ -30,6 +30,8 @@ mod hardening;
 #[cfg(test)]
 mod sheet_cases;
 #[cfg(test)]
+mod sheet_calc_cases;
+#[cfg(test)]
 mod cases;
 #[cfg(test)]
 mod exchange_cases;

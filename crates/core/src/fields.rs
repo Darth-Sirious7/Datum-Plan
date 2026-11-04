@@ -131,7 +131,9 @@ pub struct Calc<'a> {
 }
 
 pub fn money(v: f64, c: &Currency) -> String {
-    let s = format!("{:.*}", c.decimals as usize, v.abs());
+    // Halves round away from zero, as spreadsheets show money (1,234.5 → 1,235; 1.005 → 1.01), not to even.
+    let k = 10f64.powi(c.decimals.min(10) as i32);
+    let s = format!("{:.*}", c.decimals as usize, (v.abs() * k * (1.0 + 1e-15)).round() / k);
     let (int, dec) = match s.find('.') { Some(k) => s.split_at(k), None => (s.as_str(), "") };
     let mut out = String::new();
     for (k, ch) in int.chars().enumerate() {

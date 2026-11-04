@@ -1115,7 +1115,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 x.id = next;
                 p.pictures.push(x);
             }
-            let mut renamed = std::collections::HashMap::new();
+            let (mut renamed, first) = (std::collections::HashMap::new(), p.sheets.len());
             for s in &mut sheets {
                 let base: String = s.name.chars().filter(|ch| !"[]:*?/\\".contains(*ch)).collect::<String>().trim().trim_matches('\'').to_string();
                 let base = if base.is_empty() { "Sheet".to_string() } else { base };
@@ -1129,6 +1129,13 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 s.name = name;
                 s.images.retain_mut(|im| ids.get(&im.pic).map(|n| im.pic = *n).is_some());
                 p.sheets.push(std::mem::take(s));
+            }
+            // Their formulas follow the tabs that had to take another name (through stand-in names, so
+            // Sheet1 → Sheet1 (2) and Sheet1 (2) → Sheet1 (2) (2) do not run into each other).
+            let moved: Vec<(&String, &String)> = renamed.iter().filter(|(o, n)| o != n).collect();
+            for v in p.sheets[first..].iter_mut().flat_map(|s| s.cells.values_mut()).filter(|v| v.starts_with('=') && !moved.is_empty()) {
+                let tmp = moved.iter().enumerate().fold(v.clone(), |f, (i, (o, _))| crate::sheet::rename(&f, o, &format!("DatumRenamed{i}"), &[]));
+                *v = moved.iter().enumerate().fold(tmp, |f, (i, (_, n))| crate::sheet::rename(&f, &format!("DatumRenamed{i}"), n, &[]));
             }
             if !freeze.is_empty() {
                 if !p.ui.is_object() { p.ui = serde_json::json!({}); }

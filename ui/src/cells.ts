@@ -28,10 +28,11 @@ const DATE = /^\d{4}-\d{1,2}-\d{1,2}$|^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$|^\d{1,2}
 /** Whether 03/04/2026 is 3 April (the plan's date format puts the day first); set by the store. */
 export const order = { dayFirst: true };
 const DMY = /^(\d{1,2})([/.-])(\d{1,2})\2(\d{2,4})$/, DMON = /^(\d{1,2})([ -])([A-Za-z]{3,9})\2(\d{2,4})$/, MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const LISTS = [MON, ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]];
 export const asDate = (s: string) => {
   s = s.trim(); if (!DATE.test(s)) return null;
   const m = DMY.exec(s);
-  if (m) { const [mo, da] = order.dayFirst ? [+m[3], +m[1]] : [+m[1], +m[3]], y = m[4].length === 2 ? 2000 + +m[4] : +m[4], d = new Date(y, mo - 1, da); return d.getMonth() === mo - 1 && d.getDate() === da ? dateDay(d) : null; }
+  if (m) { const [mo, da] = order.dayFirst ? [+m[3], +m[1]] : [+m[1], +m[3]], y = m[4].length === 2 ? (+m[4] < 30 ? 2000 : 1900) + +m[4] : +m[4], d = new Date(y, mo - 1, da); return d.getMonth() === mo - 1 && d.getDate() === da ? dateDay(d) : null; }
   const d = new Date(/^\d{4}-/.test(s) ? s.replace(/-/g, "/") : s.replace(/-(\d\d)$/, " 20$1").replace(/-/g, " ")); return isNaN(+d) ? null : dateDay(d);
 };
 /** Day `d` written the way `s` was (03/04/2026, 3-Apr-26, 2026-04-03). */
@@ -45,7 +46,8 @@ const like = (s: string, d: number) => {
 /**
  * The k-th value (k = 1, 2, …) after the source cells `src`, as a spreadsheet fill handle does:
  * numbers continue their step (a single number counts up by 1), "Phase 1" → "Phase 2",
- * dates continue their step (a single date is copied); anything else repeats. `copy` (Ctrl) repeats.
+ * dates continue their step (a single date is copied), day and month names go on (Mon → Tue); anything
+ * else repeats. `copy` (Ctrl) repeats.
  */
 export const series = (src: string[], k: number, copy = false): string => {
   const rep = src[(k - 1) % src.length] ?? "";
@@ -53,14 +55,24 @@ export const series = (src: string[], k: number, copy = false): string => {
   const nums = src.map(s => s.trim().match(NUM));
   if (nums.every(Boolean)) {
     const v = nums.map(m => +m![1].replace(/,/g, "")), unit = nums[0]![2], step = v.length > 1 ? (v[v.length - 1] - v[0]) / (v.length - 1) : 1;
-    const x = v[v.length - 1] + step * k, dec = Math.max(...nums.map(m => (m![1].split(".")[1] ?? "").length));
-    return `${x.toFixed(dec)}${unit}`;
+    const x = v[v.length - 1] + step * k, dec = Math.max(...nums.map(m => (m![1].split(".")[1] ?? "").length)), out = x.toFixed(dec);
+    // 1,000 then 2,000 goes on as 3,000 (with the thousands separators it was typed with).
+    return `${nums.some(m => m![1].includes(",")) ? out.replace(/^-?\d+/, d => d.replace(/\B(?=(\d{3})+$)/g, ",")) : out}${unit}`;
   }
   const dates = src.map(asDate);
   if (dates.every(d => d !== null)) {
     if (dates.length < 2) return rep;
     const step = (dates[dates.length - 1]! - dates[0]!) / (dates.length - 1);
     return like(src[src.length - 1], dates[dates.length - 1]! + step * k);
+  }
+  // Day and month names go round their week or year (Mon → Tue, Dec → Jan), in the case typed.
+  const named = src.map(s => LISTS.map(l => [l, l.findIndex(x => x.toLowerCase() === s.trim().toLowerCase())] as const).find(x => x[1] >= 0));
+  if (named.every(x => x && x[0] === named[0]![0])) {
+    const l = named[0]![0], n = l.length, v = named.map(x => x![1]), step = v.length === 2 ? (v[1] - v[0] + n) % n : v.length > 2 ? (v[v.length - 1] - v[0]) / (v.length - 1) : 1;
+    if (Number.isInteger(step)) {
+      const w = l[(((v[v.length - 1] + step * k) % n) + n) % n], s0 = src[0].trim();
+      return s0 === s0.toUpperCase() ? w.toUpperCase() : s0 === s0.toLowerCase() ? w.toLowerCase() : w;
+    }
   }
   const tails = src.map(s => s.match(TAIL));
   if (tails.every(t => t && t[1] === tails[0]![1])) {

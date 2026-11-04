@@ -354,12 +354,19 @@ pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> 
 /// read on hidden sheets.
 pub fn write_sheets_xlsx(c: &Calc, path: &Path) -> Result<(), String> { write_book(c, &[], path, true) }
 
+/// The plan's currency as a workbook number format: "$"#,##0.00, or #,##0 "€" with no decimals and the
+/// symbol after, as the plan shows money.
+fn money_code(c: &crate::model::Currency) -> String {
+    let num = format!("#,##0{}{}", if c.decimals > 0 { "." } else { "" }, "0".repeat(c.decimals.min(10) as usize));
+    let sym = format!("\"{}\"", c.symbol.replace('"', ""));
+    if c.after { format!("{num} {sym}") } else { format!("{sym}{num}") }
+}
+
 /// A sheet number format as a workbook number format (None: General).
-fn xl_numfmt(c: &Calc, fm: &str, date: bool) -> Option<String> {
+fn xl_numfmt(c: &Calc, fm: &str) -> Option<String> {
     match fm {
-        "" if date => Some(crate::sheet::excel_date(&c.fmt)),
         "" | "flag" => None,
-        "money" => Some(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\"").trim_end_matches('.').to_string()),
+        "money" => Some(money_code(&c.p.currency)),
         "date" => Some(crate::sheet::excel_date(&c.fmt)),
         "pct" => Some("0.0%".into()),
         f => Some(f.to_string()),
@@ -373,7 +380,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     let head_fmt = Format::new().set_bold().set_background_color(0xE6F0FC);
     let date_fmt = Format::new().set_num_format("dd-mmm-yy");
     let days_fmt = Format::new().set_num_format("0.0# \"d\"");
-    let money_fmt = Format::new().set_num_format(format!("\"{}\"#,##0.{}", c.p.currency.symbol, "0".repeat(c.p.currency.decimals as usize)).replace(".\"", "\""));
+    let money_fmt = Format::new().set_num_format(money_code(&c.p.currency));
     // One typed cell: dates as workbook dates, durations in days, money as numbers.
     let put = |ws: &mut Worksheet, r: u32, k: u16, i: usize, key: &str, bold: bool, st: &str| -> Result<(), String> {
         let kind = c.kind(key);
@@ -381,7 +388,8 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         let fx = |f: &Format| styled(if bold { f.clone().set_bold() } else { f.clone() }, st);
         match (&v, kind) {
             (F::Null, _) => Ok(()),
-            (F::Date(m), _) => ws.write_number_with_format(r, k, *m as f64 / 1440.0 + 25569.0 - if kind == Kind::Fin && m.rem_euclid(1440) == 0 { 1.0 } else { 0.0 }, &fx(&date_fmt)).map(|_| ()).map_err(e),
+            // The day the task sheet shows, as the sheets read it (no time of day).
+            (F::Date(_), _) => ws.write_number_with_format(r, k, crate::sheet::cell_value(c, i, key).as_f64().unwrap_or_default(), &fx(&date_fmt)).map(|_| ()).map_err(e),
             (F::Num(n), Kind::Dur) => ws.write_number_with_format(r, k, n / c.p.day_min as f64, &fx(&days_fmt)).map(|_| ()).map_err(e),
             (F::Num(n), Kind::Cost) => ws.write_number_with_format(r, k, *n, &fx(&money_fmt)).map(|_| ()).map_err(e),
             (F::Num(n), _) => ws.write_number_with_format(r, k, *n, &fx(&Format::new())).map(|_| ()).map_err(e),
@@ -415,6 +423,7 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
     // The sheet tabs: values as the plan shows them (real numbers and dates), formulas with their last
     // results, number formats, styles, merges, sizes, frozen panes, tab colours, page setup, pictures.
     let book = crate::sheet::book(c);
+    let auto = crate::sheet::Dates::new(c);
     let mut meta = serde_json::Map::new();
     let names = xl_names(&c.p.sheets, !sheets_only);
     // Formulas follow a tab whose name had to change in the workbook.
@@ -435,13 +444,11 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             let Some((r, col)) = a1_index(a1) else { continue };
             let v = sh.map_or(gridcraft_core::Value::Empty, |x| x.value(gridcraft_core::CellRef::new(r, col as u32)));
             let fm = s.fmt.get(a1).map(String::as_str).unwrap_or("");
-            let dated = crate::sheet::is_dated(input, s, &c.fmt);
             let mut f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));
-            // A number typed with its own look (12%, $1,200, 1.5E+3) keeps it.
-            let typed = if fm.is_empty() && !dated && !input.starts_with('=') { gridcraft_core::parse::parse_input(input, gridcraft_core::DateSystem::default()).format.filter(|f| *f != "General").map(str::to_string) } else { None };
-            if let Some(code) = typed.or_else(|| xl_numfmt(c, fm, dated)) { f = f.set_num_format(code); }
+            // Without a format of its own, the look the sheet gives it: a date, 12%, $1,200, €12, a plan percentage.
+            if let Some(code) = if fm.is_empty() { auto.code(Some(k), input) } else { xl_numfmt(c, fm) } { f = f.set_num_format(code); }
             if input.starts_with('=') {
-                let input = renamed.iter().fold(input.clone(), |f, (o, n)| crate::sheet::rename(&f, o, n, &[]));
+                let input = renamed.iter().fold(crate::sheet::excel_formula(c, input), |f, (o, n)| crate::sheet::rename(&f, o, n, &[]));
                 let res = match &v { gridcraft_core::Value::Number(n) => n.to_string(), gridcraft_core::Value::Bool(b) => (if *b { "TRUE" } else { "FALSE" }).into(), x => x.display() };
                 ws.write_formula_with_format(r, col, rust_xlsxwriter::Formula::new(input.as_str()).set_result(res), &f).map_err(e)?;
             } else if fm == "flag" || fm == "@" {
