@@ -329,9 +329,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let ct = cons(&g(t, "cstr_type"));
         let phys = g(t, "complete_pct_type") == "CP_Phys";
         let pc = g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).clamp(0.0, 100.0).round() as u8;
-        // With physical %, the duration % comes from the remaining duration when the file has one.
+        // The duration % comes from the remaining duration when the file has one (the % column holds
+        // the physical %, which an activity measured by duration leaves at 0).
         let (target, remain) = (g(t, "target_drtn_hr_cnt").parse::<f64>().unwrap_or(0.0), g(t, "remain_drtn_hr_cnt").parse::<f64>().ok());
-        let pct = match remain { Some(r) if phys && target > 0.0 => ((1.0 - r / target) * 100.0).clamp(0.0, 100.0).round() as u8, _ => pc };
+        let pct = match remain { Some(r) if target > 0.0 && r.is_finite() => ((1.0 - r / target) * 100.0).clamp(0.0, 100.0).round() as u8, _ => pc };
         let act_type = match ty.as_str() { "TT_LOE" => ActType::Loe, "TT_WBS" => ActType::WbsSummary, "TT_Rsrc" => ActType::ResourceDep, "TT_Mile" => ActType::StartMs, "TT_FinMile" => ActType::FinishMs, _ => ActType::Task };
         Task {
             uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type, ignore_rc: ty == "TT_Task",

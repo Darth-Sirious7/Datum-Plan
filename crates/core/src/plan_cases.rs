@@ -312,3 +312,23 @@ fn levelling_one_crew_then_clearing_and_undo() {
     op(&mut dc, Op::Level { uids: vec![], clear: false });
     assert_eq!(&dates(&dc.p)[1][..11], "Nov02 08:00");
 }
+
+#[test]
+fn an_xer_activity_measured_by_duration_takes_its_progress_from_the_remaining_duration() {
+    // In an XER file the physical % column is only the physical %: an activity measured by duration
+    // shows its progress in the remaining duration (here 2 of 4 days left), with physical % at 0.
+    let dc = doc(&["4d||astart=02-Nov-26; pct=50"]);
+    let mut p = dc.p.clone();
+    p.status = Some(d(2026, 11, 3));
+    let dir = std::env::temp_dir().join(format!("datum-plan-xerpct-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("plan.xer");
+    crate::io::export(&p, &f, F, d(2026, 11, 3), &[]).unwrap();
+    let text = std::fs::read_to_string(&f).unwrap();
+    assert!(text.contains("\t50\tCP_Drtn\t"));
+    std::fs::write(&f, text.replace("\t50\tCP_Drtn\t", "\t0\tCP_Drtn\t")).unwrap();
+    let crate::io::Imported::Plan(q, _) = crate::io::import(&f).unwrap() else { panic!() };
+    std::fs::remove_dir_all(dir).ok();
+    assert_eq!((q.tasks[0].pct, q.tasks[0].pct_type), (50, PctType::Duration));
+    assert_eq!(dates(&q), dates(&p));
+}
