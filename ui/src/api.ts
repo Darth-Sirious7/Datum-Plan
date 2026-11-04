@@ -97,7 +97,12 @@ export const money = (v: number, c: Currency) => {
   return (v < 0 ? "-" : "") + (c.after ? `${s} ${c.symbol}` : `${c.symbol}${s}`);
 };
 
-export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[] }
+export interface SheetData { name: string; cells: Record<string, string>; fmt: Record<string, string>; widths: Record<string, number>; style?: Record<string, string>; images?: SheetImage[]; merges?: string[]; heights?: Record<string, number>; color?: string; hidden?: boolean; page?: SheetPage; cond?: CondRule[]; hide_rows?: number[]; hide_cols?: number[]; notes?: Record<string, string>; filter?: SheetFilter | null; valid?: Validation[] }
+/** AutoFilter: the range (headings in its first row) and each filtered column (0-based on the sheet). */
+export interface SheetFilter { range: string; cols: ColFilter[] }
+export interface ColFilter { col: number; values?: string[] | null; op: string; a: string; b: string }
+/** A drop-down list on a range: typed values or cells (src). */
+export interface Validation { range: string; list: string[]; src: string; warn?: boolean }
 /** A conditional formatting rule (see condfmt.tsx). */
 export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */
@@ -108,7 +113,7 @@ export interface Picture { id: number; name: string; role: string; data: string 
 export interface SheetImage { pic: number; cell: string; w: number; h: number; fit?: boolean }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
-export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][] }
+export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][] }
 export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
 export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
 export interface PeriodReport {

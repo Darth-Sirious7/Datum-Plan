@@ -38,7 +38,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const opts = { dateFmt: "%d-%b-%y", autosave: 0, beta: false, currency: { code: "USD", symbol: "$", decimals: 2, after: false }, company: "", logo: "", workspace: "", setupPanel: false, theme: "light" };
     const m = { ...f, options: opts, startup_file: null, recovery: null, check_update: null, templates: [], recent: [], version: "test", resources: [], checks: [], sheet_view: f.sheet_view ?? null, task_info: null };
     window.__calls = [];
-    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "import_workbook") { const sh = [...f.state.project.sheets, { name: "Vendors list", cells: { A1: "Vendor", B1: "Country", A2: "Steel Co", B2: "Germany" }, fmt: { B2: "flag" }, widths: {}, style: { A1: "b;f:#DDEBF7" } }]; f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return [f.state, ["Vendors list"]]; } if (c === "export_sheets") return "C:/Plans/Plan - sheets.xlsx"; if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
+    window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || a.op.SheetNotes || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells || o.SheetNotes)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images, notes: sh[o.Sheet.k].notes }; } if (o.SheetNotes) { const nt = { ...(sh[o.SheetNotes.k].notes ?? {}) }; o.SheetNotes.cells.forEach(([k2, v]) => { if (v) nt[k2] = v; else delete nt[k2]; }); sh[o.SheetNotes.k] = { ...sh[o.SheetNotes.k], notes: nt }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "import_workbook") { const sh = [...f.state.project.sheets, { name: "Vendors list", cells: { A1: "Vendor", B1: "Country", A2: "Steel Co", B2: "Germany" }, fmt: { B2: "flag" }, widths: {}, style: { A1: "b;f:#DDEBF7" } }]; f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return [f.state, ["Vendors list"]]; } if (c === "export_sheets") return "C:/Plans/Plan - sheets.xlsx"; if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   }, fix);
   await p.goto(url);
   await p.waitForTimeout(700);
@@ -368,8 +368,9 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
   check("Plan Data puts a live FILTER list of tasks with headings", /FILTER\(CHOOSECOLS\(Tasks/.test(await lastApply()) && (await lastApply()).includes('"Name"'));
   q = await sc(2, 0); await p.mouse.click(q.x, q.y, { button: "right" }); await p.waitForTimeout(150);
-  await p.click(".menu button:has-text('Insert Row Above')"); await p.waitForTimeout(150);
-  check("Insert Row Above asks the engine to move the cells", (await lastApply()).includes('"SheetInsert"') && (await lastApply()).includes('"at":2'));
+  await p.click(".menu button:has-text('Insert…')"); await p.waitForTimeout(150);
+  await p.click(".dlg label:has-text('Entire row') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(150);
+  check("Insert… › Entire row asks the engine to move the cells", (await lastApply()).includes('"SheetInsert"') && (await lastApply()).includes('"at":2'));
   await p.click('.side button[title="Resources"]'); await p.waitForTimeout(300);
   check("the Resource Sheet has a Country column", (await p.textContent(".tbl.sheet thead")).includes("Country"));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
@@ -606,6 +607,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // Hide and unhide rows.
   sq = await scell(2, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.hover(".menu button:has-text('Rows and Columns')"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Hide Rows')"); await p.waitForTimeout(300);
   check("Hide Rows hides the selected row", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.hide_rows)) === "[2]" && (await p.$$(".sheetgrid .row.rhid")).length === 1);
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
@@ -616,7 +618,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Ctrl+F opens Find", ((await p.textContent(".dlg header")) ?? "").includes("Find"));
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   // 0.5.19: spreadsheet keys and the fixes from the review.
-  const fname = async () => (await p.textContent(".fbar .fname"))?.trim();
+  const fname = async () => (await p.inputValue(".fbar .fname"))?.trim();
   sq = await scell(2, 1); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Control+Home"); await p.waitForTimeout(150);
   check("Ctrl+Home goes to A1", (await fname()) === "A1", await fname());
@@ -635,7 +637,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   // 0.5.24: the sheet zooms (status bar, View › Zoom, Ctrl+wheel) and clicks still land on the right cell.
   await p.click("footer button[title='Zoom In']"); await p.click("footer button[title='Zoom In']"); await p.waitForTimeout(200);
   check("Zoom In enlarges the sheet and shows the percentage", (await p.textContent("footer .zpct")) === "125%" && (await p.$eval(".sheetgrid .gsheet", e => e.style.zoom)) === "1.25");
-  { const q = await scell(3, 2); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100); check("a click on a zoomed sheet selects the cell under the pointer", (await p.textContent(".fbar .fname")) === "C4", await p.textContent(".fbar .fname")); }
+  { const q = await scell(3, 2); await p.mouse.click(q.x, q.y); await p.waitForTimeout(100); check("a click on a zoomed sheet selects the cell under the pointer", (await p.inputValue(".fbar .fname")) === "C4", await p.inputValue(".fbar .fname")); }
   await p.mouse.move(400, 400); await p.keyboard.down("Control"); await p.mouse.wheel(0, 200); await p.keyboard.up("Control"); await p.waitForTimeout(150);
   check("Ctrl+wheel zooms the sheet out", (await p.textContent("footer .zpct")) === "110%");
   await p.click("footer .zpct"); await p.waitForTimeout(150);
@@ -697,6 +699,94 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Control+p"); await p.waitForTimeout(500);
   check("a sheet prints without row numbers and column letters unless asked", (await p.$$(".pprev .ppage thead")).length === 0 && !!(await p.$(".psheet")));
   await p.click(".bs aside .back"); await p.waitForTimeout(300);
+
+  // A full spreadsheet's cell menu, row and column menus, Format Cells, Insert/Delete cells, notes,
+  // the AutoFilter, drop-down lists, Custom Sort, Go To and the Name Box, Ctrl+; and Ctrl/Shift+Space.
+  await p.click(".sheettabs button >> nth=0"); await p.waitForTimeout(300);
+  const applies = () => p.evaluate(() => window.__calls.filter(c => c[0] === "apply").map(c => JSON.stringify(c[1].op)));
+  const menuText = () => p.$$eval(".menu button span", b => b.map(x => x.textContent));
+  sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
+  await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  { const m = await menuText(), want = ["Cut", "Copy", "Paste", "Paste Special", "Insert…", "Delete…", "Clear Contents", "Sort", "Filter", "New Note…", "Format Cells…", "Number Format", "Borders", "Merge & Center", "Wrap Text", "Rows and Columns", "Freeze Panes", "AutoSum", "Insert Function…", "Plan Data…", "Drop-down List…"];
+    check("the cell menu has a full spreadsheet's commands", want.every(w => m.includes(w)) && m.length <= 26, want.filter(w => !m.includes(w)).join() + " / " + m.join()); }
+  await p.hover(".menu button:has-text('Paste Special')"); await p.waitForTimeout(150);
+  check("Paste Special offers Values, Formatting and Transpose", (await menuText()).includes("Transpose") && (await menuText()).includes("Values"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  { const rb = await scell(2, -1); await p.mouse.click(rb.x + 5, rb.y, { button: "right" }); await p.waitForTimeout(150); }
+  { const m = await menuText(); check("a row number's menu: insert, delete, height, hide", ["Insert Row", "Delete Row", "Row Height…", "AutoFit Row Height", "Hide", "Unhide", "Format Cells…"].every(w => m.includes(w)), m.join()); }
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  { const cb = await p.$eval(".sheetgrid .ghead .colh:nth-child(3)", e => { const r = e.getBoundingClientRect(); return [r.x + 20, r.y + 6]; }); await p.mouse.click(cb[0], cb[1], { button: "right" }); await p.waitForTimeout(150); }
+  { const m = await menuText(); check("a column letter's menu: insert, delete, width, hide", ["Insert Column", "Delete Column", "Column Width…", "AutoFit Column Width", "Hide"].every(w => m.includes(w)), m.join()); }
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  // Delete… › Shift cells up: only the selected columns move.
+  sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Delete…')"); await p.waitForTimeout(150);
+  await p.click(".dlg label:has-text('Shift cells up') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(150);
+  check("Delete… › Shift cells up deletes the cells and moves those below up", (await lastApply()).includes('"SheetShift":{"k":0,"range":"B2:B2","down":true,"del":true}'), await lastApply());
+  // Format Cells (Ctrl+1): number, font and border in one step.
+  sq = await scell(1, 2); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+1"); await p.waitForTimeout(200);
+  check("Ctrl+1 opens Format Cells with its five tabs", ((await p.textContent(".dlg header")) ?? "").includes("Format Cells") && (await p.$$(".dlg .dtabs button")).length === 5);
+  await p.selectOption(".dlg select.fccat", "Percentage"); await p.waitForTimeout(80);
+  await p.fill(".dlg input[type=number]", "1"); await p.waitForTimeout(80);
+  check("the number tab shows the format code", (await p.textContent(".dlg .fccode")) === "0.0%", await p.textContent(".dlg .fccode"));
+  await p.click(".dlg .dtabs button:has-text('Font')"); await p.click(".dlg label:has-text('Bold') input");
+  await p.click(".dlg .dtabs button:has-text('Border')"); await p.click(".dlg button:has-text('Outline')");
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  { const a = await lastApply(); check("Format Cells applies the number format, bold and the outline in one step", a.includes('"Batch"') && a.includes('"fmt":"0.0%"') && /"C2","b;bt:thin #000000;bb:thin #000000;bl:thin #000000;br:thin #000000"/.test(a), a); }
+  // Notes.
+  sq = await scell(2, 0); await p.mouse.click(sq.x, sq.y); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('New Note…')"); await p.waitForTimeout(150);
+  await p.fill(".dlg textarea.notebox", "Price agreed on 12 Oct"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  check("New Note saves the note on the cell", (await lastApply()).includes('"SheetNotes":{"k":0,"cells":[["A3","Price agreed on 12 Oct"]]}'));
+  check("a cell with a note has a red corner", (await p.$$(".sheetgrid .c.note")).length === 1);
+  { const b = await p.$eval(".sheetgrid .c.note", e => { const r = e.getBoundingClientRect(); return [r.x + 10, r.y + 6]; }); await p.mouse.move(b[0], b[1]); await p.waitForTimeout(150); }
+  check("pointing at the cell shows its note", ((await p.textContent(".snote").catch(() => "")) ?? "").includes("Price agreed"));
+  sq = await scell(2, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(80);
+  await p.keyboard.press("Shift+F2"); await p.waitForTimeout(150);
+  check("Shift+F2 edits the note", ((await p.textContent(".dlg header")) ?? "").includes("Edit Note") && (await p.inputValue(".dlg textarea")) === "Price agreed on 12 Oct");
+  await p.click(".dlg button:has-text('Delete Note')"); await p.waitForTimeout(200);
+  check("Delete Note removes it", (await p.$$(".sheetgrid .c.note")).length === 0);
+  // The AutoFilter: buttons on the headings, values to show, rows hidden by the engine's answer.
+  await p.evaluate(() => { const inv = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = async (c, a) => { const r = await inv(c, a); return c === "sheet_view" && r ? { ...r, filtered: [2] } : r; }; });
+  sq = await scell(0, 0); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+Shift+L"); await p.waitForTimeout(250);
+  { const f = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.filter); check("Ctrl+Shift+L filters the list around the cell, with a button on each heading", f?.range === "A1:C4" && (await p.$$(".sheetgrid .fltb")).length === 3, JSON.stringify(f)); }
+  await p.click(".sheetgrid .fltb >> nth=1"); await p.waitForTimeout(200);
+  check("a heading's button opens its filter with the column's values", ((await p.textContent(".dlg header")) ?? "").includes("Filter: Country") && (await p.textContent(".dlg .fltvals")).includes("DE"));
+  await p.click(".dlg .fltvals label:has-text('cn') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
+  { const f = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.filter); check("unticking a value filters the column", JSON.stringify(f?.cols) === '[{"col":1,"values":["DE",""],"op":"","a":"","b":""}]', JSON.stringify(f)); }
+  check("the rows the filter leaves out are hidden and the button shows the column is filtered", (await p.$$(".sheetgrid .row.rhid")).length === 1 && (await p.$$(".sheetgrid .fltb.on")).length === 1);
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  check("Sheet Tools › Format has a Data group: Filter, Drop-down List, Note", !!(await p.$(".ribbon .grp:has(.cap:text('Data')) button:has-text('Drop-down List')")));
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Filter')"); await p.waitForTimeout(300);
+  check("Filter again removes the filter and shows every row", (await p.$$(".sheetgrid .fltb")).length === 0 && (await p.$$(".sheetgrid .row.rhid")).length === 0);
+  // A drop-down list.
+  sq = await scell(1, 3); await p.mouse.click(sq.x, sq.y); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Drop-down List…')"); await p.waitForTimeout(150);
+  await p.fill(".dlg textarea", "Open\nClosed"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  check("Drop-down List saves the list on the cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.valid)) === '[{"range":"D2","list":["Open","Closed"],"src":"","warn":false}]');
+  await p.click(".sheetgrid .lstb"); await p.waitForTimeout(150);
+  check("the cell's arrow lists its values", JSON.stringify(await menuText()) === '["Open","Closed"]', JSON.stringify(await menuText()));
+  await p.click(".menu button:has-text('Closed')"); await p.waitForTimeout(200);
+  check("picking a value puts it in the cell", (await lastApply()).includes('["D2","Closed"]'));
+  await p.keyboard.type("Maybe"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("a value not in the list is refused", ((await p.textContent("#toast")) ?? "").includes("takes a value from its list") && !(await lastApply()).includes("Maybe"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  // Keys: Ctrl+; today, Name Box, Go To, Ctrl+Space and Shift+Space, Custom Sort.
+  sq = await scell(6, 1); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+;"); await p.waitForTimeout(200);
+  { const d = new Date(), z = n => String(n).padStart(2, "0"), t = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; check("Ctrl+; types today's date", (await lastApply()).includes(`["B7","${t}"]`), await lastApply()); }
+  await p.click(".fbar .fname"); await p.keyboard.type("C12"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("typing a cell in the Name Box goes there", (await p.inputValue(".fbar .fname")) === "C12", await p.inputValue(".fbar .fname"));
+  await p.keyboard.press("F5"); await p.waitForTimeout(150); await p.keyboard.type("A2:B3"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("Go To (F5) selects a range", (await p.inputValue(".fbar .fname")) === "A2:B3", await p.inputValue(".fbar .fname"));
+  await p.keyboard.press("Shift+Space"); await p.waitForTimeout(100);
+  check("Shift+Space selects the row", /^A2:[A-Z]+2$/.test(await p.inputValue(".fbar .fname")), await p.inputValue(".fbar .fname"));
+  await p.keyboard.press("Control+Space"); await p.waitForTimeout(100);
+  check("Ctrl+Space selects the column", /^A1:A\d+$/.test(await p.inputValue(".fbar .fname")), await p.inputValue(".fbar .fname"));
+  sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.hover(".menu button:has-text('Sort')"); await p.waitForTimeout(150); await p.click(".menu button:has-text('Custom Sort…')"); await p.waitForTimeout(150);
+  check("Custom Sort sorts the list around the cell by its columns, knowing the headings", ((await p.textContent(".dlg header")) ?? "").includes("Sort") && (await p.textContent(".dlg select")).includes("Column B: Country") && await p.isChecked(".dlg label:has-text('My data has headers') input"));
+  await p.click(".dlg button:has-text('Add Level')"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
+  check("the sort moves whole rows in one step", (await lastApply()).includes('"Batch"') && (await lastApply()).includes('"A2"') && !(await lastApply()).includes('"A1",'), (await lastApply()).slice(0, 200));
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
   check("leaving Sheets goes back to the Home tab", (await p.textContent(".tabs > button.on")) === "Home");
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);
