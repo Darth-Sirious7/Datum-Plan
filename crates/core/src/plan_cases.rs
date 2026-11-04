@@ -275,3 +275,40 @@ fn an_elapsed_lag_from_a_project_xml_file_keeps_its_length() {
     assert_eq!(q.tasks[1].preds[0].lag, 5 * 480);
     assert_eq!(&dates(&q)[1][..11], "Nov16 08:00");
 }
+
+#[test]
+fn update_project_then_baseline_variance_and_undo() {
+    let mut dc = doc(&["5d||", "5d|1|", "0|2|"]);
+    op(&mut dc, Op::Baseline { uids: vec![], clear: false, n: 0 });
+    op(&mut dc, Op::UpdateProject { through: "04-Nov-26".into(), reschedule: false });
+    let t = &dc.p.tasks[0];
+    assert_eq!((t.pct, t.act_start, dc.p.status), (60, Some(d(2026, 11, 2)), Some(d(2026, 11, 4))));
+    assert_eq!(dates(&dc.p), ["Nov02 08:00 Nov06 17:00 0", "Nov09 08:00 Nov13 17:00 0", "Nov13 17:00 Nov13 17:00 0"]);
+    // The crew says 4 more days on A (it slips a day): B and the milestone slip a day against the baseline.
+    let uid = dc.p.tasks[0].uid;
+    op(&mut dc, Op::Set { uid, field: "rem".into(), value: "3d".into() });
+    let c = crate::fields::Calc::new(&dc.p, F, d(2026, 11, 4));
+    assert_eq!((c.text(2, "finish"), c.text(2, "vfinish"), c.text(2, "b0finish")), ("16-Nov-26".into(), "1 day".into(), "13-Nov-26".into()));
+    dc.undo();
+    assert_eq!(dc.p.tasks[0].dur, 5 * 480);
+    dc.undo();
+    assert_eq!((dc.p.tasks[0].pct, dc.p.status), (0, None));
+}
+
+#[test]
+fn levelling_one_crew_then_clearing_and_undo() {
+    // Two 3d tasks for the same crew and a 1d task after both.
+    let mut dc = doc(&["3d||res=Crew", "3d||res=Crew", "1d|1,2|"]);
+    let before = dates(&dc.p);
+    op(&mut dc, Op::Level { uids: vec![], clear: false });
+    // Float stays logic-only (the first task could slip 3 days if the crew allowed it).
+    assert_eq!(dates(&dc.p), ["Nov02 08:00 Nov04 17:00 3", "Nov05 08:00 Nov09 17:00 0", "Nov10 08:00 Nov10 17:00 0"]);
+    op(&mut dc, Op::Level { uids: vec![], clear: true });
+    assert_eq!(dates(&dc.p), before);
+    dc.undo();
+    assert_eq!(&dates(&dc.p)[1][..11], "Nov05 08:00");
+    // Half-time on each: both fit side by side, nothing moves.
+    let mut dc = doc(&["3d||res=Crew[50%]", "3d||res=Crew[50%]"]);
+    op(&mut dc, Op::Level { uids: vec![], clear: false });
+    assert_eq!(&dates(&dc.p)[1][..11], "Nov02 08:00");
+}

@@ -91,6 +91,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const ops = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-2).map(c => Object.keys(c[1].op)[0] + ":" + JSON.stringify(c[1].op.Batch?.map(o => Object.keys(o)[0]) ?? "")));
     check("Insert Summary Task is one step (one Undo)", ops[1] === 'Batch:["Insert","Indent"]', JSON.stringify(ops));
     await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100); }
+  // Pasting a block that runs past the last task is one step (cells, then new rows): one Undo.
+  { await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 1e6; }); await p.waitForTimeout(200);
+    await p.click(".row.blank .c >> nth=2"); await p.keyboard.press("ArrowUp"); await p.waitForTimeout(100);
+    await p.evaluate(() => { const dt = new DataTransfer(); dt.setData("text/plain", "Pasted 1\nPasted 2\nPasted 3"); document.querySelector(".gscroll").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })); });
+    await p.waitForTimeout(200);
+    const op = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()[1].op);
+    check("a paste past the last task is one step", op.Batch?.length === 2 && op.Batch[0].Cells?.cells.length === 1 && op.Batch[1].InsertRows?.rows.length === 2, JSON.stringify(op));
+    await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 0; }); await p.waitForTimeout(150); }
   // The Calendar and Team Planner show the tasks under a collapsed summary too.
   { await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200);
     const collapsedQ = await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q?.collapsed?.length));
