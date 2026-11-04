@@ -908,7 +908,7 @@ export const Sheets = () => {
       <Show when={found().length}><div class="mclist findall"><For each={found()}>{([i, at, t]) => <button onClick={() => { setK(i); queueMicrotask(() => { const [r, c] = parseA1(at); go(r, c); }); }}><b>{P().sheets[i]?.name}!{at}</b> {t}</button>}</For></div></Show>
     </Dialog>;
   });
-  // ---------- the sheet's own page setup (Sheet Tools › Page) ----------
+  // ---------- the sheet's own page setup (Sheet Tools › Format) ----------
   const page = (): SheetPage => sheet()?.page ?? {};
   const setPage = (x: Partial<SheetPage>) => act({ Sheet: { k: k(), sheet: { ...sheet(), page: { ...page(), ...x } } } });
   const areaFromSel = () => { const b = bounds(); setPage({ area: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}` }); toast(`Print area: ${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}. Only these cells print.`, true); };

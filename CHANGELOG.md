@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.5.25 — 2026-11-05
+
+Sheets that work like a full spreadsheet, a simpler ribbon, and a night of bug fixing across the app (more than 70 fixes, each with a test).
+
+- **Ribbon:**
+  - **Home** also has the everyday task commands (New Task, Indent, Outdent, Information, Link, Unlink, Scroll to Task); they are on Schedule too. From Sheets, a task command opens the Gantt.
+  - **Sheet Tools** is always on the ribbon, with one tab, **Format**: cells, data, views, page setup and printing. From another view it opens Sheets; Gantt Chart Tools › Format opens the Gantt.
+- **Sheets:**
+  - A full **right-click menu** on cells, row numbers and column letters: Cut, Copy, Paste, Paste Special, Insert… and Delete… (shift cells or whole rows and columns), Clear, Sort, Filter, Notes, Format Cells…, number format, borders, merge, wrap, rows and columns, freeze panes, AutoSum, functions, plan data and drop-down lists.
+  - **Format Cells…** (Ctrl+1): number, alignment, font, border and fill.
+  - **Notes** on cells (Shift+F2): a red corner; they show when you point at the cell.
+  - **Filter** (Ctrl+Shift+L): values, conditions, top N, above or below average; sort from the heading.
+  - **Drop-down lists** in cells, from typed values or from cells.
+  - **Remove Duplicates**, **Find All**, Find and Replace on every sheet, **Go To** (F5) and a Name Box you can type in.
+  - Keys: Ctrl+; today, Ctrl+Shift+; the time, Ctrl+Space and Shift+Space, Ctrl++ and Ctrl+-.
+  - Notes, filters and drop-down lists go into an exported workbook and come back from one.
+- **Fixed, in the sheets' calculations** (14):
+  - plan dates in sheets no longer carry a hidden time of day, so COUNTIFS on Tasks[Finish], ProjectFinish lookups and date differences give the right answers;
+  - dates typed as 05/01/2026 follow the plan's day order, also inside formulas; two-digit years work;
+  - a date plus days shows as a date, and a date minus a date shows as days;
+  - amounts typed with €, £ or the plan's currency are numbers;
+  - money rounds halves up;
+  - very deeply nested formulas show #VALUE! instead of closing the app;
+  - Save as Excel keeps the same results and formats when the workbook is recalculated;
+  - imported formulas follow renamed tabs;
+  - the fill handle keeps thousands separators and continues day and month names.
+- **Fixed, in dashboards and reports** (18):
+  - the S-curve's actual line runs to the status date, and planned and actual are measured on the same day, so a plan on time no longer shows behind;
+  - long plans' S-curves reach 100 %, and phase curves run forward;
+  - earned schedule after completion, plans of milestones only, and plans with no status date give the right figures;
+  - dashboard tiles: large ranges stop at the data, rings show errors and text, pies refuse negative values, tiles on a deleted sheet say so, and dashboards with more than 200 formulas fill completely;
+  - the Report Builder prints the report and period on screen, without blank pages;
+  - the status marker on cost and earned value charts sits in the right period.
+- **Fixed, in the task sheet, Gantt and file exchange** (19):
+  - Move Up/Down of a block, remaining and actual durations longer than planned, Fill Down copies instead of counting;
+  - progress and scheduling-mode buttons work when a summary is selected; Insert Summary Task and Paste undo in one step;
+  - percent lags in the task details; Calendar and Team Planner show collapsed tasks; renaming a calendar keeps people on it;
+  - typing a start or finish on a task under way sets its actual dates; a finish typed on a milestone keeps it a milestone; daily recurring tasks skip non-working days;
+  - XER: elapsed durations, row order, task calendars and % complete; Project XML: elapsed lags; CSV/Excel import: progress set after the links.
+
 ## 0.5.24 — 2026-11-04
 
 A cleaner ribbon, zoom for sheets, and fixes to Page Breaks view.

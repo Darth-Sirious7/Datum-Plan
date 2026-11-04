@@ -174,7 +174,7 @@ export const importWorkbook = async () => {
 };
 /** Saves the plan's sheets as a workbook to share. */
 export const exportSheets = async () => { const p = await call<string | null>("export_sheets"); if (p) toast(`Saved ${p}`, true); };
-/** Sheet Tools › Cells: everything for the cells of a sheet. It opens by itself in Sheets. */
+/** Sheet Tools › Format, first part: everything for the cells of a sheet. */
 /** Task tools act on the Gantt; from another view they open it first and say so. */
 const onGantt = (f: () => unknown) => { if (["gantt", "tracking"].includes(view())) return f(); C.view("gantt"); toast("Task tools work on the Gantt: opened the Gantt.", true); };
 /** Home: the tools the task sheet and the Sheets share (clipboard, font, alignment, editing); each acts on the one in view. */
@@ -222,7 +222,7 @@ const SheetCells = () => {
     <G l="Insert" h="sheets"><S><B i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /></S><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
   </>;
 };
-/** Sheet Tools › Page: how the sheet prints, and the page views. Each sheet keeps its own page setup. */
+/** Sheet Tools › Format, second part: the page views, page setup and printing. Each sheet keeps its own page setup. */
 const SheetPageTab = () => {
   const A = () => sheetApi(), pg = () => A()?.page() ?? {}, set = (x: Partial<SheetPage>) => A()?.setPage(x);
   const eff = () => sheetPage();

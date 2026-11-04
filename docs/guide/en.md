@@ -71,7 +71,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 ![The Datum Plan window with the Gantt chart.](img/window.png)
 
 1. **File and the ribbon tabs.** **File** opens the File page. The tabs are **Home**, **Schedule**, **Progress**, **Resource**, **Report**, **Project**, **View**, **Format** and **Help**.
-2. **The ribbon.** The buttons of the chosen tab, in named groups. Each group has a **?**. **Home** holds what the task sheet and the Sheets share: Clipboard, Font, Alignment and Editing (Find, Fill, Clear, Sort); each acts on what is in view. Building the schedule (insert tasks, links, outline, task information) is on **Schedule**.
+2. **The ribbon.** The buttons of the chosen tab, in named groups. Each group has a **?**. **Home** holds what the task sheet and the Sheets share: Clipboard, Font, Alignment and Editing (Find, Fill, Clear, Sort); each acts on what is in view. It also has the everyday task commands (New Task, Indent, Outdent, Information, Link, Unlink, Scroll to Task); they are on **Schedule** too, with the rest of building the schedule. **Gantt Chart Tools › Format** and **Sheet Tools › Format** are always on the ribbon; each opens the view it works on.
 3. **The sidebar.** One click to each view: Setup, Gantt, Tracking, Network, Calendar, Task Usage, Resources, Res. Usage, Manpower, Team, Sheets, Update, Look-ahead, Dashboard, Progress, S-Curves, Reports, Builder, Checks, Risks, Sched. Risk and Portfolio.
 4. **The timeline.** The whole project on one line. Drag the blue box to scroll the Gantt chart; right-click a task and choose **Add to Timeline** to show it here.
 5. **The task sheet.** Works like a spreadsheet: type in the cells, select ranges, copy and paste with other spreadsheets, fill down.
@@ -356,7 +356,7 @@ Open **Sheets** in the sidebar. A sheet is a spreadsheet saved inside your plan 
 
 ### Format and print a sheet: Sheet Tools
 
-When you open **Sheets**, the ribbon opens on **Home** and shows **Sheet Tools** beside it with two tabs; it goes back to **Home** when you leave.
+When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format** is beside it.
 
 **Home** has the tools the task sheet and the Sheets share:
 
@@ -365,25 +365,29 @@ When you open **Sheets**, the ribbon opens on **Home** and shows **Sheet Tools**
 - **Alignment:** top, middle and bottom; left, centre and right; indent; **Wrap Text**; **Merge & Center** (the arrow: Merge Across, Merge Cells, Unmerge Cells).
 - **Editing:** **Find** (Find and Replace), **Fill** (Down and Right), **Clear** (All, Formats or Contents) and **Sort** A to Z or Z to A (formulas move with their rows, empty cells go last).
 
-**Cells** holds the tools only a sheet has:
+**Sheet Tools › Format** holds the tools only a sheet has. Sheet Tools is always on the ribbon; from another view it opens Sheets.
 
 - **Lines:** **Borders**, each choice drawn beside its name, with line colour and style; **All Borders**, **Outside** and **No Border** at one click.
 - **Number:** the number format list, currency, percent, comma style and decimals.
-- **Look:** four quick cell styles, and the arrow opens the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
-- **Rows & Columns:** insert or delete rows, columns and sheets; **Size** for row height, column width, AutoFit, **Hide** and **Unhide** rows or columns, and the tab. Right-click the cells to hide or unhide them too; a double line marks where rows or columns are hidden. Hidden rows and columns don't print, and stay hidden in an exported workbook.
-- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; Function and Plan Data.
-- **Formulas:** AutoSum (the arrow: Average, Count, Max and Min).
+- **Look:** **Conditional** formatting and **Cell Styles**, the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
+- **Rows & Columns:** **Insert** and **Delete** (rows, columns, sheets, or cells shifted right, left, down or up); **Size** for row height, column width, AutoFit, **Hide** and **Unhide** rows or columns, **Format Cells…** and the tab. A double line marks where rows or columns are hidden. Hidden rows and columns don't print, and stay hidden in an exported workbook.
+- **Data:** **Filter**, **Drop-down List** and **Note** (below).
+- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; **AutoSum** (the arrow: Average, Count, Max and Min), Function, Plan Data and Excel Workbook….
+- **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
+- **Page Setup:** size, orientation and margins (Normal, Narrow, Wide, None or your own); **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page, also when they are above the print area) and **Breaks** (**Insert Page Break** starts a new page above the selected cell's row and left of its column; or only at the row or the column; **Reset All Page Breaks**); fit to so many pages wide and tall, or a scale. Each sheet keeps its own setup; the plan's stays as it is.
+- **Print:** **Print Options** (header and footer, gridlines, row and column labels, centre on page), **Print Preview** (File › Print, where the same choices sit at the top) and **Save as Excel**.
 
 **Zoom:** the slider at the bottom right, its **−** and **+**, View › Zoom or [[Ctrl]] with the mouse wheel show the sheet from 10 % to 400 %; click the percentage to go back to 100 %.
 
-**Page** sets how this sheet prints; each sheet keeps its own setup and the plan's stays as it is:
+**Right-click** a cell for the commands you use most: Cut, Copy, Paste and Paste Special (Values, Formatting, Transpose); Insert… and Delete… (shift cells or whole rows and columns); Clear Contents; Sort (A to Z, Z to A, Custom Sort…); Filter; New Note; Format Cells…; Number Format, Borders, Merge & Center and Wrap Text; Rows and Columns; Freeze Panes; AutoSum, Insert Function, Plan Data and Drop-down List. Right-click a row number or a column letter for insert, delete, clear, height or width, AutoFit, hide and unhide.
 
-- **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
-- **Paper:** size, orientation and margins (Normal, Narrow, Wide, None or your own).
-- **What Prints:** **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page, also when they are above the print area) and **Breaks** (**Insert Page Break** starts a new page above the selected cell's row and left of its column; or only at the row or the column; **Reset All Page Breaks**).
-- **Fit:** fit to so many pages wide and tall, or a scale.
-- **On the Paper:** **Header & footer** (untick to print the cells only, without the plan's logos and title), **Gridlines**, **Row & column labels** and **Centre on page**.
-- **Print Preview** opens File › Print, where the same choices sit at the top.
+- **Format Cells…** ([[Ctrl+1]]) has five tabs: **Number** (General, Number with decimals and the 1,000 separator, Currency, Percentage, Date, Time, Text, Country with flag, Custom, with the format code shown), **Alignment**, **Font**, **Border** and **Fill**. It changes only what you touched, in one step.
+- **Notes:** **New Note** ([[Shift+F2]]) writes a note on the cell; a red corner marks it and pointing at the cell shows it. Notes move with sorting and inserted cells, and go into an exported workbook as notes.
+- **Filter** ([[Ctrl+Shift+L]]) puts a button on each heading of the list around the cell. A button sorts, ticks the values to show (with a search box and blanks), or sets a condition: equals, greater than, between, contains, begins or ends with, blank, top N, above or below average. **Clear Filter** shows every row again. Copy, Clear and formatting skip the rows the filter hides. The filter goes into an exported workbook and comes back.
+- **Drop-down List:** the values to choose from, typed in or read from cells (also on another sheet, for example `Lists!A1:A9`). An arrow shows on the cell; [[Alt+Down]] opens it. Other values are refused, unless **Only warn** is ticked.
+- **Remove Duplicates…** (Home › Sort) removes repeated rows, comparing the columns you choose.
+- **Find All** lists every match to click through; **Look in** chooses the values shown or the formulas typed, and **Every sheet** searches all the tabs.
+- **Go To:** [[F5]] or [[Ctrl+G]], or type an address in the box left of the formula bar (B12, A1:D20, Sheet2!A1).
 
 In **Page Breaks** view you set the pages by hand, on the cells:
 
@@ -398,7 +402,7 @@ Keys: [[Ctrl+Arrow]] goes to the edge of the data, [[Ctrl+Home]] to A1, [[Ctrl+E
 
 ### Conditional formatting
 
-Select the cells, then Sheet Tools › Cells › Look › **Conditional**:
+Select the cells, then Sheet Tools › Format › Look › **Conditional**:
 
 - **Highlight Cells:** greater than, less than, between, equal to, text that contains, a date occurring (before today, today, this week, in the next 7 days, this month and more), blank cells, duplicate values;
 - **Top and Bottom:** top 10, bottom 10, above or below average;
@@ -410,16 +414,17 @@ Select the cells, then Sheet Tools › Cells › Look › **Conditional**:
 
 ### Sheets and Excel workbooks
 
-- **Bring a workbook in:** Sheet Tools › Cells › **Excel Workbook…** (or **Bring in an Excel workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:
+- **Bring a workbook in:** Sheet Tools › Format › Insert › **Excel Workbook…** (or **Bring in an Excel workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:
   - values, formulas and number formats;
   - fonts, fills, borders and alignment;
   - merged cells, column widths and row heights;
   - frozen panes, the tab colour, the page setup and the pictures.
 
   Tab names already in use get " (2)". One Undo takes the whole import back.
-- **Share the sheets:** Sheet Tools › Page › **Save as Excel** writes the sheets as a workbook, with:
+- **Share the sheets:** Sheet Tools › Format › Print › **Save as Excel** writes the sheets as a workbook, with:
   - real numbers and dates, formulas with their last results, and number formats;
-  - styles, merged cells, sizes, pictures, frozen panes, tab colours and each sheet's page setup.
+  - styles, merged cells, sizes, pictures, frozen panes, tab colours and each sheet's page setup;
+  - notes, filters and drop-down lists.
 
   Formulas that read the plan (Tasks[Finish], ProjectFinish) keep working: the plan's data goes on hidden sheets in the same workbook. **File › Export › Excel workbook** writes the task table as well.
 - **Country flags** show in Excel as the country's name. A hidden "DatumPlan" sheet remembers which cells are flags (and which pictures are placed in cells), so the workbook opens in Datum Plan with its flags again.
