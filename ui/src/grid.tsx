@@ -291,7 +291,7 @@ export const Grid = (p: { width?: number }) => {
     if (ctrl && e.altKey && k === "v") { e.preventDefault(); return D.pasteSpecial(); }
     if (ctrl && !e.shiftKey && (k === "b" || k === "i" || k === "u")) { e.preventDefault(); return F.toggle(k); }
     if (ctrl && k === "a") { e.preventDefault(); setRanges([{ r0: 0, c0: 0, r1: rows().length - 1, c1: ncols() - 1 }]); return; }
-    if (ctrl && k === "d" && last) { e.preventDefault(); const n = norm(last); return n.r1 > n.r0 ? fill({ ...n, r1: n.r0 }, n.r1) : undefined; }
+    if (ctrl && k === "d" && last) { e.preventDefault(); const n = norm(last); return n.r1 > n.r0 ? fill({ ...n, r1: n.r0 }, n.r1, true) : undefined; }
     if (ctrl && (k === "-" || k === "delete")) { e.preventDefault(); return C.del(); }
     if (ctrl && (k === "+" || k === "=")) { e.preventDefault(); return C.newTask(); }
     if (!ctrl && !e.altKey && e.key.length === 1) { e.preventDefault(); startEdit(row, col, e.key); }

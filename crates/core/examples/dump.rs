@@ -92,7 +92,15 @@ fn main() {
         p.sheets.push(SheetData { name: "Vendors".into(), cells: cells.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), fmt: fmt.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(), ..Default::default() });
         (p, NaiveDate::from_ymd_opt(2026, 10, 24).unwrap())
     };
-    let guide = arg == "guide" || arg == "tutorial";
+    let mut v = fixture(&p, today, arg == "guide" || arg == "tutorial");
+    // A new, empty plan: every view must open on it too.
+    if arg.is_empty() { v["empty"] = fixture(&Project::new("New plan", NaiveDate::from_ymd_opt(2026, 10, 26).unwrap()), today, true) }
+    println!("{v}");
+}
+
+/// The engine's answers the mocked window reads for plan `p`.
+fn fixture(p: &Project, today: NaiveDate, guide: bool) -> serde_json::Value {
+    let p = p.clone();
     let c = Calc::new(&p, "%d-%b-%y", today);
     let q = Query { cols: p.columns.iter().filter(|c| c.1 > 0).map(|c| c.0.clone()).collect(), ..Query::default() };
     let mut g = c.grid(&q);
@@ -115,7 +123,7 @@ fn main() {
         proj["subplans"] = serde_json::json!([{ "file": "C:/Plans/Engineering.dplan", "name": "Engineering" }, { "file": "C:/Plans/Procurement.dplan", "name": "Procurement", "level": 1 }]);
     }
     // A master's combined view: a subplan's row and one of its tasks after the plan's rows.
-    let query_subs = {
+    let query_subs = if p.tasks.is_empty() { serde_json::Value::Null } else {
             let mut v = serde_json::to_value(&g).unwrap();
             let t = v["rows"].as_array().unwrap().iter().find(|r| r["kind"] == "task").cloned().unwrap();
             let mut head = t.clone();
@@ -130,7 +138,8 @@ fn main() {
             v["rows"].as_array_mut().unwrap().extend([head, child]);
             v
         };
-    println!("{}", serde_json::json!({
+    let t2 = |k: usize| p.tasks.get(k).map_or((0, String::new()), |t| (t.uid, t.name.clone()));
+    serde_json::json!({
         "state": { "tabs": if guide { serde_json::json!([{ "name": p.name, "path": null, "dirty": false, "moved": 0, "role": "", "group": -1, "level": 0, "project": "" }]) } else { serde_json::json!([{ "name": p.name, "path": "C:/Plans/Main.dplan", "dirty": false, "moved": 0, "role": "master", "group": 0, "level": 0, "project": p.name }, { "name": "Engineering", "path": "C:/Plans/Engineering.dplan", "dirty": true, "moved": 2, "role": "sub", "group": 0, "level": 0, "project": p.name }]) }, "tab": 0, "project": proj, "summary": c.summary(), "path": if guide { None } else { Some("C:/Plans/Main.dplan") }, "dirty": false, "undo": false, "redo": false, "clip": 0, "rev": 1 },
         "query": g, "query:timeline": tl, "query:tracking": tracking, "scurve": report::scurve(&c, "week", "duration", None), "period_report": report::period_report(&c, "week", None),
         "periods": report::period_ends(&c, "week"), "curve": report::curve(&c, "week"), "usage": report::usage(&c, "resource", "work", "week"), "usage:group": report::usage(&c, "group", "work", "week"),
@@ -141,9 +150,9 @@ fn main() {
         "link_go": [{ "dir": "in", "label": "Engineering › E1010 IFC drawings issued (FS+5d)", "file": "C:/Plans/Engineering.dplan", "uid": 2, "moved": true }, { "dir": "out", "label": "Main schedule › A1040 Engineering complete (FS)", "file": "C:/Plans/Main schedule.dplan", "uid": 5, "moved": false }],
         "subplan_rows": [{ "file": "C:/Plans/Engineering.dplan", "name": "Engineering", "level": 0, "found": true, "open": true, "tab": 1, "start": c.s.start, "finish": c.s.start + 40 * cal::DAY, "pct": 25.0, "tasks": 19 }, { "file": "C:/Plans/Procurement.dplan", "name": "Procurement", "level": 1, "found": true, "open": false, "tab": -1, "start": c.s.start, "finish": c.s.start + 90 * cal::DAY, "pct": 0.0, "tasks": 15 }],
         "query_subs": query_subs,
-        "link_users": [{ "uid": p.tasks[2].uid, "task": p.tasks[2].name, "tab": 1, "by": "Main schedule › A1040 Engineering complete (FS)" }],
-        "link_states": [{ "uid": p.tasks[1].uid, "task": p.tasks[1].name, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
+        "link_users": [{ "uid": t2(2).0, "task": t2(2).1, "tab": 1, "by": "Main schedule › A1040 Engineering complete (FS)" }],
+        "link_states": [{ "uid": t2(1).0, "task": t2(1).1, "k": 0, "link": { "file": "C:/Plans/Engineering.dplan", "uid": 2, "kind": "FS", "lag": 0, "plan": "Engineering", "code": "E1010", "name": "IFC drawings issued", "start": c.s.start, "finish": c.s.start + 10 * cal::DAY }, "now_start": c.s.start, "now_finish": c.s.start + 15 * cal::DAY, "state": "changed" }],
         "sheet_catalog": { "functions": sheet::functions(), "names": sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect::<Vec<_>>(), "tasks": sheet::task_columns(&c).into_iter().map(|x| x.1).collect::<Vec<_>>(), "resources": sheet::RES_COLS.iter().map(|x| x.1).collect::<Vec<_>>() },
         "resources": c.res_grid(&["name", "kind", "label", "initials", "group", "max", "rate", "ovt", "per_use", "cal", "code", "country", "email", "work", "cost"].map(String::from)), "network": network::layout(&c, &rows), "field_list": { "task": fields::task_fields(), "resource": fields::resource_fields(), "filters": query::builtin_filters() },
-    }));
+    })
 }

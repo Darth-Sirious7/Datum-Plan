@@ -666,12 +666,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if pred == succ {
                 return Err("A task cannot be its own predecessor.".into());
             }
-            let lag = if lag.trim().is_empty() { 0 } else { let l = lag.trim(); let neg = l.starts_with('-'); let m = parse::dur(l.trim_start_matches(['+', '-']), p.day_min)?.0; if neg { -m } else { m } };
+            let (lag, pct) = parse::lag(&lag, p.day_min)?;
             let t = &mut p.tasks[i];
             let at = t.preds.iter().position(|l| l.pred == pred);
             match (kind, at) {
-                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct: false },
-                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct: false }),
+                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct },
+                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct }),
                 (None, Some(k)) => { t.preds.remove(k); }
                 (None, None) => {}
             }

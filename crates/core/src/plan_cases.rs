@@ -223,3 +223,20 @@ fn a_task_list_with_progress_starts_each_task_after_its_predecessors() {
     assert_eq!((p.tasks[1].act_start, p.tasks[1].pct), (Some(d(2026, 11, 9)), 40));
     assert_eq!(p.tasks[2].preds[0].lag, -480);
 }
+
+#[test]
+fn a_percent_lag_survives_changing_the_link_type_in_the_details_pane() {
+    // The Predecessors tab shows a percent lag as "50%" and sends it back when the type changes.
+    let mut dc = doc(&["4d||", "2d|1SS+50%|"]);
+    let (a, b) = (dc.p.tasks[0].uid, dc.p.tasks[1].uid);
+    op(&mut dc, Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FF), lag: "50%".into() });
+    let l = dc.p.tasks[1].preds[0].clone();
+    assert_eq!((l.kind, l.lag, l.pct), (LinkType::FF, 50, true));
+    // An overlap by a share of the predecessor, typed with a minus sign as the column's tip shows.
+    op(&mut dc, Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "\u{2212}25%".into() });
+    let l = dc.p.tasks[1].preds[0].clone();
+    assert_eq!((l.kind, l.lag, l.pct), (LinkType::FS, -25, true));
+    assert_eq!(dates(&dc.p)[1], "Nov05 08:00 Nov06 17:00 0");
+    op(&mut dc, Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "-1d".into() });
+    assert_eq!((dc.p.tasks[1].preds[0].lag, dc.p.tasks[1].preds[0].pct), (-480, false));
+}

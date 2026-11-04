@@ -20,9 +20,8 @@ export const C = {
     const u = uids();
     if (!u.length) return C.newTask();
     const first = grid().rows.find(r => r.uid === u[0])!;
-    await act({ Batch: [{ Insert: { at: first.id - 1, name: "New summary task", ms: false } }] });
-    await refresh();
-    await act({ Indent: { uids: u } });
+    // One step, so one Undo takes it all back.
+    await act({ Batch: [{ Insert: { at: first.id - 1, name: "New summary task", ms: false } }, { Indent: { uids: u } }] });
   },
   del: () => { const u = uids(); if (u.length) act({ Delete: { uids: u } }); },
   indent: () => act({ Indent: { uids: uids() } }),
@@ -31,8 +30,9 @@ export const C = {
   unlink: () => act({ Unlink: { uids: uids() } }),
   move: (up: boolean) => act({ Move: { uids: uids(), up } }),
   onTrack: () => act({ MarkOnTrack: { uids: uids() } }),
-  pct: (v: number) => act({ Batch: uids().map(uid => ({ Set: { uid, field: "pct", value: String(v) } })) }),
-  mode: (manual: boolean) => act({ Batch: uids().map(uid => ({ Set: { uid, field: "mode", value: manual ? "manual" : "auto" } })) }),
+  // As cells: a summary in the selection is skipped (its progress comes from its tasks), not an error that stops the rest.
+  pct: (v: number) => act({ Cells: { cells: uids().map(uid => [uid, "pct", String(v)] as [number, string, string]) } }),
+  mode: (manual: boolean) => act({ Cells: { cells: uids().map(uid => [uid, "mode", manual ? "manual" : "auto"] as [number, string, string]) } }),
   inactive: () => { const r = selRows(); const on = r.some(x => x.off); act({ Batch: uids().map(uid => ({ Set: { uid, field: "active", value: on ? "yes" : "no" } })) }); },
   timeline: () => act({ Batch: uids().map(uid => ({ Set: { uid, field: "timeline", value: "yes" } })) }),
   split: () => { const r = curRow(); if (r?.kind === "task") D.splitTask(r.uid); },

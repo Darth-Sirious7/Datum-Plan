@@ -121,19 +121,27 @@ pub fn preds(s: &str, ids: &[u32], day: i64) -> Result<Vec<Link>, String> {
         if matches!(rest.get(..2), Some("FS" | "SS" | "FF" | "SF")) {
             rest = &rest[2..];
         }
-        let pct = rest.ends_with('%');
-        let amount = |x: &str| -> Result<i64, String> {
-            if pct { x.trim_end_matches('%').parse::<f64>().map(|v| v.round() as i64).map_err(|_| format!("\"{tok}\": write a percent lag as +50%.")) } else { Ok(dur(x, day)?.0) }
-        };
-        let lag = match rest.chars().next() {
-            None => 0,
-            Some('+') => amount(&rest[1..])?,
-            Some('-') => -amount(&rest[1..])?,
+        let (lag, pct) = match rest.chars().next() {
+            None => (0, false),
+            Some('+' | '-') => lag(rest, day).map_err(|e| format!("\"{tok}\": {e}"))?,
             _ => return Err(format!("Write the lag in \"{tok}\" as +2d, -4h or +50%.")),
         };
         out.push(Link { pred: uid, kind, lag, pct });
     }
     Ok(out)
+}
+
+/// A lag as typed: "+2d" or "2d" waits, "-4h" overlaps, "50%" or "-20%" is a share of the
+/// predecessor's duration. Empty is no lag. Gives working minutes (or the percent) and whether it is a percent.
+pub fn lag(s: &str, day: i64) -> Result<(i64, bool), String> {
+    let t: String = s.replace('\u{2212}', "-").chars().filter(|c| !c.is_whitespace()).collect();
+    let (neg, x) = match t.strip_prefix('-') { Some(x) => (true, x), None => (false, t.strip_prefix('+').unwrap_or(&t)) };
+    if x.is_empty() { return Ok((0, false)) }
+    let pct = x.ends_with('%');
+    let v = if pct {
+        x.trim_end_matches('%').parse::<f64>().ok().filter(|v| v.is_finite()).map(|v| v.clamp(-10_000.0, 10_000.0).round() as i64).ok_or("write a percent lag as +50%.")?
+    } else { dur(x, day)?.0 };
+    Ok((if neg { -v } else { v }, pct))
 }
 
 pub fn fmt_link(id: usize, l: &Link, day: i64) -> String {
