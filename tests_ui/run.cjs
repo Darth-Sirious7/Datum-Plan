@@ -41,6 +41,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     window.__TAURI__ = { core: { invoke: async (c, a) => { window.__calls.push([c, a]); if (c === "dash_eval") return a.items.slice(0, 200).map(i => (f.dash_map ?? {})[i[1] + "\u0001" + i[0]] ?? [[["42", 42, ""]]]); if (c === "apply" && a.op && a.op.Ui) { f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), [a.op.Ui.key]: a.op.Ui.value } } }; return f.state; } if (c === "pick_logo") return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="; if (c === "apply" && a.op && (a.op.Picture || a.op.SheetImages)) { const pr = f.state.project; let pics = [...(pr.pictures ?? [])], sheets = pr.sheets; if (a.op.Picture) { const o = a.op.Picture; if (!o.pic) pics = pics.filter(x => x.id !== o.id); else if (o.id) pics = pics.map(x => x.id === o.id ? { ...o.pic, id: o.id } : x); else pics.push({ ...o.pic, id: Math.max(0, ...pics.map(x => x.id)) + 1 }); } else sheets = sheets.map((s, i) => i === a.op.SheetImages.k ? { ...s, images: a.op.SheetImages.images } : s); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...pr, pictures: pics, sheets } }; return f.state; } if (c === "apply" && a.op && (a.op.Sheet || a.op.SheetStyle || a.op.SheetMove || (a.op.Batch && a.op.Batch.every(o => o.Sheet || o.SheetStyle || o.SheetCells)))) { let sh = [...f.state.project.sheets]; const one = o => { if (o.Sheet) { if (o.Sheet.k === null) sh.push(o.Sheet.sheet); else if (!o.Sheet.sheet) sh.splice(o.Sheet.k, 1); else sh[o.Sheet.k] = { ...o.Sheet.sheet, cells: sh[o.Sheet.k].cells, images: sh[o.Sheet.k].images }; } if (o.SheetStyle) { const st = { ...(sh[o.SheetStyle.k].style ?? {}) }; o.SheetStyle.cells.forEach(([k2, v]) => { if (v) st[k2] = v; else delete st[k2]; }); sh[o.SheetStyle.k] = { ...sh[o.SheetStyle.k], style: st }; } if (o.SheetMove) { const [x] = sh.splice(o.SheetMove.from, 1); sh.splice(o.SheetMove.to, 0, x); } }; (a.op.Batch ?? [a.op]).forEach(one); f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return f.state; } if (c === "import_workbook") { const sh = [...f.state.project.sheets, { name: "Vendors list", cells: { A1: "Vendor", B1: "Country", A2: "Steel Co", B2: "Germany" }, fmt: { B2: "flag" }, widths: {}, style: { A1: "b;f:#DDEBF7" } }]; f.state = { ...f.state, rev: f.state.rev + 1, project: { ...f.state.project, sheets: sh } }; return [f.state, ["Vendors list"]]; } if (c === "export_sheets") return "C:/Plans/Plan - sheets.xlsx"; if (c === "tutorial_example") return { ...f.state, project: { ...f.state.project, ui: { ...(f.state.project.ui ?? {}), tour: { setup: "Setup holds the facts.", gantt: "The Gantt is where the plan is built.\n\n• Links\n• Milestones", tracking: "Tracking compares with the baseline." } } } }; if (c === "query" && window.__subsView) return f.query_subs; if (a && a.by && `${c}:${a.by}` in m) return m[`${c}:${a.by}`]; if (c in m) return m[c]; if (c === "apply") return f.state; return null; } }, event: { listen: async () => () => {} } };
   };
   await p.addInitScript(mock, fix);
+  const bridge = mock;
   await p.goto(url);
   await p.waitForTimeout(700);
   await p.click(".bs aside .back");
@@ -77,6 +78,36 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const e1 = await cellBox(2, 1); await p.mouse.dblclick(e1.x, e1.y); await p.waitForTimeout(150);
   await p.keyboard.press("Control+A"); await p.keyboard.type("Renamed task"); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
   check("double-click edits a cell", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop())).includes("Renamed task"));
+  // Ctrl+D copies the top cell down, as Fill › Down says (it made "Sprint 1" into Sprint 2, Sprint 3).
+  { const a1 = await cellBox(10, 1), a3 = await cellBox(12, 1); await p.mouse.click(a1.x, a1.y); await p.keyboard.down("Shift"); await p.mouse.click(a3.x, a3.y); await p.keyboard.up("Shift"); await p.keyboard.press("Control+d"); await p.waitForTimeout(150);
+    const op = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()[1].op);
+    check("Ctrl+D copies the top cell down", JSON.stringify(op.Cells?.cells.map(c => c[2])) === '["Sprint 1","Sprint 1"]', JSON.stringify(op)); }
+  // Progress on rows that take in a summary: the summary is skipped, not an error that stops the tasks.
+  { const a1 = await cellBox(0, 1), a3 = await cellBox(2, 1); await p.mouse.click(a1.x, a1.y); await p.keyboard.down("Shift"); await p.mouse.click(a3.x, a3.y); await p.keyboard.up("Shift");
+    await p.mouse.click(a3.x, a3.y, { button: "right" }); await p.waitForTimeout(150); await p.hover(".menu button:has-text('Progress')"); await p.waitForTimeout(150);
+    await p.click(".menu button:has-text('50% Complete')"); await p.waitForTimeout(150);
+    const op = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()[1].op);
+    check("50% Complete on a summary and its tasks goes as cells", JSON.stringify(op.Cells?.cells.map(c => c[2])) === '["50","50","50"]', JSON.stringify(op));
+    await p.click(".tabs > button:text-is('Schedule')"); await p.waitForTimeout(150); await p.click(".rb[title='Summary']"); await p.waitForTimeout(200);
+    const ops = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-2).map(c => Object.keys(c[1].op)[0] + ":" + JSON.stringify(c[1].op.Batch?.map(o => Object.keys(o)[0]) ?? "")));
+    check("Insert Summary Task is one step (one Undo)", ops[1] === 'Batch:["Insert","Indent"]', JSON.stringify(ops));
+    await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100); }
+  // Pasting a block that runs past the last task is one step (cells, then new rows): one Undo.
+  { await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 1e6; }); await p.waitForTimeout(200);
+    await p.click(".row.blank .c >> nth=2"); await p.keyboard.press("ArrowUp"); await p.waitForTimeout(100);
+    await p.evaluate(() => { const dt = new DataTransfer(); dt.setData("text/plain", "Pasted 1\nPasted 2\nPasted 3"); document.querySelector(".gscroll").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })); });
+    await p.waitForTimeout(200);
+    const op = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").pop()[1].op);
+    check("a paste past the last task is one step", op.Batch?.length === 2 && op.Batch[0].Cells?.cells.length === 1 && op.Batch[1].InsertRows?.rows.length === 2, JSON.stringify(op));
+    await p.evaluate(() => { document.querySelector(".gscroll").scrollTop = 0; }); await p.waitForTimeout(150); }
+  // The Calendar and Team Planner show the tasks under a collapsed summary too.
+  { await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200);
+    const collapsedQ = await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q?.collapsed?.length));
+    for (const v of ["Calendar", "Team"]) {
+      await p.evaluate(() => { window.__calls.length = 0; }); await p.click(`.side button[title="${v}"]`); await p.waitForTimeout(300);
+      check(`${v} reads every task, not only the open outline`, collapsedQ && await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q.flat && !c[1].q.collapsed.length)));
+    }
+    await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300); await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200); }
 
   // 3. Right-click menu commands run (they did nothing in 0.3.0) and show icons.
   const head = await p.$(".ghead .hc:nth-child(3)");
@@ -896,6 +927,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     await p.waitForTimeout(250);
   }
   check("every view opens without errors", errors.length === 0, errors.join(" | "));
+  // …and on a new, empty plan.
+  const e2 = await b.newPage({ viewport: { width: 1440, height: 900 } }), errs2 = [];
+  e2.on("pageerror", e => errs2.push(e.message));
+  await e2.addInitScript(bridge, fix.empty);
+  await e2.goto(url); await e2.waitForTimeout(700); await e2.click(".bs aside .back"); await e2.waitForTimeout(300);
+  for (const v of await e2.$$eval(".side button", bs => bs.map(x => x.title))) { await e2.click(`.side button[title="${v}"]`); await e2.waitForTimeout(250); }
+  check("every view opens without errors on an empty plan", errs2.length === 0, errs2.join(" | "));
+  await e2.close();
 
   await b.close();
   srv.close();

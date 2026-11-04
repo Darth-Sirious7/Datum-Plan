@@ -144,10 +144,16 @@ export const Network = () => {
   );
 };
 
+/** Every task the filter keeps, also those under collapsed summaries (the outline is the Gantt's, not these views'). */
+const allTasks = () => {
+  const [d] = createResource(() => [tick(), JSON.stringify(query())], () => call<{ rows: Row[] }>("query", { q: { ...query(), flat: true, collapsed: [], level: 0, group: [] } }));
+  return () => (d()?.rows ?? grid().rows).filter(r => r.kind === "task" && !r.off);
+};
+
 // ---------- Calendar ----------
 export const CalendarView = () => {
   const [month, setMonth] = createSignal<Date>((() => { const s = out()?.summary.s; const d = s ? dayDate(s) : new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })());
-  const tasks = () => grid().rows.filter(r => r.kind === "task" && !r.off);
+  const tasks = allTasks();
   const days = createMemo(() => {
     const m = month(), first = new Date(m); first.setDate(1 - ((first.getDay() + 6) % 7));
     return Array.from({ length: 42 }, (_, k) => { const d = new Date(first); d.setDate(first.getDate() + k); return d; });
@@ -286,7 +292,7 @@ export const ResourceGraph = () => {
 
 // ---------- Team Planner ----------
 export const TeamPlanner = () => {
-  const tasks = () => grid().rows.filter(r => r.kind === "task" && !r.off);
+  const tasks = allTasks();
   const s = () => out()!.summary, span = () => Math.max(7, s().f - s().s + 2);
   const lanes = createMemo(() => {
     const people = P().resources.filter(r => r.kind === "Work");

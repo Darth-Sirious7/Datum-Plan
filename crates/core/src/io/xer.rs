@@ -15,6 +15,9 @@ fn clean(s: &str) -> String {
     s.replace(['\t', '\n', '\r'], " ")
 }
 
+/// Elapsed durations run on this round-the-clock calendar in the file (XER has no elapsed durations).
+const ELAPSED: &str = "Elapsed (24 hours)";
+
 const CS: [(Constraint, &str); 7] = [
     (Constraint::MSO, "CS_MSO"), (Constraint::MFO, "CS_MEO"), (Constraint::SNET, "CS_MSOA"), (Constraint::SNLT, "CS_MSOB"),
     (Constraint::FNET, "CS_MEOA"), (Constraint::FNLT, "CS_MEOB"), (Constraint::ALAP, "CS_ALAP"),
@@ -40,6 +43,8 @@ fn clndr_data(c: &Calendar) -> String {
     }
     format!("(0||CalendarData()((0||DaysOfWeek()({days}))(0||VIEW(ShowTotal|Y)())(0||Exceptions()({exc}))))")
 }
+
+type Row = HashMap<String, String>;
 
 struct PNode { name: String, args: String, kids: Vec<PNode> }
 
@@ -138,6 +143,10 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
             cal_rows.push(format!("{}\tN\t{}\t\t{}\t{today} 00:00\tCA_Rsrc\t{hd}\t{}\t{}\t{}\tY\t{}", 1000 + k, clean(&c.name), cal_id(r.cal.as_deref()), hd * 5.0, hd * 20.0, hd * 250.0, clndr_data(&c)));
         }
     }
+    let el = p.calendars.len() + 1;
+    if p.tasks.iter().any(|t| t.elapsed) {
+        cal_rows.push(format!("{el}\tN\t{ELAPSED}\t1\t\t{today} 00:00\tCA_Project\t24\t168\t720\t8760\tN\t{}", clndr_data(&Calendar::full(ELAPSED))));
+    }
     table("CALENDAR", "clndr_id default_flag clndr_name proj_id base_clndr_id last_chng_date clndr_type day_hr_cnt week_hr_cnt month_hr_cnt year_hr_cnt rsrc_private clndr_data", cal_rows);
     let data = p.status.map(|d| dt(at(d) + DAY)).unwrap_or_else(|| dt(s.start));
     table("PROJECT", "proj_id proj_short_name clndr_id plan_start_date last_recalc_date scd_end_date def_complete_pct_type",
@@ -180,7 +189,7 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
             // A deadline goes as a secondary "finish on or before" constraint.
             let (cd2, ct2) = t.deadline.map_or((String::new(), ""), |d| (format!("{d} 23:59"), "CS_MEOB"));
             format!("{}\t1\t{}\t{}\t{pc}\t{pt}\t{kind}\tDT_FixedDUR2\t{status}\t{code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{cd}\t{ct}\t{cd2}\t{ct2}",
-                t.uid, wbs_of[i], cal_id(t.cal.as_deref()), clean(&t.name), dur as f64 / 60.0, dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
+                t.uid, wbs_of[i], if t.elapsed { el } else { cal_id(t.cal.as_deref()) }, clean(&t.name), dur as f64 / 60.0, dur as f64 * (100 - t.pct as i64) as f64 / 6000.0,
                 t.act_start.map(|d| format!("{d} 08:00")).unwrap_or_default(), t.act_finish.map(|d| format!("{d} 17:00")).unwrap_or_default(),
                 dt(s.es[i]), dt(s.ef[i]), dt(s.es[i]), dt(s.ef[i]))
         }).collect());
@@ -277,24 +286,38 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         acts.entry(g(t, "wbs_id")).or_default().push(t);
     }
     acts.values_mut().for_each(|v| v.sort_by_key(|a| (g(a, "early_start_date"), g(a, "task_code"))));
+    // Under each WBS node: its activities, then its child nodes. A file Datum Plan wrote keeps the
+    // plan's rows: nodes sit at their row (seq_num) and activities fill the other rows in file order.
+    let mut place: HashMap<*const Row, usize> = HashMap::new();
+    if text.lines().next().is_some_and(|l| l.split('\t').nth(5) == Some("Datum Plan")) {
+        let taken: HashSet<usize> = wbs.iter().filter_map(|w| g(w, "seq_num").parse::<usize>().ok()).collect();
+        let mut free = (1..).filter(|k| !taken.contains(k));
+        for t in rows("TASK").iter().filter(mine) { place.insert(t as *const _, free.next().unwrap_or(0)); }
+        for w in &wbs { place.insert(*w as *const _, g(w, "seq_num").parse().unwrap_or(0)); }
+    }
     let cons = |s: &str| CS.iter().find(|(_, n)| *n == s).map(|(c, _)| *c).unwrap_or_default();
     let mut uid = 1_000_000u32;
     // `seen` walks each WBS node once, so a damaged file whose WBS loops back on itself still opens.
     #[allow(clippy::too_many_arguments)]
-    fn walk<'a>(id: &'a str, level: u8, seen: &mut HashSet<&'a str>, p: &mut Project, kids: &'a HashMap<String, Vec<&'a HashMap<String, String>>>, acts: &HashMap<String, Vec<&HashMap<String, String>>>,
-        mk: &mut dyn FnMut(&HashMap<String, String>, u8) -> Task, sum: &mut dyn FnMut(&HashMap<String, String>, u8) -> Task) {
+    fn walk<'a>(id: &'a str, level: u8, seen: &mut HashSet<&'a str>, p: &mut Project, kids: &'a HashMap<String, Vec<&'a Row>>, acts: &'a HashMap<String, Vec<&'a Row>>,
+        place: &HashMap<*const Row, usize>, mk: &mut dyn FnMut(&Row, u8) -> Task, sum: &mut dyn FnMut(&Row, u8) -> Task) {
         if !seen.insert(id) {
             return;
         }
-        for t in acts.get(id).into_iter().flatten() {
-            let task = mk(t, level);
-            p.tasks.push(task);
-        }
-        for w in kids.get(id).into_iter().flatten() {
+        let key = |r: &Row| place.get(&(r as *const _)).copied().unwrap_or(0);
+        let mut items: Vec<(usize, bool, &Row)> = acts.get(id).into_iter().flatten().map(|t| (key(t), false, *t)).collect();
+        items.extend(kids.get(id).into_iter().flatten().map(|w| (key(w), true, *w)));
+        items.sort_by_key(|x| (x.0, x.1));
+        for (_, node, r) in items {
+            if !node {
+                let task = mk(r, level);
+                p.tasks.push(task);
+                continue;
+            }
             let at = p.tasks.len();
-            let s = sum(w, level);
+            let s = sum(r, level);
             p.tasks.push(s);
-            walk(w.get("wbs_id").map_or("", |s| s.trim()), level.saturating_add(1), seen, p, kids, acts, mk, sum);
+            walk(r.get("wbs_id").map_or("", |s| s.trim()), level.saturating_add(1), seen, p, kids, acts, place, mk, sum);
             if p.tasks.len() == at + 1 {
                 p.tasks.pop(); // an empty WBS node
             }
@@ -306,9 +329,10 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let ct = cons(&g(t, "cstr_type"));
         let phys = g(t, "complete_pct_type") == "CP_Phys";
         let pc = g(t, "phys_complete_pct").parse::<f64>().unwrap_or(0.0).clamp(0.0, 100.0).round() as u8;
-        // With physical %, the duration % comes from the remaining duration when the file has one.
+        // The duration % comes from the remaining duration when the file has one (the % column holds
+        // the physical %, which an activity measured by duration leaves at 0).
         let (target, remain) = (g(t, "target_drtn_hr_cnt").parse::<f64>().unwrap_or(0.0), g(t, "remain_drtn_hr_cnt").parse::<f64>().ok());
-        let pct = match remain { Some(r) if phys && target > 0.0 => ((1.0 - r / target) * 100.0).clamp(0.0, 100.0).round() as u8, _ => pc };
+        let pct = match remain { Some(r) if target > 0.0 && r.is_finite() => ((1.0 - r / target) * 100.0).clamp(0.0, 100.0).round() as u8, _ => pc };
         let act_type = match ty.as_str() { "TT_LOE" => ActType::Loe, "TT_WBS" => ActType::WbsSummary, "TT_Rsrc" => ActType::ResourceDep, "TT_Mile" => ActType::StartMs, "TT_FinMile" => ActType::FinishMs, _ => ActType::Task };
         Task {
             uid: g(t, "task_id").parse().unwrap_or(0), name: g(t, "task_name"), level, dur, code: g(t, "task_code"), act_type, ignore_rc: ty == "TT_Task",
@@ -324,7 +348,15 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         uid += 1;
         Task { uid, name: g(w, "wbs_name"), code: g(w, "wbs_short_name"), level, ..Default::default() }
     };
-    walk(root.as_deref().unwrap_or(""), 0, &mut HashSet::new(), &mut p, &kids, &acts, &mut mk, &mut sum);
+    walk(root.as_deref().unwrap_or(""), 0, &mut HashSet::new(), &mut p, &kids, &acts, &place, &mut mk, &mut sum);
+    // Activities on the project calendar follow it (a later change of project calendar moves them too).
+    let pc = p.calendar.clone();
+    p.tasks.iter_mut().filter(|t| t.cal.as_ref() == Some(&pc)).for_each(|t| t.cal = None);
+    // A task on the round-the-clock calendar Datum Plan writes for them is elapsed again.
+    if p.calendars.iter().any(|c| c.name == ELAPSED && *c == Calendar::full(ELAPSED)) {
+        p.tasks.iter_mut().filter(|t| t.cal.as_deref() == Some(ELAPSED)).for_each(|t| (t.elapsed, t.cal, t.unit) = (true, None, Unit::D));
+        p.calendars.retain(|c| c.name != ELAPSED || p.calendar == ELAPSED);
+    }
     // Activities outside the WBS tree go at the end.
     let have: std::collections::HashSet<String> = p.tasks.iter().map(|x| x.uid.to_string()).collect();
     let rest: Vec<Task> = rows("TASK").iter().filter(mine).filter(|t| !have.contains(&g(t, "task_id"))).map(|t| mk(t, 0)).collect();

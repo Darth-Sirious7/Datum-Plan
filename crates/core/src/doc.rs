@@ -58,7 +58,7 @@ pub enum Op {
     /// Many cell edits as one step (paste, fill, clear a range). Cells that cannot take the value
     /// are skipped; it fails only when none could be set.
     Cells { cells: Vec<(u32, String, String)> },
-    /// Inserts a recurring task: a summary with one occurrence every `interval` days, weeks or
+    /// Inserts a recurring task: a summary with one occurrence every `interval` working days, weeks or
     /// months from `start`, each held to its date by a Start No Earlier Than constraint.
     Recurring { at: usize, name: String, dur: String, every: String, interval: u32, count: u32, start: String },
     /// Renames a column (empty title restores the field's name).
@@ -244,10 +244,15 @@ fn shift(p: &mut Project, uids: &[u32], by: i8) {
 }
 
 fn move_rows(p: &mut Project, uids: &[u32], up: bool) {
-    let mut v = idxs(p, uids);
+    // Rows under a selected summary move with it; a row next to a selected row that cannot move stays too.
+    let mut v: Vec<usize> = vec![];
+    for i in idxs(p, uids) {
+        if !v.last().is_some_and(|&j| p.subtree(j).contains(&i)) { v.push(i) }
+    }
     if !up {
         v.reverse();
     }
+    let sel: HashSet<u32> = v.iter().map(|&i| p.tasks[i].uid).collect();
     for uid in v.iter().map(|&i| p.tasks[i].uid).collect::<Vec<_>>() {
         let i = p.idx(uid).unwrap();
         let (r, lvl) = (p.subtree(i), p.tasks[i].level);
@@ -258,9 +263,11 @@ fn move_rows(p: &mut Project, uids: &[u32], up: bool) {
             }
             if k > 0 && p.tasks[k - 1].level == lvl {
                 let k = p.subtree(k - 1).start;
+                if sel.contains(&p.tasks[k].uid) { continue }
                 p.tasks[k..r.end].rotate_right(r.len());
             }
         } else if r.end < p.tasks.len() && p.tasks[r.end].level == lvl {
+            if sel.contains(&p.tasks[r.end].uid) { continue }
             let s = p.subtree(r.end);
             p.tasks[i..s.end].rotate_left(r.len());
         }
@@ -382,18 +389,34 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "pct" => set_pct_by(p, i, v.trim_end_matches('%').trim().parse().ok().filter(|n| *n <= 100).ok_or("Enter a number from 0 to 100.")?, s)?,
         "adur" => {
             let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
+            // More actual work than planned: the task took that long.
+            if m > p.tasks[i].dur && p.tasks[i].dur > 0 { p.tasks[i].dur = m }
             let d = p.tasks[i].dur.max(1);
             set_pct(p, i, (m.min(d) * 100 / d) as u8)?;
         }
         "rem" => {
+            // Within the duration it sets the progress; more remaining work than that never undoes the
+            // work done: the duration grows (a task not started just takes the new duration).
             let m = parse::dur_for(v, day, p.tasks[i].elapsed)?;
-            let d = p.tasks[i].dur.max(1);
-            set_pct(p, i, (100 - (m.min(d) * 100 / d)) as u8)?;
+            let t = &p.tasks[i];
+            let d = t.dur.max(1);
+            let pct = (100 - (m.min(d) * 100 / d)) as u8;
+            if m <= d && (pct >= t.pct || t.act_start.is_none()) {
+                return set_pct(p, i, pct);
+            }
+            let done = if t.act_start.is_some() { t.dur * t.pct as i64 / 100 } else { 0 };
+            let t = &mut p.tasks[i];
+            t.dur = done + m;
+            if t.act_start.is_some() { (t.pct, t.act_finish) = ((done * 100 / (done + m)).min(99) as u8, None) }
         }
         "start" => {
             let d = date(v)?;
             let t = &mut p.tasks[i];
-            if t.manual {
+            // A task under way started when it did: its start is the actual start.
+            if let (Some(_), Some(n)) = (t.act_start, d) {
+                if t.act_finish.is_some_and(|f| f < n) { return Err("That start is after the task's actual finish.".into()) }
+                t.act_start = d;
+            } else if t.manual {
                 t.mstart = d;
             } else if d.is_some() {
                 (t.constraint, t.cdate) = (Constraint::SNET, d);
@@ -403,6 +426,17 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         }
         "finish" => {
             let d = date(v)?.ok_or("Type a finish date.")?;
+            // A finished task's finish is its actual finish (and its duration follows).
+            if p.tasks[i].act_finish.is_some() {
+                if p.tasks[i].act_start.is_some_and(|a| d < a) { return Err("That finish is before the task's actual start.".into()) }
+                p.tasks[i].act_finish = Some(d);
+            }
+            // A milestone stays one: it moves to the end of that day.
+            let t = &mut p.tasks[i];
+            if t.dur == 0 && t.act_start.is_none() {
+                if t.manual { t.mstart = Some(d) } else { (t.constraint, t.cdate) = (Constraint::FNET, Some(d)) }
+                return Ok(());
+            }
             let s = sched::schedule(p)?;
             let c = &s.cals[s.ci[i]];
             p.tasks[i].dur = c.between(s.es[i], c.end_of(d)).max(0);
@@ -649,12 +683,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if pred == succ {
                 return Err("A task cannot be its own predecessor.".into());
             }
-            let lag = if lag.trim().is_empty() { 0 } else { let l = lag.trim(); let neg = l.starts_with('-'); let m = parse::dur(l.trim_start_matches(['+', '-']), p.day_min)?.0; if neg { -m } else { m } };
+            let (lag, pct) = parse::lag(&lag, p.day_min)?;
             let t = &mut p.tasks[i];
             let at = t.preds.iter().position(|l| l.pred == pred);
             match (kind, at) {
-                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct: false },
-                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct: false }),
+                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct },
+                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct }),
                 (None, Some(k)) => { t.preds.remove(k); }
                 (None, None) => {}
             }
@@ -884,8 +918,8 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if p.calendar == old {
                 p.calendar = cal.name.clone();
             }
-            for t in p.tasks.iter_mut().filter(|t| t.cal.as_deref() == Some(old.as_str())) {
-                t.cal = Some(cal.name.clone());
+            for c in p.tasks.iter_mut().map(|t| &mut t.cal).chain(p.resources.iter_mut().map(|r| &mut r.cal)).filter(|c| c.as_deref() == Some(old.as_str())) {
+                *c = Some(cal.name.clone());
             }
             match p.calendars.iter().position(|c| c.name == old) {
                 Some(k) => p.calendars[k] = cal,
@@ -936,12 +970,20 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let first = parse::date_in(&start, fmt).or_else(|_| parse::date(&start))?;
             let t = p.new_task(name.trim(), lv, d);
             p.tasks.insert(at, t);
+            // Daily occurrences fall on working days of the project calendar (not two on a Monday after a weekend).
+            let pc = crate::cal::WorkCal::new(p.calendars.iter().find(|c| c.name == p.calendar).unwrap_or(&p.calendars[0]));
+            let mut workday = first;
             for k in 0..count {
                 let n = interval.max(1) as u64 * k as u64;
                 let day = match every.as_str() {
                     "month" => u32::try_from(n).ok().and_then(|n| first.checked_add_months(chrono::Months::new(n))),
                     "week" => first.checked_add_days(chrono::Days::new(7 * n)),
-                    _ => first.checked_add_days(chrono::Days::new(n)),
+                    _ => {
+                        let work = |mut d: NaiveDate| { while !pc.is_work_day(d) && d < crate::cal::hi() { d = d.succ_opt().unwrap_or(d) } d };
+                        if k == 0 { workday = work(first) }
+                        for _ in 0..if k == 0 { 0 } else { interval.max(1) } { workday = work(workday.succ_opt().filter(|d| *d <= crate::cal::hi()).ok_or("The occurrences run past the dates a plan can hold (to 2600).")?) }
+                        Some(workday)
+                    }
                 }.filter(|d| *d <= crate::cal::hi()).ok_or("The occurrences run past the dates a plan can hold (to 2600).")?;
                 let mut t = p.new_task(&format!("{} {}", name.trim(), k + 1), lv + 1, d);
                 t.unit = unit;

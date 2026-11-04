@@ -43,3 +43,5 @@ mod formula_cases;
 mod parity;
 #[cfg(test)]
 mod report_cases;
+#[cfg(test)]
+mod plan_cases;

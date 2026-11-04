@@ -238,7 +238,7 @@ pub fn to_project(t: &Table, map: &[String], name: &str, today: NaiveDate, fmt: 
     let mut bad = 0;
     for (i, r) in rows.iter().enumerate() {
         let has_preds = !get(r, "preds").is_empty();
-        for f in ["name", "code", "dur", "start", "finish", "res", "pct", "deadline", "astart", "afinish", "notes"] {
+        for f in ["name", "code", "dur", "start", "finish", "res", "deadline", "notes"] {
             let v = get(r, f);
             if v.is_empty() || (f == "start" && has_preds) || (f == "finish" && col("dur").is_some()) {
                 continue;
@@ -261,6 +261,15 @@ pub fn to_project(t: &Table, map: &[String], name: &str, today: NaiveDate, fmt: 
         }).collect();
         if doc::set(&mut p, i, "preds", &mapped.join(","), fmt).is_err() {
             bad += 1;
+        }
+    }
+    // Progress last: a % complete without an actual start takes the start the links give.
+    for (i, r) in rows.iter().enumerate() {
+        for f in ["astart", "afinish", "pct"] {
+            let v = get(r, f);
+            if !v.is_empty() && !p.is_summary(i) && (f != "pct" || p.tasks[i].act_finish.is_none()) && doc::set(&mut p, i, f, &v, fmt).is_err() {
+                bad += 1;
+            }
         }
     }
     p.normalize();

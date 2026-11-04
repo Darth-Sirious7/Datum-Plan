@@ -689,7 +689,7 @@ export const recurring = (at: number) => openDialog(() => {
       <div class="form">
         <Row label="Task name"><Text value={v.name} set={x => setV("name", x)} /></Row>
         <Row label="Duration"><Text value={v.dur} set={x => setV("dur", x)} /></Row>
-        <Row label="Recur every"><span class="inline"><input type="number" min="1" style={{ width: "60px" }} value={v.interval} onChange={e => setV("interval", +e.currentTarget.value)} /> <Pick value={v.every} set={x => setV("every", x)} options={[["day", "day(s)"], ["week", "week(s)"], ["month", "month(s)"]]} /></span></Row>
+        <Row label="Recur every"><span class="inline"><input type="number" min="1" style={{ width: "60px" }} value={v.interval} onChange={e => setV("interval", +e.currentTarget.value)} /> <Pick value={v.every} set={x => setV("every", x)} options={[["day", "working day(s)"], ["week", "week(s)"], ["month", "month(s)"]]} /></span></Row>
         <Row label="Start"><Text type="date" value={v.start} set={x => setV("start", x)} /></Row>
         <Row label="Occurrences"><Text type="number" value={v.count} set={x => setV("count", +x)} /></Row>
       </div>
