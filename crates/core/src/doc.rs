@@ -102,6 +102,10 @@ pub enum Op {
     /// Inserts (or with `del` deletes) the cells of `range` on tab k: the cells below (`down`) or to the
     /// right move to make room (or close the gap), within the range's columns (rows); formulas follow.
     SheetShift { k: usize, range: String, down: bool, del: bool },
+    /// Removes duplicate rows of a range on tab k: a row whose values in `cols` (0-based on the sheet;
+    /// empty: every column) match an earlier row's goes, and the rows below move up within the range's
+    /// columns. `header`: the first row is headings and stays.
+    SheetDedupe { k: usize, range: String, cols: Vec<u32>, header: bool },
     Batch(Vec<Op>),
 }
 
@@ -1202,6 +1206,18 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
             s.images.retain_mut(|im| shift(&im.cell).map(|x| im.cell = x).is_some());
+        }
+        Op::SheetDedupe { k, range, cols, header } => {
+            let s = p.sheets.get(k).ok_or("That sheet does not exist.")?;
+            let (r0, c0, r1, c1) = crate::model::sheet_range(&range).ok_or("Choose a range of cells.")?;
+            let cols: Vec<u32> = if cols.is_empty() { (c0..=c1).collect() } else { cols.into_iter().filter(|c| (c0..=c1).contains(c)).collect() };
+            let mut seen = std::collections::HashSet::new();
+            let cell = |r: u32, c: u32| s.cells.get(&format!("{}{}", crate::sheet::col_name(c), r + 1)).map_or(String::new(), |v| v.trim().to_lowercase());
+            let dups: Vec<u32> = (r0 + header as u32..=r1.min(r0 + 100_000)).filter(|&r| !seen.insert(cols.iter().map(|&c| cell(r, c)).collect::<Vec<_>>())).collect();
+            // From the bottom up, so each row is still where it was found.
+            for r in dups.into_iter().rev() {
+                exec(p, Op::SheetShift { k, range: format!("{}{}:{}{}", crate::sheet::col_name(c0), r + 1, crate::sheet::col_name(c1), r + 1), down: true, del: true }, fmt)?;
+            }
         }
         Op::SheetImages { k, images } => {
             let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();

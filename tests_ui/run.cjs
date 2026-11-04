@@ -755,6 +755,9 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".dlg .fltvals label:has-text('cn') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
   { const f = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.filter); check("unticking a value filters the column", JSON.stringify(f?.cols) === '[{"col":1,"values":["DE",""],"op":"","a":"","b":""}]', JSON.stringify(f)); }
   check("the rows the filter leaves out are hidden and the button shows the column is filtered", (await p.$$(".sheetgrid .row.rhid")).length === 1 && (await p.$$(".sheetgrid .fltb.on")).length === 1);
+  await p.click(".fbar .fname"); await p.keyboard.type("C2:C4"); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+  await p.keyboard.press("Delete"); await p.waitForTimeout(200);
+  { const a = await lastApply(); check("Clear Contents on a filtered list leaves the hidden rows alone", a.includes('["C2",""]') && a.includes('["C4",""]') && !a.includes('"C3"'), a); }
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   check("Sheet Tools › Format has a Data group: Filter, Drop-down List, Note", !!(await p.$(".ribbon .grp:has(.cap:text('Data')) button:has-text('Drop-down List')")));
   await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Filter')"); await p.waitForTimeout(300);
@@ -787,6 +790,18 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Custom Sort sorts the list around the cell by its columns, knowing the headings", ((await p.textContent(".dlg header")) ?? "").includes("Sort") && (await p.textContent(".dlg select")).includes("Column B: Country") && await p.isChecked(".dlg label:has-text('My data has headers') input"));
   await p.click(".dlg button:has-text('Add Level')"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(300);
   check("the sort moves whole rows in one step", (await lastApply()).includes('"Batch"') && (await lastApply()).includes('"A2"') && !(await lastApply()).includes('"A1",'), (await lastApply()).slice(0, 200));
+  sq = await scell(5, 4); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+f"); await p.waitForTimeout(150);
+  await p.keyboard.type("pipe"); await p.click(".dlg button:has-text('Find All')"); await p.waitForTimeout(150);
+  check("Find All lists every match", (await p.$$(".dlg .findall button")).length === 1 && (await p.textContent(".dlg .findall")).includes("A3"));
+  await p.click(".dlg .findall button"); await p.waitForTimeout(150);
+  check("a match in the list goes to its cell", (await p.inputValue(".fbar .fname")) === "A3", await p.inputValue(".fbar .fname"));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) .rbw.sp button.sarr"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Remove Duplicates…')"); await p.waitForTimeout(150);
+  check("Remove Duplicates lists the list's columns by their headings", (await p.$$(".dlg .fltvals label")).length === 3 && (await p.textContent(".dlg .fltvals")).includes("Column A: Vendor"));
+  await p.click(".dlg .fltvals label:has-text('Column C') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  check("Remove Duplicates asks the engine to drop the repeated rows", (await lastApply()).includes('"SheetDedupe":{"k":0,"range":"A1:C4","cols":[0,1],"header":true}'), await lastApply());
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
   check("leaving Sheets goes back to the Home tab", (await p.textContent(".tabs > button.on")) === "Home");
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);

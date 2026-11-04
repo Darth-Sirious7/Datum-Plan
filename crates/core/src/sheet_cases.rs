@@ -477,6 +477,20 @@ fn notes_filters_and_drop_down_lists_go_to_the_workbook_and_back() {
 }
 
 #[test]
+fn remove_duplicates_keeps_the_first_of_each() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("V", &[("A1", "Vendor"), ("B1", "Country"), ("A2", "Steel Co"), ("B2", "DE"), ("A3", "steel co "), ("B3", "de"), ("A4", "Pipe"), ("B4", "IT"), ("A5", "Steel Co"), ("B5", "FR"), ("D3", "keep")])) });
+    // By both columns: row 3 is row 2 again (case and spaces do not count).
+    op(&mut doc, Op::SheetDedupe { k: 0, range: "A1:B5".into(), cols: vec![], header: true });
+    let col = |d: &Doc, c: &str| (1..=5).map(|r| d.p.sheets[0].cells.get(&format!("{c}{r}")).cloned().unwrap_or_default()).collect::<Vec<_>>();
+    assert_eq!(col(&doc, "A"), vec!["Vendor", "Steel Co", "Pipe", "Steel Co", ""]);
+    assert_eq!(doc.p.sheets[0].cells.get("D3").map(String::as_str), Some("keep"), "cells outside the range stay");
+    // By the vendor only.
+    op(&mut doc, Op::SheetDedupe { k: 0, range: "A1:B4".into(), cols: vec![0], header: true });
+    assert_eq!((col(&doc, "A"), col(&doc, "B")), (vec!["Vendor".to_string(), "Steel Co".into(), "Pipe".into(), "".into(), "".into()], vec!["Country".to_string(), "DE".into(), "IT".into(), "".into(), "".into()]));
+}
+
+#[test]
 fn inserting_and_deleting_cells_moves_only_their_columns() {
     let mut doc = base();
     op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("S", &[("A1", "a"), ("B1", "1"), ("B2", "2"), ("B3", "3"), ("C2", "x"), ("D1", "=SUM(B1:B3)"), ("D2", "=B3")])) });

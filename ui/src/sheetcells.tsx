@@ -173,6 +173,16 @@ export const sortDialog = (cols: [number, string][], headers: boolean, run: (lev
   </Dialog>;
 });
 
+/** Remove Duplicates: the columns that make two rows the same. */
+export const dedupeDialog = (cols: [number, string][], headers: boolean, run: (cols: number[], headers: boolean) => void) => openDialog(() => {
+  const [on, setOn] = createSignal(new Set(cols.map(c => c[0]))), [hd, setHd] = createSignal(headers);
+  return <Dialog title="Remove Duplicates" okText="OK" help="sheetdata" ok={() => { if (!on().size) return false; run(cols.map(c => c[0]).filter(c => on().has(c)), hd()); }}>
+    <p class="muted">A row whose values in the ticked columns match a row above it is removed; the rows below move up.</p>
+    <label class="chk"><input type="checkbox" checked={hd()} onChange={e => setHd(e.currentTarget.checked)} />My data has headers</label>
+    <div class="fltvals"><For each={cols}>{([c, n]) => <label class="chk"><input type="checkbox" checked={on().has(c)} onChange={e => { const s = new Set(on()); if (e.currentTarget.checked) s.add(c); else s.delete(c); setOn(s); }} />{n}</label>}</For></div>
+  </Dialog>;
+});
+
 /** A drop-down list on the selected cells: typed values or cells to read them from. */
 export const listDialog = (range: string, cur: Validation | undefined, save: (v: Validation | null) => void) => openDialog(() => {
   const [r, setR] = createSignal(cur?.range ?? range), [fromCells, setFromCells] = createSignal(!!cur?.src), [items, setItems] = createSignal((cur?.list ?? []).join("\n")), [src, setSrc] = createSignal(cur?.src ?? ""), [warn, setWarn] = createSignal(!!cur?.warn);

@@ -37,6 +37,7 @@ pub fn catalog() -> Vec<OpInfo> {
         o("SheetCells", "Type into cells of tab k: values or spreadsheet formulas. Formulas read the plan as tables and names: Tasks[Finish], Resources[Country], ProjectFinish, SPI. fmt (instead of values) sets a number format such as 0.0%, #,##0, dd-mmm-yy, money or flag.", json!({"SheetCells": {"k": 0, "cells": [["A1", "Late tasks"], ["B1", "=COUNTIF(Tasks[Late],TRUE)"]], "fmt": null}})),
         o("SheetInsert", "Insert (count > 0) or delete (count < 0) rows or columns (cols: true) of tab k at a 0-based position; formulas follow.", json!({"SheetInsert": {"k": 0, "cols": false, "at": 2, "count": 1}})),
         o("SheetShift", "Insert (or with del: delete) the cells of a range on tab k, moving the cells below (down: true) or to the right; formulas follow.", json!({"SheetShift": {"k": 0, "range": "B2:C3", "down": true, "del": false}})),
+        o("SheetDedupe", "Remove duplicate rows of a range on tab k, comparing the columns listed (0-based; empty: all); header keeps the first row.", json!({"SheetDedupe": {"k": 0, "range": "A1:C40", "cols": [0], "header": true}})),
         o("SheetNotes", "Put notes on cells of tab k (empty text deletes the note).", json!({"SheetNotes": {"k": 0, "cells": [["B2", "Price confirmed by the vendor"]]}})),
         o("ApplyCredit", "Give tasks the weighted steps of a rule of credit (Concrete, Cable, Piping…).", json!({"ApplyCredit": {"uids": [3], "rule": "Cable"}})),
     ]
