@@ -368,11 +368,14 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
     let long = fin - c.s.start.div_euclid(DAY) > 3660;
     let mut days = if unit == "day" && !long { (c.s.start.div_euclid(DAY)..=fin).collect() } else { period_ends(c, if unit == "day" { "week" } else { unit }) };
     let lo = tasks.iter().map(|&i| p.tasks[i].bls.get(&0).map_or(c.s.es[i], |b| b.start.min(c.s.es[i]))).min().unwrap_or(c.s.start).div_euclid(DAY);
-    days.retain(|&d| d >= lo - 7);
+    // From the day before the first start (0 %); a plan longer than the periods counted ends on its finish.
+    days.retain(|&d| d >= lo);
     days.insert(0, lo - 1);
+    if days.last().is_some_and(|&l| l < fin) { days.push(fin) }
     let dd = c.progress_at();
     let h = history(c);
     let mut out = SCurve { days: vec![], planned: vec![], actual: vec![], forecast: vec![], total, status_day: dd / DAY - 1, name: scope.and_then(|u| p.idx(u)).map_or(p.name.clone(), |k| p.tasks[k].name.clone()), weight };
+    let mut prev = i64::MIN;
     for d in days {
         let t = (d + 1) * DAY;
         let (mut a, mut b, mut f) = (0.0, 0.0, 0.0);
@@ -384,7 +387,9 @@ pub fn scurve(c: &Calc, unit: &str, how: &str, scope: Option<u32>) -> SCurve {
         }
         out.days.push(d);
         out.planned.push(a / total * 100.0);
-        out.actual.push((t <= dd + DAY).then_some(b / total * 100.0));
+        // Actual up to the status date, and in the period that holds it (measured at the status date).
+        out.actual.push((d <= out.status_day || prev < out.status_day).then_some(b / total * 100.0));
+        prev = d;
         out.forecast.push(f / total * 100.0);
     }
     out
@@ -447,9 +452,11 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
     let within = |d: Option<chrono::NaiveDate>, a: i64, b: i64| d.is_some_and(|d| { let x = crate::cal::at(d) / DAY; x > a && x <= b });
     let day = |t: i64| t.div_euclid(DAY);
     let next = to + (to - prev);
+    // Planned and actual on the same day: the status date when it falls inside the period.
+    let now = if prev < dd { to.min(dd) } else { to };
     let mut r = PeriodReport {
         kind: kind.into(), from: prev + 1, to, prev_from: before + 1,
-        planned_prev: at(prev, 0), planned: at(to, 0), actual_prev: at(prev, 1), actual: at(to.min(dd), 1),
+        planned_prev: at(prev, 0), planned: at(now, 0), actual_prev: at(prev, 1), actual: at(to.min(dd), 1),
         ..Default::default()
     };
     let sum = c.summary();
@@ -481,7 +488,7 @@ pub fn period_report(c: &Calc, kind: &str, end: Option<i64>) -> PeriodReport {
         let sub: Vec<usize> = p.subtree(i).filter(|&j| w[j] > 0.0).collect();
         let tw: f64 = sub.iter().map(|&j| w[j]).sum::<f64>().max(1e-9);
         let pa = |d: i64, which: usize| sub.iter().map(|&j| { let v = progress_at(c, j, (d + 1) * DAY, &h); w[j] * [v.0, v.1][which] }).sum::<f64>() / tw * 100.0;
-        r.wbs.push(WbsRow { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), planned_prev: pa(prev, 0), planned: pa(to, 0), actual_prev: pa(prev, 1), actual: pa(to.min(dd), 1) });
+        r.wbs.push(WbsRow { uid: p.tasks[i].uid, name: p.tasks[i].name.clone(), planned_prev: pa(prev, 0), planned: pa(now, 0), actual_prev: pa(prev, 1), actual: pa(to.min(dd), 1) });
     }
     let mut last = i64::MIN;
     for &e in &ends {

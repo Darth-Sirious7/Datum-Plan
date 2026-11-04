@@ -215,7 +215,8 @@ fn planned_pct(c: &Calc) -> f64 {
     let (p, s) = (c.p, &c.s);
     let leaves: Vec<usize> = (0..p.tasks.len()).filter(|&i| !s.summary[i] && !s.off[i]).collect();
     let w: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();
-    if w <= 0.0 { return 0.0 }
+    // A plan of milestones only takes the plain average, as PercentComplete does.
+    if w <= 0.0 { return if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| c.val(i, "plannedpct").num()).sum::<f64>() / leaves.len() as f64 } }
     leaves.iter().map(|&i| p.tasks[i].dur as f64 * c.val(i, "plannedpct").num()).sum::<f64>() / w
 }
 
@@ -428,7 +429,9 @@ pub fn eval(c: &Calc, items: &[(String, String)]) -> Vec<Vec<Vec<Shown>>> {
         // `=Sheet!A1:C9` shows the sheet's own cells, with their formats.
         if let Some((tab, r)) = sheet_range(f).and_then(|(name, r)| p.sheets.iter().position(|s| s.name.eq_ignore_ascii_case(&name)).map(|t| (t, r))) {
             let (sh, sd) = (wb.sheet(tab + BUILT_IN), &p.sheets[tab]);
-            return (r.start.row..=r.end.row.min(r.start.row + 499)).map(|row| (r.start.col..=r.end.col.min(r.start.col + 39)).map(|col| {
+            // Up to the last cell in use, so a generous range (A1:Z5000) does not show hundreds of empty rows and series.
+            let used = sh.and_then(|sh| sh.used_range()).map_or(CellRef::new(0, 0), |u| u.end);
+            return (r.start.row..=r.end.row.min(used.row).min(r.start.row + 499)).map(|row| (r.start.col..=r.end.col.min(used.col).min(r.start.col + 39)).map(|col| {
                 let at = CellRef::new(row, col);
                 let a1 = format!("{}{}", col_name(col), row + 1);
                 let v = sh.map_or(Value::Empty, |sh| sh.value(at));

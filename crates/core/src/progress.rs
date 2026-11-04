@@ -124,7 +124,9 @@ pub fn earned_schedule(c: &Calc) -> Option<EarnedSchedule> {
         (prev, d) = (v, d + 1);
     };
     let days = |a: i64, b: i64| pc.between(a, b) as f64 / p.day_min.max(1) as f64;
-    let (es, at, pd) = (days(start, es_t.max(start)), days(start, dd), days(start, fin));
+    // Actual time stops when all the work is done (a plan finished on time stays on time).
+    let end = if ev >= 1.0 - 1e-9 { tasks.iter().map(|&i| s.ef[i]).max().unwrap_or(dd).min(dd) } else { dd };
+    let (es, at, pd) = (days(start, es_t.max(start)), days(start, end), days(start, fin));
     if at <= 0.0 { return None }
     let spi_t = es / at;
     let ieac = if spi_t > 0.0 { pd / spi_t } else { f64::INFINITY };

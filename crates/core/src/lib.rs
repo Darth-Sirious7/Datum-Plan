@@ -39,3 +39,5 @@ mod sched_cases;
 mod formula_cases;
 #[cfg(test)]
 mod parity;
+#[cfg(test)]
+mod report_cases;
