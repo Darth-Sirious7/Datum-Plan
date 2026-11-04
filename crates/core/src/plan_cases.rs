@@ -240,3 +240,38 @@ fn a_percent_lag_survives_changing_the_link_type_in_the_details_pane() {
     op(&mut dc, Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "-1d".into() });
     assert_eq!((dc.p.tasks[1].preds[0].lag, dc.p.tasks[1].preds[0].pct), (-480, false));
 }
+
+#[test]
+fn renaming_a_calendar_keeps_the_people_on_it() {
+    let mut dc = doc(&["2d||res=Night crew"]);
+    let mut cal = Calendar::standard("Nights");
+    cal.week = [vec![(1320, 1440)], vec![(0, 360), (1320, 1440)], vec![(0, 360), (1320, 1440)], vec![(0, 360), (1320, 1440)], vec![(0, 360), (1320, 1440)], vec![(0, 360)], vec![]];
+    op(&mut dc, Op::CalPut { old: None, cal: cal.clone() });
+    let r = dc.p.resources[0].uid;
+    op(&mut dc, Op::ResJson { uid: r, field: "cal".into(), value: serde_json::json!("Nights") });
+    op(&mut dc, Op::ProjectSet { field: "opts".into(), value: serde_json::json!({ "res_cals": true }) });
+    let before = dates(&dc.p);
+    assert_eq!(&before[0][..11], "Nov02 22:00");
+    cal.name = "Night shift".into();
+    op(&mut dc, Op::CalPut { old: Some("Nights".into()), cal });
+    assert_eq!(dc.p.resources[0].cal.as_deref(), Some("Night shift"));
+    assert_eq!(dates(&dc.p), before);
+}
+
+#[test]
+fn an_elapsed_lag_from_a_project_xml_file_keeps_its_length() {
+    // Pour 5d, then Strip forms 7 elapsed days later (concrete curing): the file says LagFormat 8 (edays).
+    let dc = doc(&["5d||", "2d|1FS+7d|"]);
+    let dir = std::env::temp_dir().join(format!("datum-plan-elag-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("plan.xml");
+    crate::io::export(&dc.p, &f, F, d(2026, 11, 2), &[]).unwrap();
+    let text = std::fs::read_to_string(&f).unwrap().replace("<LinkLag>33600</LinkLag><LagFormat>7</LagFormat>", "<LinkLag>100800</LinkLag><LagFormat>8</LagFormat>");
+    std::fs::write(&f, text).unwrap();
+    let crate::io::Imported::Plan(q, notes) = crate::io::import(&f).unwrap() else { panic!() };
+    std::fs::remove_dir_all(dir).ok();
+    assert!(notes.iter().any(|n| n.contains("elapsed lag")), "{notes:?}");
+    // Fri 6 Nov 17:00 + 7 days round the clock = Fri 13 Nov 17:00: Strip forms starts Mon 16 Nov.
+    assert_eq!(q.tasks[1].preds[0].lag, 5 * 480);
+    assert_eq!(&dates(&q)[1][..11], "Nov16 08:00");
+}

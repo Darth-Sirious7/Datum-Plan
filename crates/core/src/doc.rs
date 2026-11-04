@@ -901,8 +901,8 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if p.calendar == old {
                 p.calendar = cal.name.clone();
             }
-            for t in p.tasks.iter_mut().filter(|t| t.cal.as_deref() == Some(old.as_str())) {
-                t.cal = Some(cal.name.clone());
+            for c in p.tasks.iter_mut().map(|t| &mut t.cal).chain(p.resources.iter_mut().map(|r| &mut r.cal)).filter(|c| c.as_deref() == Some(old.as_str())) {
+                *c = Some(cal.name.clone());
             }
             match p.calendars.iter().position(|c| c.name == old) {
                 Some(k) => p.calendars[k] = cal,

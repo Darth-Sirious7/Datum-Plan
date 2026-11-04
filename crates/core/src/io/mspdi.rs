@@ -249,6 +249,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     }
     let unit = |c: &str| match c { "3" | "4" => Unit::M, "5" | "6" => Unit::H, "9" | "10" => Unit::W, "11" | "12" => Unit::Mo, _ => Unit::D };
     let mut tasks: Vec<(i64, Task)> = vec![];
+    let week_work: i64 = p.calendars.iter().find(|c| c.name == p.calendar).map_or(2400, |c| c.week.iter().flatten().map(|&(a, b)| b.saturating_sub(a) as i64).sum::<i64>()).max(1);
     for t in root.get("Tasks").into_iter().flat_map(|x| x.all("Task")) {
         let uid: u32 = t.val("UID").parse().unwrap_or(0);
         if uid == 0 || t.val("IsNull") == "1" || t.val("OutlineLevel") == "0" {
@@ -277,9 +278,14 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         }
         for l in t.all("PredecessorLink") {
             if let Ok(pred) = l.val("PredecessorUID").parse() {
-                let lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
+                let mut lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
                 let pct = matches!(l.val("LagFormat"), "19" | "20");
-                if matches!(l.val("LagFormat"), "4" | "6" | "8" | "10" | "12" | "20") { elapsed += 1 }
+                // An elapsed lag (clock time) becomes the working time of as long on the project calendar:
+                // 7 elapsed days are 5 working days on a five-day week.
+                if matches!(l.val("LagFormat"), "4" | "6" | "8" | "10" | "12" | "20") {
+                    elapsed += 1;
+                    if !pct { lag = (lag as i128 * week_work as i128 / (7 * 1440)) as i64 }
+                }
                 k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag, pct });
             }
         }
@@ -324,7 +330,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();
     let missing: usize = p.tasks.iter_mut().map(|t| { let n = t.preds.len(); t.preds.retain(|l| uids.contains(&l.pred)); n - t.preds.len() }).sum();
     if missing > 0 { notes.push(format!("{missing} links point to tasks that are not in the file; they were left out.")) }
-    if elapsed > 0 { notes.push(format!("{elapsed} links have an elapsed lag (counted round the clock); Datum Plan counts them in working time.")) }
+    if elapsed > 0 { notes.push(format!("{elapsed} links have an elapsed lag (counted round the clock); Datum Plan counts each as the same share of a working week (7 elapsed days are 5 working days on a five-day week).")) }
     if late_bl > 0 { notes.push(format!("{late_bl} baseline values beyond Baseline 10 were left out.")) }
     p.normalize();
     Ok((p, notes))

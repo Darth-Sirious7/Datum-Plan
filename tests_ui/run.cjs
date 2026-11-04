@@ -91,6 +91,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
     const ops = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-2).map(c => Object.keys(c[1].op)[0] + ":" + JSON.stringify(c[1].op.Batch?.map(o => Object.keys(o)[0]) ?? "")));
     check("Insert Summary Task is one step (one Undo)", ops[1] === 'Batch:["Insert","Indent"]', JSON.stringify(ops));
     await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100); }
+  // The Calendar and Team Planner show the tasks under a collapsed summary too.
+  { await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200);
+    const collapsedQ = await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q?.collapsed?.length));
+    for (const v of ["Calendar", "Team"]) {
+      await p.evaluate(() => { window.__calls.length = 0; }); await p.click(`.side button[title="${v}"]`); await p.waitForTimeout(300);
+      check(`${v} reads every task, not only the open outline`, collapsedQ && await p.evaluate(() => window.__calls.some(c => c[0] === "query" && c[1].q.flat && !c[1].q.collapsed.length)));
+    }
+    await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300); await p.dispatchEvent(".gbody .row b.tg >> nth=0", "mousedown"); await p.waitForTimeout(200); }
 
   // 3. Right-click menu commands run (they did nothing in 0.3.0) and show icons.
   const head = await p.$(".ghead .hc:nth-child(3)");
