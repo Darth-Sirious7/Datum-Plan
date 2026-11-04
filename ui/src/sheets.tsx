@@ -21,6 +21,8 @@ import { condLooks, lookCss, condMenu, bounds as cfBounds } from "./condfmt";
 import type { CondRule } from "./api";
 import { colorPalette } from "./colors";
 import { openDialog } from "./store";
+import * as X from "./sheetcells";
+import type { ColFilter, Validation } from "./api";
 
 const RH = 22, CW = 96, HW = 46;
 const COLORS = ["#2F6FDE", "#D64545", "#7A4FD8", "#1F9D55", "#C77700", "#C2185B"];
@@ -90,7 +92,10 @@ export const Sheets = () => {
   // The grid reaches past the used cells, and grows as you go further (by keys or by scrolling).
   const [reach, setReach] = createSignal<[number, number]>([0, 0]);
   const nrows = () => Math.max(200, (data()?.rows ?? 0) + 30, reach()[0] + 40), ncols = () => Math.max(26, (data()?.cols ?? 0) + 6, reach()[1] + 8);
-  const hidR = createMemo(() => new Set(sheet()?.hide_rows ?? [])), hidC = createMemo(() => new Set(sheet()?.hide_cols ?? []));
+  /** Rows the AutoFilter leaves out: copy, clear, fill and formats skip them, as in a spreadsheet. */
+  const fltRows = createMemo(() => new Set(sheet()?.filter ? data()?.filtered ?? [] : []));
+  const eachShown = (f: (r: number, c: number) => void, max?: number) => S.each((r, c) => { if (!fltRows().has(r)) f(r, c); }, max);
+  const hidR = createMemo(() => new Set([...(sheet()?.hide_rows ?? []), ...fltRows()])), hidC = createMemo(() => new Set(sheet()?.hide_cols ?? []));
   const width = (c: number) => (hidC().has(c) ? 0 : tw()?.[0] === c ? tw()![1] : sheet()?.widths?.[c] ?? CW);
   const lefts = createMemo(() => { let x = HW; return Array.from({ length: ncols() }, (_, c) => { const l = x; x += width(c); return l; }); });
   // Row heights: tops[r] is where row r starts (below the header); a row being dragged uses th.
@@ -125,7 +130,7 @@ export const Sheets = () => {
   let paintFmt: string | null = null;
   createEffect(() => { if (F.painter() !== null && F.target() === fmtTarget) paintFmt = fmtOf(...cur()); });
   const fmtTarget: F.Target = {
-    get: () => { const st = sheet()?.style ?? {}, out: [string, string][] = []; S.each((r, c) => out.push([a1(r, c), st[a1(r, c)] ?? ""]), 20000); return out; },
+    get: () => { const st = sheet()?.style ?? {}, out: [string, string][] = []; eachShown((r, c) => out.push([a1(r, c), st[a1(r, c)] ?? ""]), 20000); return out; },
     set: list => act({ SheetStyle: { k: k(), cells: list } }),
     paste: (what, tr) => pasteSpecial(what, tr),
   };
@@ -154,6 +159,11 @@ export const Sheets = () => {
     // "+A1*2" or "-SUM(B:B)" starts a formula, as in a spreadsheet; "-5" stays a number.
     const v2 = /^[+-](?=[A-Za-z$(])/.test(v) ? `=${v}` : v;
     const val = v2.startsWith("=") && v2.length > 1 ? closeParens(v2) : v2;
+    const li = hm.k === k() ? validAt(hm.r, hm.c) : -1, allowed = li >= 0 ? listOf(li) : [];
+    if (li >= 0 && val && !val.startsWith("=") && !allowed.some(x => x.toLowerCase() === val.toLowerCase())) {
+      if (!sheet().valid![li].warn) { toast(`This cell takes a value from its list: ${allowed.slice(0, 8).join(", ")}${allowed.length > 8 ? "…" : ""}.`); setEdit(v); setHome(hm); return; }
+      toast("That value is not in the cell's list.");
+    }
     if (move) { const m = mergeAt(hm.r, hm.c), [fr, fc] = m ? [move[0] > 0 ? m.r1 : m.r0, move[1] > 0 ? m.c1 : m.c0] : [hm.r, hm.c]; go(Math.max(0, fr + move[0]), Math.max(0, fc + move[1])); box?.focus(); }
     if (val !== input(hm.k, hm.r, hm.c)) await put([[a1(hm.r, hm.c), val]], hm.k);
   };
@@ -162,7 +172,7 @@ export const Sheets = () => {
     const v = edit(), hm = home(); if (v === null || !hm) return;
     batch(() => { setEdit(null); setHome(null); setPoint(null); });
     const val = v.startsWith("=") && v.length > 1 ? closeParens(v) : v, items: [string, number, number][] = [], at: string[] = [];
-    S.each((r, c) => { items.push([val, r - hm.r, c - hm.c]); at.push(a1(r, c)); }, 20000);
+    eachShown((r, c) => { items.push([val, r - hm.r, c - hm.c]); at.push(a1(r, c)); }, 20000);
     const moved = val.startsWith("=") ? await call<string[]>("formula_shift", { items }) : null;
     await put(at.map((a, i) => [a, moved?.[i] ?? val]));
     box?.focus();
@@ -196,6 +206,7 @@ export const Sheets = () => {
     if (list.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setSug((sug() + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length); return; }
     if (list.length && e.key === "Tab") { e.preventDefault(); accept(list[sug()]); return; }
     if (e.key === "F4") { e.preventDefault(); const [t, c] = cycleAnchor(edit()!, caret()); setText(t, c); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === ";" || e.key === ":")) { e.preventDefault(); const t = edit()!, at = caret(), x = stamp(e.shiftKey); setText(t.slice(0, at) + x + t.slice(at), at + x.length); return; }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fillSel(); return; }
     if (e.key === "Enter") { e.preventDefault(); commit([e.shiftKey ? -1 : 1, 0]); }
     else if (e.key === "Tab") { e.preventDefault(); commit([0, e.shiftKey ? -1 : 1]); }
@@ -208,7 +219,7 @@ export const Sheets = () => {
   createEffect(() => { if (edit() !== null && home() && home()!.k !== k()) { lastEl = "bar"; queueMicrotask(() => { barEl?.focus(); barEl?.setSelectionRange(caret(), caret()); }); } });
 
   // ---------- keys, clipboard, fill ----------
-  const clear = () => { const out: [string, string][] = []; S.each((r, c) => { if (input(k(), r, c)) out.push([a1(r, c), ""]); }); put(out); };
+  const clear = () => { const out: [string, string][] = []; eachShown((r, c) => { if (input(k(), r, c)) out.push([a1(r, c), ""]); }); put(out); };
   const key = (e: KeyboardEvent) => {
     if (picSel() >= 0 && edit() === null && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); putImgs(imgs().filter((_, j) => j !== picSel())); setPicSel(-1); return; }
     // Keys typed before the cell editor has focus still go into it (fast typing loses nothing).
@@ -226,8 +237,15 @@ export const Sheets = () => {
     };
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.altKey && e.key === "=") { e.preventDefault(); return autoSum("SUM"); }
-    if (ctrl && e.shiftKey && (e.key === "+" || e.key === "=")) { e.preventDefault(); return insertCells(false); }
-    if (ctrl && !e.shiftKey && e.key === "-") { e.preventDefault(); return insertCells(true); }
+    if (ctrl && (e.key === "+" || (e.shiftKey && e.key === "="))) { e.preventDefault(); return shiftDlg(false); }
+    if (ctrl && !e.shiftKey && e.key === "-") { e.preventDefault(); return shiftDlg(true); }
+    if (ctrl && e.key === "1") { e.preventDefault(); return formatDlg(); }
+    if (ctrl && (e.key === ";" || e.key === ":")) { e.preventDefault(); return put([[a1(...cur()), stamp(e.shiftKey)]]); }
+    if (ctrl && e.shiftKey && e.key.toLowerCase() === "l") { e.preventDefault(); return toggleFilter(); }
+    if (e.key === "F5" || (ctrl && e.key.toLowerCase() === "g")) { e.preventDefault(); return X.goToDialog(goTo); }
+    if (e.shiftKey && e.key === "F2") { e.preventDefault(); return editNote(); }
+    if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); const [r0, c0] = cur(), fb = fbox(); if (fb && r0 === fb.r0 && c0 >= fb.c0 && c0 <= fb.c1) return filterCol(c0); if (validAt(r0, c0) >= 0) return listMenu(); return; }
+    if (e.key === " " && (ctrl || e.shiftKey) && !(ctrl && e.shiftKey)) { e.preventDefault(); const [r0, c0] = cur(); return ctrl ? S.cols(c0, c0, false, false) : S.rows(r0, r0, false, false); }
     // Ctrl+arrow: to the edge of the data (the next filled cell after a gap, or the last of a filled run).
     const filled = (rr: number, cc: number) => !!cells().get(a1(rr, cc))?.[2];
     const jump = (dr: number, dc: number) => {
@@ -261,6 +279,13 @@ export const Sheets = () => {
   };
   const copy = (cut = false) => {
     const [r0, c0, r1, c1] = range();
+    const shownRows = Array.from({ length: r1 - r0 + 1 }, (_, i) => r0 + i).filter(r => !fltRows().has(r));
+    if (shownRows.length <= r1 - r0) {
+      const st = sheet()?.style ?? {}, cs = Array.from({ length: c1 - c0 + 1 }, (_, j) => c0 + j);
+      clip.text = toTsv(shownRows.map(r => cs.map(c => cells().get(a1(r, c))?.[2] ?? ""))); clip.styles = shownRows.map(r => cs.map(c => st[a1(r, c)] ?? ""));
+      sclip.text = "";
+      return clip.text;
+    }
     const lines: string[][] = [], inputs: string[][] = [];
     for (let r = r0; r <= r1; r++) { const l = [], m = []; for (let c = c0; c <= c1; c++) { const shown = cells().get(a1(r, c))?.[2] ?? ""; l.push(shown); m.push(input(k(), r, c) || shown); } lines.push(l); inputs.push(m); }
     const st = sheet()?.style ?? {};
@@ -471,11 +496,11 @@ export const Sheets = () => {
     const n = Math.min(1000, c ? g.c1 - g.c0 + 1 : g.r1 - g.r0 + 1);
     act({ SheetInsert: { k: k(), cols: c, at: c ? g.c0 : g.r0, count: del ? -n : n } });
   };
-  const setFmt = (f: string) => { const out: [string, string][] = []; S.each((r, c) => out.push([a1(r, c), ""]), 20000); act({ SheetCells: { k: k(), cells: out, fmt: f } }); };
+  const setFmt = (f: string) => { const out: [string, string][] = []; eachShown((r, c) => out.push([a1(r, c), ""]), 20000); act({ SheetCells: { k: k(), cells: out, fmt: f } }); };
   const customFmt = () => { const f = prompt("Number format code, for example #,##0.0 or dd/mm/yyyy or 0.0\"%\"", fmtOf(...cur())); if (f !== null) setFmt(f.trim()); };
   const moreDecimals = (d: number) => {
     const by = new Map<string, [string, string][]>();
-    S.each((r, c) => { const f = decimals(fmtOf(r, c), d); by.set(f, [...(by.get(f) ?? []), [a1(r, c), ""]]); }, 20000);
+    eachShown((r, c) => { const f = decimals(fmtOf(r, c), d); by.set(f, [...(by.get(f) ?? []), [a1(r, c), ""]]); }, 20000);
     act({ Batch: [...by].map(([f, list]) => ({ SheetCells: { k: k(), cells: list, fmt: f } })) });
   };
   // ---------- Home tab commands ----------
@@ -485,24 +510,7 @@ export const Sheets = () => {
   const trackClick = (e: MouseEvent) => { lastClick = e; };
   addEventListener("mousedown", trackClick, true); onCleanup(() => removeEventListener("mousedown", trackClick, true));
   /** Borders on the selection, as a spreadsheet draws them (inner lines once, not twice). */
-  const border = (kind: string) => {
-    const b = bounds(), [kd, col] = pen(), ln = (k = kd) => `${k} ${col}`;
-    F.changeEach((st, id) => {
-      const [r, c] = parseA1(id), o = { ...st }, top = r === b.r0, bot = r === b.r1, lft = c === b.c0, rgt = c === b.c1;
-      const set = (k: F.Side, on: boolean, v = ln()) => { if (on) o[k] = v; };
-      switch (kind) {
-        case "none": F.SIDES.forEach(k => delete o[k]); break;
-        case "all": set("bb", true); set("br", true); set("bt", top); set("bl", lft); break;
-        case "outside": set("bt", top); set("bb", bot); set("bl", lft); set("br", rgt); break;
-        case "thickbox": set("bt", top, ln("thick")); set("bb", bot, ln("thick")); set("bl", lft, ln("thick")); set("br", rgt, ln("thick")); break;
-        case "top": set("bt", top); break; case "bottom": set("bb", bot); break; case "left": set("bl", lft); break; case "right": set("br", rgt); break;
-        case "topbottom": set("bt", top); set("bb", bot); break;
-        case "dblbottom": set("bb", bot, ln("dbl")); break; case "thickbottom": set("bb", bot, ln("thick")); break;
-        case "topthickbottom": set("bt", top); set("bb", bot, ln("thick")); break;
-      }
-      return o;
-    });
-  };
+  const border = (kind: string) => { const b = bounds(); F.changeEach((st, id) => { const [r, c] = parseA1(id); return X.edges(kind, pen(), b, r, c, st); }); };
   const BI = (label: string, kind: string): Item => ({ label, icon: `bd-${kind}`, run: () => border(kind) });
   const borderItems = (): Item[] => [
     BI("Bottom Border", "bottom"), BI("Top Border", "top"), BI("Left Border", "left"), BI("Right Border", "right"), "-",
@@ -529,7 +537,7 @@ export const Sheets = () => {
   /** A cell style sets font and fill; alignment, wrapping and (unless the style has its own) borders stay, as in a spreadsheet. */
   const cellStyle = (st: string) => { const n = F.parse(st), own = F.SIDES.some(k2 => n[k2]); F.changeEach(o => ({ a: o.a, v: o.v, w: o.w, x: o.x, ...(own ? {} : { bt: o.bt, bb: o.bb, bl: o.bl, br: o.br }), ...n })); };
   const clearKind = async (kind: "all" | "formats" | "contents") => {
-    const ids: string[] = []; S.each((r, c) => ids.push(a1(r, c)), 20000);
+    const ids: string[] = []; eachShown((r, c) => ids.push(a1(r, c)), 20000);
     const ops: unknown[] = [];
     if (kind !== "formats") ops.push({ SheetCells: { k: k(), cells: ids.filter(a => sheet().cells[a]).map(a => [a, ""]), fmt: null } });
     if (kind !== "contents") { ops.push({ SheetStyle: { k: k(), cells: ids.filter(a => sheet().style?.[a]).map(a => [a, ""]) } }); ops.push({ SheetCells: { k: k(), cells: ids.filter(a => sheet().fmt?.[a]).map(a => [a, ""]), fmt: "" } }); }
@@ -537,19 +545,6 @@ export const Sheets = () => {
   };
   const fillDown = () => { const b = bounds(); if (b.r1 > b.r0) { setCur([b.r0, b.c0]); setEnd([b.r0, b.c1]); fillRange(b.r1, b.c1, true); } };
   const fillRight = () => { const b = bounds(); if (b.c1 > b.c0) { setCur([b.r0, b.c0]); setEnd([b.r1, b.c0]); fillRange(b.r1, b.c1, true); } };
-  /** Sorts the selected rows by the selection's first column (values and formats move with their rows). */
-  const sortRows = async (asc: boolean) => {
-    const b = bounds(); if (b.r1 <= b.r0) return toast("Select the rows to sort (two or more).");
-    const key = (r: number) => { const x = cells().get(a1(r, b.c0)); return x?.[4] !== null && x?.[4] !== undefined ? x[4] : (x?.[2] ?? "").toLowerCase(); };
-    const blank = (r: number) => !(cells().get(a1(r, b.c0))?.[2] ?? "");
-    const rows = Array.from({ length: b.r1 - b.r0 + 1 }, (_, i) => b.r0 + i).sort((x, y) => {
-      if (blank(x) !== blank(y)) return blank(x) ? 1 : -1;
-      const p = key(x), q = key(y); const d = typeof p === "number" && typeof q === "number" ? p - q : String(p).localeCompare(String(q), undefined, { numeric: true }); return asc ? d : -d; });
-    const items: [string, number, number][] = [], at: string[] = [], sts: [string, string][] = [], fms = new Map<string, [string, string][]>();
-    rows.forEach((src, i) => { for (let c = b.c0; c <= b.c1; c++) { const to = a1(b.r0 + i, c); items.push([input(k(), src, c), b.r0 + i - src, 0]); at.push(to); sts.push([to, sheet().style?.[a1(src, c)] ?? ""]); const f = fmtOf(src, c); fms.set(f, [...(fms.get(f) ?? []), [to, ""]]); } });
-    const moved = await call<string[]>("formula_shift", { items });
-    act({ Batch: [{ SheetCells: { k: k(), cells: at.map((a, i) => [a, moved?.[i] ?? items[i][0]]), fmt: null } }, { SheetStyle: { k: k(), cells: sts } }, ...[...fms].map(([f, cl]) => ({ SheetCells: { k: k(), cells: cl, fmt: f } }))] });
-  };
   const rowHeight = async () => { const b = bounds(), v = await askText("Row Height", "Row height (pixels)", String(rh(b.r0))); const n = Math.round(+(v ?? "")); if (!v || !(n >= 6 && n <= 600)) return; const hs = { ...(sheet().heights ?? {}) }; for (let r = b.r0; r <= Math.min(b.r1, b.r0 + 5000); r++) { if (n === RH) delete hs[r]; else hs[r] = n; } act({ Sheet: { k: k(), sheet: { ...sheet(), heights: hs } } }); };
   const colWidth = async () => { const b = bounds(), v = await askText("Column Width", "Column width (pixels)", String(width(b.c0))); const n = Math.round(+(v ?? "")); if (!v || !(n >= 16 && n <= 1200)) return; const ws = { ...(sheet().widths ?? {}) }; for (let c = b.c0; c <= Math.min(b.c1, b.c0 + 500); c++) ws[c] = n; saveWidths(ws); };
   /** AutoFit Row Height: rows with wrapped text grow to fit it; others go back to the standard height. */
@@ -563,13 +558,32 @@ export const Sheets = () => {
     act({ Sheet: { k: k(), sheet: { ...sheet(), heights: hs } } });
   };
   const autofitCols = () => { const b = bounds(); for (let c = b.c0; c <= b.c1; c++) autofit(c); };
-  const fmtItems = (): Item[] => [...FORMATS.map(([l, f]) => ({ label: l, on: fmtOf(...cur()) === f, run: () => setFmt(f) })), "-", { label: "Custom…", run: customFmt }];
+  const fmtItems = (): Item[] => [...FORMATS.map(([l, f]) => ({ label: l, on: fmtOf(...cur()) === f, run: () => setFmt(f) })), "-", { label: "Custom…", run: customFmt }, { label: "More Number Formats…", keys: "Ctrl+1", run: () => formatDlg("num") }];
   const sumItems = (): Item[] => ["SUM", "AVERAGE", "COUNT", "MAX", "MIN"].map(f => ({ label: f[0] + f.slice(1).toLowerCase(), keys: f === "SUM" ? "Alt+=" : undefined, run: () => autoSum(f) }));
+  const pasteItems = (): Item[] => [{ label: "Paste Special…", keys: "Ctrl+Alt+V", run: () => import("./dialogs").then(d => d.pasteSpecial()) }, "-",
+    { label: "Values", run: () => pasteSpecial("values", false) }, { label: "Formatting", icon: "paint", run: () => pasteSpecial("formats", false) }, { label: "Transpose", run: () => pasteSpecial("all", true) }];
+  const clipItems = (): Item[] => [
+    { label: "Cut", icon: "cut", keys: "Ctrl+X", run: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); } },
+    { label: "Copy", icon: "copy", keys: "Ctrl+C", run: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); } },
+    { label: "Paste", icon: "paste", keys: "Ctrl+V", run: async () => pasteAll(await clipText()) },
+    { label: "Paste Special", icon: "paste", sub: pasteItems() }];
+  /** Right-click on a row number or a column letter: the commands for whole rows or columns. */
+  const lineMenu = (e: MouseEvent, cols: boolean) => {
+    const b = bounds(), n = cols ? b.c1 - b.c0 + 1 : b.r1 - b.r0 + 1, w = cols ? "Column" : "Row", ws = `${n > 1 ? `${n} ` : ""}${w}${n > 1 ? "s" : ""}`;
+    openMenu(e, [...clipItems(), "-",
+      { label: `Insert ${ws}`, run: () => insertCells(false, cols) }, { label: `Delete ${ws}`, run: () => insertCells(true, cols) }, { label: "Clear Contents", keys: "Delete", run: clear }, "-",
+      { label: "Format Cells…", keys: "Ctrl+1", run: () => formatDlg() },
+      cols ? { label: "Column Width…", run: colWidth } : { label: "Row Height…", run: rowHeight }, { label: cols ? "AutoFit Column Width" : "AutoFit Row Height", run: cols ? autofitCols : autofitRows }, "-",
+      { label: "Hide", run: () => hideLines(cols, true) }, { label: "Unhide", off: !(cols ? sheet()?.hide_cols : sheet()?.hide_rows)?.length, run: () => hideLines(cols, false) }]);
+  };
   const cellMenu = (e: MouseEvent) => {
     const [r, c] = at(e.clientX, e.clientY);
+    // On the headings: whole rows or columns (the clicked one, unless it is in the selection).
+    if (r < 0 && c >= 0) { if (!S.ranges().some(g => c >= Math.min(g.c0, g.c1) && c <= Math.max(g.c0, g.c1) && Math.min(g.r0, g.r1) === 0)) S.cols(c, c, false, false); return lineMenu(e, true); }
+    if (c < 0 && r >= 0) { if (!S.ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1) && Math.min(g.c0, g.c1) === 0)) S.rows(r, r, false, false); return lineMenu(e, false); }
     if (r >= 0 && c >= 0 && !inR(r, c)) go(r, c);
-    const g = S.last(), nr = g.r1 - g.r0 + 1, nc = g.c1 - g.c0 + 1;
-    const pg = page(), [cr, cc] = cur();
+    const pg = page(), [cr, cc] = cur(), nt = sheet()?.notes?.[a1(cr, cc)], st = F.parse(sheet()?.style?.[a1(cr, cc)]), fz = frozen()[0] || frozen()[1];
+    const anyNote = () => { let f = false; S.each((rr, c2) => { if (sheet()?.notes?.[a1(rr, c2)]) f = true; }, 20000); return f; };
     openMenu(e, [
       ...(sheetMode() === "breaks" ? [
         { label: "Insert Page Break", run: () => breakHere() },
@@ -577,25 +591,137 @@ export const Sheets = () => {
         { label: "Reset All Page Breaks", off: !(pg.breaks ?? []).length && !(pg.col_breaks ?? []).length, run: resetBreaks },
         { label: "Set Print Area", run: areaFromSel },
         { label: "Reset Print Area", off: !pg.area, run: () => setPage({ area: "" }) }, "-" as const] : []),
-      { label: "Cut", keys: "Ctrl+X", run: () => { navigator.clipboard?.writeText(copy(true)).catch(() => {}); } },
-      { label: "Copy", keys: "Ctrl+C", run: () => { navigator.clipboard?.writeText(copy()).catch(() => {}); } },
-      { label: "Paste", keys: "Ctrl+V", run: async () => pasteAll(await clipText()) },
-      { label: "Paste Special…", keys: "Ctrl+Alt+V", run: () => import("./dialogs").then(d => d.pasteSpecial()) },
-      "-",
-      { label: nr > 1 ? `Insert ${nr} Rows Above` : "Insert Row Above", run: () => insertCells(false, false) },
-      { label: nc > 1 ? `Insert ${nc} Columns Left` : "Insert Column Left", run: () => insertCells(false, true) },
-      { label: nr > 1 ? `Delete ${nr} Rows` : "Delete Row", run: () => insertCells(true, false) },
-      { label: nc > 1 ? `Delete ${nc} Columns` : "Delete Column", run: () => insertCells(true, true) },
-      { label: "Clear Contents", keys: "Delete", run: clear },
-      "-",
-      { label: "Hide Rows", run: () => hideLines(false, true) }, { label: "Unhide Rows", off: !(sheet()?.hide_rows ?? []).length, run: () => hideLines(false, false) },
-      { label: "Hide Columns", run: () => hideLines(true, true) }, { label: "Unhide Columns", off: !(sheet()?.hide_cols ?? []).length, run: () => hideLines(true, false) },
-      "-",
+      ...clipItems(), "-",
+      { label: "Insert…", keys: "Ctrl++", run: () => shiftDlg(false) }, { label: "Delete…", keys: "Ctrl+-", run: () => shiftDlg(true) }, { label: "Clear Contents", keys: "Delete", run: clear }, "-",
+      { label: "Sort", icon: "az", sub: [{ label: "Sort A to Z", run: () => sortRows(true) }, { label: "Sort Z to A", run: () => sortRows(false) }, "-", { label: "Custom Sort…", run: customSort }] },
+      { label: "Filter", icon: "filter", sub: [{ label: "Filter by Selected Cell's Value", run: filterByValue }, { label: sheet()?.filter ? "Remove Filter" : "Filter", keys: "Ctrl+Shift+L", on: !!sheet()?.filter, run: toggleFilter }, { label: "Clear Filter", off: !sheet()?.filter?.cols.length, run: clearFilter }] },
+      { label: nt ? "Edit Note…" : "New Note…", keys: "Shift+F2", run: editNote }, ...(nt || anyNote() ? [{ label: "Delete Note", run: deleteNotes }] : []), "-",
+      { label: "Format Cells…", keys: "Ctrl+1", run: () => formatDlg() },
       { label: "Number Format", sub: fmtItems() },
+      { label: "Borders", icon: "bd-all", sub: borderItems() },
+      { label: merged() ? "Unmerge Cells" : "Merge & Center", icon: "merge", run: () => merge(merged() ? "unmerge" : "center") },
+      { label: "Wrap Text", icon: "wrap", on: !!st.w, run: () => F.setProp("w", !st.w || undefined) }, "-",
+      { label: "Rows and Columns", sub: [{ label: "Row Height…", run: rowHeight }, { label: "Column Width…", run: colWidth }, { label: "AutoFit Row Height", run: autofitRows }, { label: "AutoFit Column Width", run: autofitCols }, "-",
+        { label: "Hide Rows", run: () => hideLines(false, true) }, { label: "Unhide Rows", off: !(sheet()?.hide_rows ?? []).length, run: () => hideLines(false, false) },
+        { label: "Hide Columns", run: () => hideLines(true, true) }, { label: "Unhide Columns", off: !(sheet()?.hide_cols ?? []).length, run: () => hideLines(true, false) }] },
+      { label: "Freeze Panes", sub: [{ label: "Freeze Panes", on: !!fz, run: () => freeze([cr, cc]) }, { label: "Freeze Top Row", run: () => freeze([1, 0]) }, { label: "Freeze First Column", run: () => freeze([0, 1]) }, { label: "Unfreeze Panes", off: !fz, run: () => freeze([0, 0]) }] }, "-",
       { label: "AutoSum", sub: sumItems() },
       { label: "Insert Function…", run: insertFn },
       { label: "Plan Data…", run: planData },
+      { label: "Drop-down List…", run: editList },
     ]);
+  };
+  // ---------- notes, filter, drop-down lists, sort, go to ----------
+  /** After a dialog: the keys go to the grid again. */
+  const refocus = () => setTimeout(() => box?.focus());
+  const putNotes = (list: [string, string][]) => { refocus(); return list.length ? act({ SheetNotes: { k: k(), cells: list } }) : undefined; };
+  const editNote = () => { const id = a1(...cur()); X.noteDialog(id, sheet()?.notes?.[id] ?? "", t => putNotes([[id, t]])); };
+  const deleteNotes = () => { const out: [string, string][] = []; eachShown((r, c) => { if (sheet()?.notes?.[a1(r, c)]) out.push([a1(r, c), ""]); }, 20000); putNotes(out); };
+  const [hover, setHover] = createSignal<{ x: number; y: number; t: string } | null>(null);
+  const noteHover = (e: MouseEvent) => { const el = (e.target as HTMLElement).closest?.(".c.note") as HTMLElement | null, t = el?.dataset.note; if (!el || !t) return setHover(null); const b = el.getBoundingClientRect(); setHover({ x: b.right + 6, y: b.top, t }); };
+  /** Today's date (Ctrl+;) or the time now (Ctrl+Shift+;), typed as the plan writes them. */
+  const stamp = (time: boolean) => { const d = new Date(), z = (n: number) => String(n).padStart(2, "0"); return time ? `${z(d.getHours())}:${z(d.getMinutes())}` : `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
+  /** The filled block around a cell (as far as filled cells touch it), for Filter and Sort on one cell. */
+  const region = (r: number, c: number) => {
+    const b = { r0: r, c0: c, r1: r, c1: c }, has = (rr: number, cc: number) => rr >= 0 && cc >= 0 && !!cells().get(a1(rr, cc))?.[2];
+    const rowHas = (rr: number) => { for (let cc = Math.max(0, b.c0 - 1); cc <= b.c1 + 1; cc++) if (has(rr, cc)) return true; return false; };
+    const colHas = (cc: number) => { for (let rr = Math.max(0, b.r0 - 1); rr <= b.r1 + 1; rr++) if (has(rr, cc)) return true; return false; };
+    for (let n = 0, grew = true; grew && n < 5000; n++) { grew = false;
+      if (b.r0 > 0 && rowHas(b.r0 - 1)) { b.r0--; grew = true; } if (rowHas(b.r1 + 1)) { b.r1++; grew = true; }
+      if (b.c0 > 0 && colHas(b.c0 - 1)) { b.c0--; grew = true; } if (colHas(b.c1 + 1)) { b.c1++; grew = true; } }
+    return b;
+  };
+  const fbox = createMemo(() => { const g = sheet()?.filter?.range ? cfBounds(sheet()!.filter!.range) : null; return g ? { r0: g.r0, c0: g.c0, r1: g.r1, c1: g.c1 } : null; });
+  const setFilter = (f: SheetData["filter"]) => (refocus(), act({ Sheet: { k: k(), sheet: { ...sheet(), filter: f ?? null } } }));
+  const toggleFilter = () => {
+    if (sheet()?.filter) return setFilter(null);
+    const b0 = bounds(), b = b0.r0 === b0.r1 ? region(b0.r0, b0.c0) : b0;
+    if (b.r1 <= b.r0) return toast("Select a list with headings in its first row, then turn on Filter.");
+    return setFilter({ range: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`, cols: [] });
+  };
+  const clearFilter = () => { const f = sheet()?.filter; if (f) setFilter({ ...f, cols: [] }); };
+  const colValues = (c: number) => { const b = fbox(); if (!b) return []; const seen = new Set<string>(); for (let r = b.r0 + 1; r <= b.r1; r++) seen.add(cells().get(a1(r, c))?.[2] ?? ""); return [...seen].sort((x, y) => (x === "" ? 1 : y === "" ? -1 : x.localeCompare(y, undefined, { numeric: true }))); };
+  const setColFilter = (c: number, cf: ColFilter | null) => { const f = sheet()?.filter; if (f) setFilter({ ...f, cols: [...f.cols.filter(x => x.col !== c), ...(cf ? [cf] : [])] }); };
+  const filterCol = (c: number) => { const b = fbox(); if (!b) return; X.filterDialog({ title: cells().get(a1(b.r0, c))?.[2] || colName(c), values: colValues(c), cur: sheet()?.filter?.cols.find(x => x.col === c), col: c, sort: asc => sortBy([[c, asc]], { r0: b.r0 + 1, c0: b.c0, r1: b.r1, c1: b.c1 }), save: cf => setColFilter(c, cf) }); };
+  /** Filter by the selected cell's value: turns the filter on (the block around the cell) if it is off. */
+  const filterByValue = async () => {
+    const [r, c] = cur(), v = cells().get(a1(r, c))?.[2] ?? "";
+    let f = sheet()?.filter, b = fbox();
+    if (!f || !b || r <= b.r0 || r > b.r1 || c < b.c0 || c > b.c1) { const g = region(r, c); if (g.r1 <= g.r0 || r === g.r0) return toast("Select a cell in a list with headings in its first row."); f = { range: `${a1(g.r0, g.c0)}:${a1(g.r1, g.c1)}`, cols: [] }; }
+    await setFilter({ ...f, cols: [...f.cols.filter(x => x.col !== c), { col: c, values: [v], op: "", a: "", b: "" }] });
+  };
+  /** Sorts rows by several columns (values, formulas, styles and formats move with their rows). */
+  const sortBy = async (levels: [number, boolean][], b = bounds()) => {
+    if (b.r1 <= b.r0) return toast("Select the rows to sort (two or more).");
+    const key = (r: number, c: number) => { const x = cells().get(a1(r, c)); return x?.[4] !== null && x?.[4] !== undefined ? x[4] : (x?.[2] ?? "").toLowerCase(); };
+    const blank = (r: number, c: number) => !(cells().get(a1(r, c))?.[2] ?? "");
+    const rows = Array.from({ length: b.r1 - b.r0 + 1 }, (_, i) => b.r0 + i).sort((x, y) => {
+      for (const [c, asc] of levels) {
+        if (blank(x, c) !== blank(y, c)) return blank(x, c) ? 1 : -1;
+        const p = key(x, c), q = key(y, c); const d = typeof p === "number" && typeof q === "number" ? p - q : String(p).localeCompare(String(q), undefined, { numeric: true });
+        if (d) return asc ? d : -d;
+      }
+      return x - y; });
+    const items: [string, number, number][] = [], at: string[] = [], sts: [string, string][] = [], fms = new Map<string, [string, string][]>(), nts: [string, string][] = [];
+    rows.forEach((src, i) => { for (let c = b.c0; c <= b.c1; c++) { const to = a1(b.r0 + i, c); items.push([input(k(), src, c), b.r0 + i - src, 0]); at.push(to); sts.push([to, sheet().style?.[a1(src, c)] ?? ""]); nts.push([to, sheet().notes?.[a1(src, c)] ?? ""]); const f = fmtOf(src, c); fms.set(f, [...(fms.get(f) ?? []), [to, ""]]); } });
+    const moved = await call<string[]>("formula_shift", { items });
+    act({ Batch: [{ SheetCells: { k: k(), cells: at.map((a, i) => [a, moved?.[i] ?? items[i][0]]), fmt: null } }, { SheetStyle: { k: k(), cells: sts } }, ...[...fms].map(([f, cl]) => ({ SheetCells: { k: k(), cells: cl, fmt: f } })), ...(sheet().notes && Object.keys(sheet().notes!).length ? [{ SheetNotes: { k: k(), cells: nts } }] : [])] });
+  };
+  const sortRows = (asc: boolean) => { const b0 = bounds(), b = b0.r0 === b0.r1 ? region(b0.r0, b0.c0) : b0, hd = b !== b0 && !cells().get(a1(b.r0, b0.c0))?.[3] && !!cells().get(a1(b.r0, b0.c0))?.[2] && !!cells().get(a1(b.r0 + 1, b0.c0))?.[3];
+    return sortBy([[b0.c0, asc]], hd ? { ...b, r0: b.r0 + 1 } : b); };
+  /** The list the selection is in (or the selection), its columns named by their headings, and whether it seems to have headings. */
+  const listCols = () => {
+    const b0 = bounds(), b = b0.r0 === b0.r1 ? region(b0.r0, b0.c0) : b0;
+    const head = (c: number) => cells().get(a1(b.r0, c))?.[2] ?? "", looks = Array.from({ length: b.c1 - b.c0 + 1 }, (_, i) => b.c0 + i).some(c => head(c) && !cells().get(a1(b.r0, c))?.[3]);
+    return { b, looks, cols: Array.from({ length: Math.min(200, b.c1 - b.c0 + 1) }, (_, i) => [b.c0 + i, `Column ${colName(b.c0 + i)}${head(b.c0 + i) ? `: ${head(b.c0 + i)}` : ""}`] as [number, string]) };
+  };
+  const customSort = () => { const { b, looks, cols } = listCols(); X.sortDialog(cols, looks, (lv, hd) => { refocus(); sortBy(lv, hd ? { ...b, r0: b.r0 + 1 } : b); }); };
+  const dedupe = () => {
+    const { b, looks, cols } = listCols();
+    if (b.r1 <= b.r0) return toast("Select a list of two or more rows.");
+    X.dedupeDialog(cols, looks, (cs, hd) => { refocus(); act({ SheetDedupe: { k: k(), range: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`, cols: cs, header: hd } }); });
+  };
+  /** The drop-down list that covers a cell (its index in the sheet's lists), or -1. */
+  const validAt = (r: number, c: number) => (sheet()?.valid ?? []).findIndex(v => { const g = cfBounds(v.range); return !!g && r >= g.r0 && r <= g.r1 && c >= g.c0 && c <= g.c1; });
+  const listOf = (i: number) => data()?.lists?.[i] ?? sheet()?.valid?.[i]?.list ?? [];
+  const listMenu = (e?: MouseEvent) => {
+    const [r, c] = cur(), i = validAt(r, c); if (i < 0) return;
+    const b = (box.querySelector(".lstb") as HTMLElement | null)?.getBoundingClientRect();
+    openMenu(e ?? { x: b?.left ?? 200, y: (b?.bottom ?? 200) + 2 }, listOf(i).length ? listOf(i).map(v => ({ label: v, on: input(k(), r, c) === v, run: () => { put([[a1(r, c), v]]); box.focus(); } })) : [{ label: "(the list is empty)", off: true }]);
+  };
+  const editList = () => {
+    const b = bounds(), i = (sheet()?.valid ?? []).findIndex(v => { const g = cfBounds(v.range); return !!g && g.r0 <= b.r1 && b.r0 <= g.r1 && g.c0 <= b.c1 && b.c0 <= g.c1; });
+    X.listDialog(selA1(), i >= 0 ? sheet().valid![i] : undefined, v => (refocus(), act({ Sheet: { k: k(), sheet: { ...sheet(), valid: [...(sheet().valid ?? []).filter((_, j) => j !== i), ...(v ? [v] : [])] as Validation[] } } })));
+  };
+  /** Insert… / Delete…: whole rows or columns when they are selected; otherwise ask how the other cells move. */
+  const shiftDlg = (del: boolean) => {
+    const g = S.last(), b = bounds();
+    if (g.r0 === 0 && g.r1 >= nrows() - 1) return insertCells(del, true);
+    if (Math.min(g.c0, g.c1) === 0 && Math.max(g.c0, g.c1) >= ncols() - 1) return insertCells(del, false);
+    X.shiftDialog(del, how => { refocus(); if (how === "rows" || how === "cols") return insertCells(del, how === "cols"); act({ SheetShift: { k: k(), range: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`, down: how === "down", del } }); });
+  };
+  /** Format Cells (Ctrl+1): the dialog's choices on every selected cell, in one step to undo. */
+  const formatDlg = (tab?: string) => X.formatCells({ st: F.parse(sheet()?.style?.[a1(...cur())]), fmt: fmtOf(...cur()), tab }, r => {
+    const b = bounds(), list: [string, string][] = [], ids: string[] = [], ops: unknown[] = [];
+    eachShown((rr, cc) => {
+      const id = a1(rr, cc), was = sheet()?.style?.[id] ?? "";
+      let o = F.parse(was) as Record<string, unknown>;
+      for (const key of r.touched) o[key] = (r.st as Record<string, unknown>)[key] || undefined;
+      for (const kind of r.borders) o = X.edges(kind, r.pen, b, rr, cc, o as F.St) as Record<string, unknown>;
+      const v = F.ser(o as F.St); if (v !== was) list.push([id, v]); ids.push(id);
+    }, 20000);
+    if (list.length) ops.push({ SheetStyle: { k: k(), cells: list } });
+    if (r.fmt !== null) ops.push({ SheetCells: { k: k(), cells: ids.map(a => [a, ""]), fmt: r.fmt } });
+    refocus(); if (ops.length) act({ Batch: ops });
+  });
+  /** Go To and the Name Box: A1, A1:C9, or Sheet2!B4. */
+  const goTo = (ref: string): boolean => {
+    const t = ref.trim().replace(/\$/g, ""), bang = t.lastIndexOf("!"), name = bang > 0 ? t.slice(0, bang).replace(/^'|'$/g, "").replace(/''/g, "'") : "", g = cfBounds((bang > 0 ? t.slice(bang + 1) : t).toUpperCase());
+    if (!g) { toast(`${ref} is not a cell or range (for example B12, A1:D20 or Sheet2!A1).`); return false; }
+    const tab = name ? P().sheets.findIndex(x => x.name.toLowerCase() === name.toLowerCase()) : k();
+    if (tab < 0) { toast(`There is no sheet called ${name}.`); return false; }
+    setK(tab); queueMicrotask(() => { go(g.r0, g.c0); if (g.r1 > g.r0 || g.c1 > g.c0) setEnd([g.r1, g.c1]); box?.focus(); });
+    return true;
   };
 
   // ---------- panes, mouse, columns ----------
@@ -743,25 +869,43 @@ export const Sheets = () => {
   // ---------- Find and Replace (Ctrl+F, Ctrl+H) ----------
   const findDialog = (replace: boolean) => openDialog(() => {
     const [q, setQ] = createSignal(""), [w, setW] = createSignal(""), [mc, setMc] = createSignal(false), [whole, setWhole] = createSignal(false), [note, setNote] = createSignal("");
+    const [look, setLook] = createSignal("both"), [every, setEvery] = createSignal(false), [found, setFound] = createSignal<[number, string, string][]>([]);
     const hit = (t: string) => { const a = mc() ? t : t.toLowerCase(), b = mc() ? q() : q().toLowerCase(); return !!b && (whole() ? a === b : a.includes(b)); };
+    /** Values shown, formulas typed, or both. */
+    const hitCell = (shown: string, typed: string) => (look() !== "formulas" && hit(shown)) || (look() !== "values" && !!typed && hit(typed));
     const order = () => [...cells().values()].map(x => [parseA1(x[0]), x] as const).sort((p2, q2) => p2[0][0] - q2[0][0] || p2[0][1] - q2[0][1]);
+    /** Find All: every match on this sheet (or every sheet: what was typed there), to click through. */
+    const findAll = () => {
+      const out: [number, string, string][] = [];
+      P().sheets.forEach((sh, i) => {
+        if (i === k()) order().forEach(([, x]) => { if (hitCell(x[2], x[1])) out.push([i, x[0], x[2]]); });
+        else if (every() && !sh.hidden) Object.entries(sh.cells).forEach(([a, t]) => { if (hitCell(t, t)) out.push([i, a, t]); });
+      });
+      setFound(out.slice(0, 500)); setNote(`${out.length} cell${out.length === 1 ? "" : "s"} found.`);
+    };
     const next = () => {
-      const [r0, c0] = cur(), list = order().filter(([, x]) => hit(x[2]) || (x[1] && hit(x[1])));
+      const [r0, c0] = cur(), list = order().filter(([, x]) => hitCell(x[2], x[1]));
       if (!list.length) return setNote(`Nothing found for “${q()}”.`);
       const after = list.find(([[r, c]]) => r > r0 || (r === r0 && c > c0)) ?? list[0];
       go(after[0][0], after[0][1]); setNote(`${list.length} cell${list.length > 1 ? "s" : ""} found.`);
     };
     const swap = (t: string) => { const re = new RegExp(q().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), mc() ? "g" : "gi"); return whole() ? w() : t.replace(re, () => w()); };
     const replaceOne = () => { const t = input(k(), ...cur()); if (t && hit(t)) put([[a1(...cur()), swap(t)]]); next(); };
-    const replaceAll = () => { const list: [string, string][] = Object.entries(sheet().cells).filter(([, t]) => hit(t)).map(([a, t]) => [a, swap(t)]); put(list); setNote(`Replaced in ${list.length} cell${list.length === 1 ? "" : "s"}.`); };
+    const replaceAll = () => {
+      let n = 0; const ops = P().sheets.map((sh, i) => [i, i === k() || every() ? Object.entries(sh.cells).filter(([, t]) => hit(t)).map(([a, t]) => [a, swap(t)]) : []] as const).filter(([, l]) => l.length).map(([i, l]) => { n += l.length; return { SheetCells: { k: i, cells: l, fmt: null } }; });
+      if (ops.length) act({ Batch: ops }); setNote(`Replaced in ${n} cell${n === 1 ? "" : "s"}.`);
+    };
     return <Dialog title={replace ? "Find and Replace" : "Find"} help="sheetediting">
       <div class="form">
         <Row label="Find"><input value={q()} onInput={e => setQ(e.currentTarget.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); next(); } }} /></Row>
         <Show when={replace}><Row label="Replace with"><input value={w()} onInput={e => setW(e.currentTarget.value)} /></Row></Show>
         <Row label=""><label class="chk"><input type="checkbox" checked={mc()} onChange={e => setMc(e.currentTarget.checked)} />Match case</label><label class="chk"><input type="checkbox" checked={whole()} onChange={e => setWhole(e.currentTarget.checked)} />Match the whole cell</label></Row>
+        <Row label="Look in"><select onChange={e => setLook(e.currentTarget.value)}><option value="both">Values and formulas</option><option value="values">Values shown</option><option value="formulas">Formulas typed</option></select></Row>
+        <Row label=""><label class="chk"><input type="checkbox" checked={every()} onChange={e => setEvery(e.currentTarget.checked)} />Every sheet (Find All and Replace All)</label></Row>
       </div>
       <p class="muted">{note() || "Looks in the values shown and in what was typed (formulas too)."}</p>
-      <div class="row2"><button class="btn pri" onClick={next}>Find Next</button><Show when={replace}><button class="btn" onClick={replaceOne}>Replace</button><button class="btn" onClick={replaceAll}>Replace All</button></Show></div>
+      <div class="row2"><button class="btn pri" onClick={next}>Find Next</button><button class="btn" onClick={findAll}>Find All</button><Show when={replace}><button class="btn" onClick={replaceOne}>Replace</button><button class="btn" onClick={replaceAll}>Replace All</button></Show></div>
+      <Show when={found().length}><div class="mclist findall"><For each={found()}>{([i, at, t]) => <button onClick={() => { setK(i); queueMicrotask(() => { const [r, c] = parseA1(at); go(r, c); }); }}><b>{P().sheets[i]?.name}!{at}</b> {t}</button>}</For></div></Show>
     </Dialog>;
   });
   // ---------- the sheet's own page setup (Sheet Tools › Page) ----------
@@ -833,6 +977,8 @@ export const Sheets = () => {
     paste: async () => { await pasteAll(await clipText()); box?.focus(); },
     focus: () => { box?.focus(); F.setTarget(fmtTarget); },
     page, setPage, areaFromSel, titlesFromSel, breakHere, unbreakHere, condMenu: condMenuAt, hideLines, unhideAll, find: () => findDialog(false), replace: () => findDialog(true),
+    formatCells: formatDlg, shiftDlg, customSort, dedupe, toggleFilter, clearFilter, filterByValue, filtering: () => !!sheet()?.filter, editNote, deleteNotes, editList, goTo: () => X.goToDialog(goTo),
+    insertShift: (del: boolean, down: boolean) => { const b = bounds(); act({ SheetShift: { k: k(), range: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`, down, del } }); },
   };
   setSheetApi(api);
   onCleanup(() => { if (sheetApi() === api) setSheetApi(null); });
@@ -887,9 +1033,11 @@ export const Sheets = () => {
       <For each={Array.from({ length: ncols() }, (_, c) => c)}>{c => {
         const x = () => cells().get(a1(r, c));
         const err = () => ERRORS[x()?.[2] ?? ""];
-        return <div class="c" classList={{ chid: width(c) === 0, r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "" }} title={err() ?? undefined}
+        const nt = () => sheet()?.notes?.[a1(r, c)], fh = () => { const b = fbox(); return !!b && r === b.r0 && c >= b.c0 && c <= b.c1; };
+        return <div class="c" classList={{ chid: width(c) === 0, r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "", note: !!nt(), fh: fh() }} title={err() ?? undefined} data-note={nt()}
           style={{ width: `${width(c)}px`, ...cellCss(r, c, rh(r)), ...(c < frozen()[1] ? { position: "sticky", left: `${lefts()[c]}px`, "z-index": 3 } : {}), ...spill(r, c) }}>
-          <Show when={!mergeAt(r, c)}><Show when={fmtOf(r, c) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></Show></div>;
+          <Show when={!mergeAt(r, c)}><Show when={fmtOf(r, c) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></Show>
+          <Show when={fh()}><button class="fltb" classList={{ on: !!sheet()?.filter?.cols.some(f => f.col === c) }} title="Filter and sort this column (Alt+Down)" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); go(r, c); filterCol(c); }}>{sheet()?.filter?.cols.some(f => f.col === c) ? "▼" : "▾"}</button></Show></div>;
       }}</For>
     </div>
   );
@@ -914,13 +1062,14 @@ export const Sheets = () => {
         <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><div class="row2"><button class="btn pri" onClick={addSheet}>Add a sheet</button><button class="btn" onClick={() => import("./ribbon").then(m => m.importWorkbook())}>Bring in an Excel workbook…</button></div></div>}>
-        <div class="fbar"><span class="fname">{home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : a1(...cur())}</span><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
+        <div class="fbar"><input class="fname" title="Name Box: type a cell or range (B12, A1:D20, Sheet2!A1) and press Enter to go there" value={home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : selA1()}
+          onFocus={e => e.currentTarget.select()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); if (goTo(e.currentTarget.value)) box?.focus(); } if (e.key === "Escape") { e.currentTarget.value = selA1(); box?.focus(); } }} /><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
           <input ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
             onFocus={() => { lastEl = "bar"; if (edit() === null) startEdit(input(k(), ...cur())); }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} /></div>
         <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85 * sheetZoom()} /></div></Show>
         <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); el.addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); zoomSheet(e.deltaY < 0 ? 1 : -1); }, { passive: false }); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { const z = sheetZoom(); setTop(box.scrollTop); if ((box.scrollTop + box.clientHeight) / z > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if ((box.scrollLeft + box.clientWidth) / z > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
-          onContextMenu={e => { e.preventDefault(); if (edit() === null) cellMenu(e); }} onDblClick={() => { if (edit() === null) startEdit(input(k(), ...cur())); }}>
+          onContextMenu={e => { e.preventDefault(); if (edit() === null) cellMenu(e); }} onMouseOver={noteHover} onMouseLeave={() => setHover(null)} onDblClick={() => { if (edit() === null) startEdit(input(k(), ...cur())); }}>
           <div class="gsheet" style={{ width: `${lefts()[ncols() - 1] + width(ncols() - 1) + 40}px`, height: `${top_(nrows()) + RH}px`, zoom: sheetZoom() }}>
             <div class="ghead" style={{ height: `${RH}px` }}>
               <div class="hc idc" style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 2 }} />
@@ -957,11 +1106,13 @@ export const Sheets = () => {
               <Show when={back()}>{t => { const [a, b, c, d] = range(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(t()[1], b)]}px`, top: `${top_(Math.min(t()[0], a))}px`, width: `${lefts()[d] + width(d) - lefts()[Math.min(t()[1], b)]}px`, height: `${top_(c + 1) - top_(Math.min(t()[0], a))}px` }} />; }}</Show>
               <Show when={fillTo()}>{t => { const [a, b] = cur(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(b, range()[1])]}px`, top: `${top_(Math.min(a, range()[0]))}px`, width: `${lefts()[t()[1]] + width(t()[1]) - lefts()[Math.min(b, range()[1])]}px`, height: `${top_(t()[0] + 1) - top_(Math.min(a, range()[0]))}px` }} />; }}</Show>
               <Show when={edit() === null}><i class="fill" title="Drag to fill (series; formulas follow); hold Ctrl to copy" style={{ left: `${lefts()[range()[3]] + width(range()[3]) - 4}px`, top: `${top_(range()[2] + 1) - 4}px` }} onMouseDown={fillDrag} /></Show>
+              <Show when={edit() === null && validAt(...cur()) >= 0}><button class="lstb" title="Pick from the list (Alt+Down)" style={{ left: `${lefts()[cur()[1]] + width(cur()[1]) + 1}px`, top: `${top_(cur()[0])}px`, height: `${rh(cur()[0])}px` }} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }} onClick={e => listMenu(e)}>▾</button></Show>
               <Show when={edit() !== null && home()?.k === k() && home()!.r >= frozen()[0]}>{EditBox()}</Show>
             </div>
           </div>
         </div>
       </Show>
+      <Show when={hover()}>{n => <div class="snote" style={{ left: `${Math.min(n().x, innerWidth - 260)}px`, top: `${n().y}px` }}>{n().t}</div>}</Show>
       <Show when={edit() !== null && (sugs().length || sig())}>
         <div class="fhint" style={hintPos()} onMouseDown={e => e.preventDefault()}>
           <Show when={sugs().length} fallback={<Show when={sig()}>{s => <div class="fsig"><code>{s().name}(<For each={s().args}>{(a, i) => <>{i() ? ", " : ""}<span classList={{ on: i() === s().at }}>{a}</span></>}</For>)</code><p>{s().about}</p></div>}</Show>}>

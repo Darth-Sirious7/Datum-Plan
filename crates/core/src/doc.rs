@@ -97,6 +97,15 @@ pub enum Op {
     Picture { id: u32, pic: Option<Picture> },
     /// Replaces the pictures placed on sheet k.
     SheetImages { k: usize, images: Vec<SheetImage> },
+    /// Sets notes on cells of tab k (empty text deletes the note).
+    SheetNotes { k: usize, cells: Vec<(String, String)> },
+    /// Inserts (or with `del` deletes) the cells of `range` on tab k: the cells below (`down`) or to the
+    /// right move to make room (or close the gap), within the range's columns (rows); formulas follow.
+    SheetShift { k: usize, range: String, down: bool, del: bool },
+    /// Removes duplicate rows of a range on tab k: a row whose values in `cols` (0-based on the sheet;
+    /// empty: every column) match an earlier row's goes, and the rows below move up within the range's
+    /// columns. `header`: the first row is headings and stays.
+    SheetDedupe { k: usize, range: String, cols: Vec<u32>, header: bool },
     Batch(Vec<Op>),
 }
 
@@ -1011,8 +1020,8 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 // Cells, formats, styles and pictures have their own edits: a change to the tab's layout never
                 // overwrites them (a copy from the window a moment old would undo an edit just made).
                 let o = &mut p.sheets[k];
-                let (cells, fmt, style, images) = (std::mem::take(&mut o.cells), std::mem::take(&mut o.fmt), std::mem::take(&mut o.style), std::mem::take(&mut o.images));
-                p.sheets[k] = SheetData { cells, fmt, style, images, ..s };
+                let (cells, fmt, style, images, notes) = (std::mem::take(&mut o.cells), std::mem::take(&mut o.fmt), std::mem::take(&mut o.style), std::mem::take(&mut o.images), std::mem::take(&mut o.notes));
+                p.sheets[k] = SheetData { cells, fmt, style, images, notes, ..s };
                 p.normalize();
             }
             (Some(k), None) if k < p.sheets.len() => {
@@ -1057,7 +1066,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let (row, col) = if cols { (other, pos) } else { (pos, other) };
                 Some(format!("{}{}", crate::sheet::col_name(col), row + 1))
             };
-            for m in [&mut s.cells, &mut s.fmt, &mut s.style] {
+            for m in [&mut s.cells, &mut s.fmt, &mut s.style, &mut s.notes] {
                 *m = std::mem::take(m).into_iter().filter_map(|(a1, v)| shift(&a1).map(|x| (x, v))).collect();
             }
             // A picture whose row (column) goes moves to where the deleted rows (columns) were.
@@ -1074,11 +1083,19 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let moved = |v: Vec<u32>| -> Vec<u32> { v.into_iter().filter_map(|x| if x < at { Some(x) } else if count > 0 { Some(x.saturating_add(n)) } else if x >= at.saturating_add(n) { Some(x - n) } else { None }).collect() };
             if cols { s.hide_cols = moved(std::mem::take(&mut s.hide_cols)); } else { s.hide_rows = moved(std::mem::take(&mut s.hide_rows)); }
             // Conditional formatting ranges follow their cells too.
-            s.cond = std::mem::take(&mut s.cond).into_iter().filter_map(|mut c| {
-                let (r0, c0, r1, c1) = crate::model::sheet_range(&c.range)?;
+            let moved_range = |g: &str| -> Option<String> {
+                let (r0, c0, r1, c1) = crate::model::sheet_range(g)?;
                 let (r0, c0, r1, c1) = if cols { (r0, edge(c0, false)?, r1, edge(c1, true)?) } else { (edge(r0, false)?, c0, edge(r1, true)?, c1) };
-                (r1 >= r0 && c1 >= c0).then(|| { c.range = format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1); c })
-            }).collect();
+                (r1 >= r0 && c1 >= c0).then(|| format!("{}{}:{}{}", crate::sheet::col_name(c0), r0 + 1, crate::sheet::col_name(c1), r1 + 1))
+            };
+            s.cond = std::mem::take(&mut s.cond).into_iter().filter_map(|mut c| { c.range = moved_range(&c.range)?; Some(c) }).collect();
+            // Drop-down lists and the AutoFilter too (a filtered column moves with its cells; a deleted one goes).
+            s.valid = std::mem::take(&mut s.valid).into_iter().filter_map(|mut v| { v.range = moved_range(&v.range)?; Some(v) }).collect();
+            s.filter = s.filter.take().and_then(|mut f| {
+                f.range = moved_range(&f.range)?;
+                if cols { f.cols.retain_mut(|x| match x.col { c if c < at => true, c if count > 0 => { x.col = c.saturating_add(n); true } c if c >= at.saturating_add(n) => { x.col = c - n; true } _ => false }); }
+                Some(f)
+            });
             if let Some(pg) = &mut s.page {
                 if !cols { pg.breaks = pg.breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); }
                 else { pg.col_breaks = pg.col_breaks.iter().filter_map(|&b| edge(b, false)).filter(|&b| b > 0).collect(); }
@@ -1191,6 +1208,65 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if from >= p.sheets.len() || to >= p.sheets.len() { return Err("That sheet does not exist.".into()) }
             let s = p.sheets.remove(from);
             p.sheets.insert(to, s);
+        }
+        Op::SheetNotes { k, cells } => {
+            let s = p.sheets.get_mut(k).ok_or("That sheet does not exist.")?;
+            for (a1, v) in cells {
+                let a1 = a1.to_uppercase();
+                if gridcraft_core::CellRef::parse(&a1).is_none() { return Err(format!("{a1} is not a cell.")) }
+                if v.trim().is_empty() { s.notes.remove(&a1); } else { s.notes.insert(a1, v.chars().take(8_000).collect()); }
+            }
+        }
+        Op::SheetShift { k, range, down, del } => {
+            use gridcraft_formula::adjust::{Axis, Edit};
+            let target = p.sheets.get(k).ok_or("That sheet does not exist.")?.name.clone();
+            let (r0, c0, r1, c1) = crate::model::sheet_range(&range).ok_or("Choose a range of cells.")?;
+            // Along the shift: where it starts and ends; across it: the band of rows (columns) that moves.
+            let (start, end, lo, hi) = if down { (r0, r1, c0, c1) } else { (c0, c1, r0, r1) };
+            let n = end - start + 1;
+            let moves = |r: u32, c: u32| { let (pos, across) = if down { (r, c) } else { (c, r) }; across >= lo && across <= hi && pos >= start };
+            let mv = |r: u32, c: u32| -> Option<(u32, u32)> {
+                if !moves(r, c) { return Some((r, c)) }
+                let pos = if down { r } else { c };
+                let pos = if !del { pos.saturating_add(n) } else if pos <= end { return None } else { pos - n };
+                Some(if down { (pos, c) } else { (r, pos) })
+            };
+            let s = &p.sheets[k];
+            for m in &s.merges {
+                let Some((a, b, cc, d)) = crate::model::sheet_range(m) else { continue };
+                let corners = [moves(a, b), moves(a, d), moves(cc, b), moves(cc, d)];
+                // A merge across the shifted band's edge, or (deleting) partly inside the cells that go.
+                let part = del && [(a, b), (cc, d)].iter().filter(|(r, c)| moves(*r, *c) && (if down { *r } else { *c }) <= end).count() == 1;
+                if part || (corners.iter().any(|x| *x) && !corners.iter().all(|x| *x)) { return Err("This would move part of a merged cell. Unmerge it first.".into()) }
+            }
+            let last = if down { 1_048_575 } else { 16_383 };
+            let mut used = s.cells.keys().chain(s.fmt.keys()).chain(s.style.keys()).filter_map(|a| gridcraft_core::CellRef::parse(a));
+            if !del && used.any(|x| moves(x.row, x.col) && (if down { x.row } else { x.col }).saturating_add(n) > last) {
+                return Err("Inserting these cells would push cells off the sheet. Clear the far cells first.".into());
+            }
+            let range = gridcraft_core::RangeRef::new(gridcraft_core::CellRef::new(r0, c0), gridcraft_core::CellRef::new(r1, c1));
+            let axis = if down { Axis::Rows } else { Axis::Cols };
+            let edit = if del { Edit::DeleteCells { axis, range } } else { Edit::InsertCells { axis, range } };
+            rewrite_sheets(p, |f, host| crate::sheet::adjust(f, host, &target, &edit));
+            let s = &mut p.sheets[k];
+            let shift = |x: &str| gridcraft_core::CellRef::parse(x).and_then(|x| mv(x.row, x.col)).map(|(r, c)| format!("{}{}", crate::sheet::col_name(c), r + 1));
+            for m in [&mut s.cells, &mut s.fmt, &mut s.style, &mut s.notes] {
+                *m = std::mem::take(m).into_iter().filter_map(|(x, v)| shift(&x).map(|y| (y, v))).collect();
+            }
+            s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
+            s.images.retain_mut(|im| shift(&im.cell).map(|x| im.cell = x).is_some());
+        }
+        Op::SheetDedupe { k, range, cols, header } => {
+            let s = p.sheets.get(k).ok_or("That sheet does not exist.")?;
+            let (r0, c0, r1, c1) = crate::model::sheet_range(&range).ok_or("Choose a range of cells.")?;
+            let cols: Vec<u32> = if cols.is_empty() { (c0..=c1).collect() } else { cols.into_iter().filter(|c| (c0..=c1).contains(c)).collect() };
+            let mut seen = std::collections::HashSet::new();
+            let cell = |r: u32, c: u32| s.cells.get(&format!("{}{}", crate::sheet::col_name(c), r + 1)).map_or(String::new(), |v| v.trim().to_lowercase());
+            let dups: Vec<u32> = (r0 + header as u32..=r1.min(r0 + 100_000)).filter(|&r| !seen.insert(cols.iter().map(|&c| cell(r, c)).collect::<Vec<_>>())).collect();
+            // From the bottom up, so each row is still where it was found.
+            for r in dups.into_iter().rev() {
+                exec(p, Op::SheetShift { k, range: format!("{}{}:{}{}", crate::sheet::col_name(c0), r + 1, crate::sheet::col_name(c1), r + 1), down: true, del: true }, fmt)?;
+            }
         }
         Op::SheetImages { k, images } => {
             let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();

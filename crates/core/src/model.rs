@@ -476,7 +476,28 @@ pub struct SheetData { pub name: String, pub cells: BTreeMap<String, String>, pu
     /// Conditional formatting: rules over ranges, the first that applies to a cell wins.
     #[serde(default, skip_serializing_if = "Vec::is_empty")] pub cond: Vec<CondRule>,
     /// The sheet's own page setup for printing.
-    #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<Box<SheetPage>> }
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub page: Option<Box<SheetPage>>,
+    /// Notes on cells (A1 address → text): a red corner shows them; hover reads them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] pub notes: BTreeMap<String, String>,
+    /// AutoFilter: a range whose first row holds the headings, and the condition on each column.
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub filter: Option<SheetFilter>,
+    /// Drop-down lists: cells that take one of a list of values.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")] pub valid: Vec<Validation> }
+
+/// An AutoFilter: the range ("A1:D40", headings in its first row) and the columns filtered.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SheetFilter { pub range: String, pub cols: Vec<ColFilter> }
+/// One filtered column (0-based, on the sheet): the values shown (None: any), and a condition
+/// `op` (see `sheetx::FILTER_OPS`; empty for none) with its values `a` and `b`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColFilter { pub col: u32, #[serde(skip_serializing_if = "Option::is_none")] pub values: Option<Vec<String>>, pub op: String, pub a: String, pub b: String }
+/// A drop-down list on a range: its values typed (`list`) or read from cells (`src`, "Lists!A1:A9").
+/// Other values are refused unless `warn` (then they are only flagged).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Validation { pub range: String, pub list: Vec<String>, pub src: String, #[serde(skip_serializing_if = "std::ops::Not::not")] pub warn: bool }
 
 /// A range "A1:C2" as (row0, col0, row1, col1), 0-based and ordered.
 pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
@@ -787,6 +808,19 @@ impl Project {
             for v in [&mut s.hide_rows, &mut s.hide_cols] { v.sort_unstable(); v.dedup(); v.retain(|x| *x < 1_048_576); v.truncate(20_000); }
             s.cond.retain(|c| COND_OPS.contains(&c.op.as_str()) && sheet_range(&c.range).is_some());
             s.cond.truncate(500);
+            s.notes.retain(|a, t| !t.trim().is_empty() && gridcraft_core::CellRef::parse(a).is_some());
+            if s.notes.len() > 20_000 { s.notes = std::mem::take(&mut s.notes).into_iter().take(20_000).collect(); }
+            s.notes.values_mut().for_each(|t| if t.len() > 32_000 { *t = t.chars().take(8_000).collect() });
+            if s.filter.as_ref().is_some_and(|f| sheet_range(&f.range).is_none()) { s.filter = None; }
+            if let Some(f) = &mut s.filter {
+                let (_, c0, _, c1) = sheet_range(&f.range).unwrap_or_default();
+                f.cols.retain(|x| x.col >= c0 && x.col <= c1 && (x.op.is_empty() || crate::sheetx::FILTER_OPS.contains(&x.op.as_str())));
+                f.cols.truncate(500);
+                for x in &mut f.cols { if let Some(v) = &mut x.values { v.truncate(10_000); } x.a.truncate(500); x.b.truncate(500); }
+            }
+            s.valid.retain(|v| sheet_range(&v.range).is_some() && (!v.list.is_empty() || !v.src.trim().is_empty()));
+            s.valid.truncate(500);
+            for v in &mut s.valid { v.list.truncate(1_000); v.list.iter_mut().for_each(|x| x.truncate(255)); v.src.truncate(200); }
             for c in &mut s.cond { c.a.truncate(500); c.b.truncate(500); c.style.truncate(500); }
             if let Some(pg) = &mut s.page {
                 pg.scale = if pg.scale == 0 { 0 } else { pg.scale.clamp(10, 400) };
