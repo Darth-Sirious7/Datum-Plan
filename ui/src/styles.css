@@ -1029,6 +1029,9 @@ button.link { color: var(--blue); text-decoration: underline; padding: 0; }
 .fcbody { min-height: 260px; padding-top: 10px; }
 .fcnum { display: grid; grid-template-columns: 150px 1fr; gap: 12px; }
 .fccat { width: 100%; }
+.fcbody select[size] { height: auto; min-height: 150px; padding: 2px !important; }
+.fcbody { min-width: 540px; }
+.fcbody .form { grid-template-columns: 120px 1fr; align-content: start; }
 .fccode { font: 12px var(--mono); color: var(--text2); }
 .fcsw { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--line3); vertical-align: middle; padding: 0; }
 .fcsw.big { width: 20px; height: 20px; }

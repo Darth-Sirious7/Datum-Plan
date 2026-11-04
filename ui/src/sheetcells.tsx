@@ -71,7 +71,7 @@ export const formatCells = (start: { st: F.St; fmt: string; tab?: string }, ok: 
   });
   const sides = createMemo(() => { let o: F.St = { ...start.st }; for (const k of borders()) o = edges(k, pen(), { r0: 0, c0: 0, r1: 0, c1: 0 }, 0, 0, o); return o; });
   const BB = (p: { k: string; l: string }) => <button class="btn sm" onClick={() => setBorders(p.k === "none" ? ["none"] : [...borders(), p.k])}>{p.l}</button>;
-  return <Dialog title="Format Cells" okText="OK" help="formatcells" wide ok={() => ok({ st: st(), touched: [...touched], borders: borders(), pen: pen(), fmt: code() === start.fmt ? null : code() })}>
+  return <Dialog title="Format Cells" okText="OK" help="formatcells" ok={() => ok({ st: st(), touched: [...touched], borders: borders(), pen: pen(), fmt: code() === start.fmt ? null : code() })}>
     <Tabs tabs={[["num", "Number"], ["align", "Alignment"], ["font", "Font"], ["border", "Border"], ["fill", "Fill"]]} on={tab()} set={setTab} />
     <div class="fcbody">
       <Show when={tab() === "num"}><div class="fcnum">
