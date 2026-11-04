@@ -132,9 +132,21 @@ fn slash_dates_follow_the_plans_day_order() {
     assert_eq!(num("%m/%d/%Y", &[("A1", "05/01/2026")], "A1"), Some(46143.0), "1 May");
     assert_eq!(num("%m/%d/%Y", &[("A1", "13/01/2026")], "A1"), None);
     assert_eq!(num("%Y-%m-%d", &[("A1", "2026-03-05")], "A1"), Some(46086.0));
+    assert_eq!(num("%Y-%m-%d", &[("A1", "31/01/2026")], "A1"), Some(46053.0), "a year-first plan reads slashes day first, as its fill handle does");
     // Version numbers and decimals stay what they are.
     let v = sheet("%d/%m/%Y", &[("A1", "1.2.3"), ("A2", "1.5"), ("A3", "=A2*2")]);
     assert_eq!((v["A1"].as_str(), v["A3"].as_str()), ("1.2.3", "3"));
+}
+
+#[test]
+fn dates_written_in_criteria_follow_the_plans_day_order() {
+    // In a day-first plan "05/01/2026" is 5 January in a criterion too, as in a cell.
+    let data = [("A1", "05/01/2026"), ("A2", "13/01/2026"), ("C1", "10"), ("C2", "20")];
+    check("%d/%m/%Y", &data, &[
+        ("=COUNTIF(A1:A2,\"05/01/2026\")", "1"), ("=COUNTIF(A1:A2,\">\"&\"10/01/2026\")", "1"), ("=COUNTIF(A1:A2,\">=13/01/2026\")", "1"), ("=SUMIFS(C1:C2,A1:A2,\"<10/01/2026\")", "10"),
+        ("=DATEVALUE(\"13/01/2026\")", "13/01/2026"), ("=\"13/01/2026\"+1", "46036"), ("=\"Due \"&\"13/01/2026\"", "Due 13/01/2026"), ("=COUNTIF(A1:A2,\">\"&DATE(2026,1,10))", "1"),
+    ]);
+    check("%m/%d/%Y", &[("A1", "05/01/2026")], &[("=COUNTIF(A1,\"05/01/2026\")", "1"), ("=DATEVALUE(\"05/01/2026\")", "05/01/2026")]);
 }
 
 #[test]
@@ -402,5 +414,6 @@ fn excel_export_gives_the_same_figures_when_the_workbook_recalculates() {
     let plan = part(&f, "xl/worksheets/sheet2.xml");
     assert!(plan.contains("<v>46339</v>") && !plan.contains("46339.7"), "Design's finish in the Plan table: {plan}");
 }
+
 
 

@@ -155,7 +155,7 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
     for (k, t) in texts.iter().enumerate() {
         for i in 0..n {
             let cell = match t {
-                Some(t) => formula_cell(&t.replace("{ROW}", &(i + 1).to_string())),
+                Some(t) => formula_cell(&t.replace("{ROW}", &(i + 1).to_string()), &c.fmt),
                 None => Cell::value(Value::Error(gridcraft_core::CellError::Name)),
             };
             sheet.set_cell(CellRef::new(i as u32, k as u32), cell);
@@ -297,9 +297,54 @@ fn parse(body: &str) -> Option<Expr> {
     if too_deep(body) { None } else { gridcraft_formula::parse(body).ok() }
 }
 
-/// A formula cell for the engine; one nested too deeply is #VALUE!.
-fn formula_cell(f: &str) -> Cell {
-    if too_deep(f) { Cell::value(Value::Error(gridcraft_core::CellError::Value)) } else { Cell::formula(Formula::new(f)) }
+/// A formula cell for the engine; one nested too deeply is #VALUE!. Dates written as text in criteria,
+/// DATEVALUE and arithmetic (`COUNTIF(A:A,">13/01/2026")`) are read in the plan's day order.
+fn formula_cell(f: &str, fmt: &str) -> Cell {
+    if too_deep(f) { return Cell::value(Value::Error(gridcraft_core::CellError::Value)) }
+    let dated = f.contains('"') && f.contains(['/', '-', '.']);
+    match parse(f.strip_prefix('=').unwrap_or(f)).filter(|_| dated) {
+        Some(e) => Cell::formula(Formula::new(&format!("={}", gridcraft_formula::printer::print(&date_texts(e, fmt))))),
+        None => Cell::formula(Formula::new(f)),
+    }
+}
+
+/// Text that is a date typed as the plan writes it (with a criteria operator before it: ">=13/01/2026")
+/// becomes the same date year first, which the engine reads one way only.
+fn date_texts(e: Expr, fmt: &str) -> Expr {
+    let iso = |t: &str| -> Option<String> {
+        let op = t.len() - t.trim_start_matches(['<', '>', '=']).len();
+        let (op, rest) = t.split_at(op);
+        if !date_shaped(rest) { return None }
+        let d = chrono::NaiveDate::from_ymd_opt(1899, 12, 30)?.checked_add_days(chrono::Days::new(typed_date(rest, fmt)? as u64))?;
+        Some(format!("{op}{}", d.format("%Y-%m-%d")))
+    };
+    // A text argument, or the text parts of one built with & (">"&"10/01/2026").
+    fn fix(e: Expr, iso: &dyn Fn(&str) -> Option<String>) -> Expr {
+        match e {
+            Expr::Text(t) => Expr::Text(iso(&t).map_or(t, Into::into)),
+            Expr::Binary(BinOp::Concat, a, b) => Expr::Binary(BinOp::Concat, Box::new(fix(*a, iso)), Box::new(fix(*b, iso))),
+            Expr::Paren(x) => Expr::Paren(Box::new(fix(*x, iso))),
+            e => e,
+        }
+    }
+    e.map(&mut |e| match e {
+        Expr::Call(n, args) => {
+            let crit = |i: usize| match n.as_str() {
+                "COUNTIF" | "SUMIF" | "AVERAGEIF" => i == 1,
+                "COUNTIFS" => i % 2 == 1,
+                "SUMIFS" | "AVERAGEIFS" | "MAXIFS" | "MINIFS" => i > 0 && i.is_multiple_of(2),
+                "DATEVALUE" => i == 0,
+                _ => false,
+            };
+            let args = args.into_iter().enumerate().map(|(i, a)| if crit(i) { fix(a, &iso) } else { a }).collect();
+            Expr::Call(n, args)
+        }
+        Expr::Binary(op @ (BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div), a, b) => {
+            let one = |x: Box<Expr>| match *x { Expr::Text(t) => Box::new(Expr::Text(iso(&t).map_or(t, Into::into))), x => Box::new(x) };
+            Expr::Binary(op, one(a), one(b))
+        }
+        e => e,
+    })
 }
 
 /// A plan column that holds dates (Start, Finish, Baseline Start, Actual Finish…).
@@ -436,11 +481,9 @@ fn pct_code(e: &Expr, body: &str) -> Option<String> {
     Some(if places == 0 { "0\"%\"".into() } else { format!("0.{}\"%\"", "0".repeat(places)) })
 }
 
-/// Whether the plan writes the day before the month (24/10/2026, 24-Oct-26).
-fn day_first(fmt: &str) -> bool {
-    let at = |keys: &[&str]| keys.iter().filter_map(|k| fmt.find(k)).min();
-    match (at(&["%d", "%e"]), at(&["%m", "%b", "%B"])) { (Some(d), Some(m)) => d < m, _ => true }
-}
+/// Whether 03/04/2026 is 3 April: the day comes first unless the plan's format starts with the month
+/// (10/24/2026), as the window's fill handle reads it.
+fn day_first(fmt: &str) -> bool { !fmt.starts_with("%m") }
 
 /// A date typed in a sheet, as a serial: numbers in the plan's day order (24/10/2026 is 24 October
 /// when the plan writes the day first; 3/4 is this year), two-digit years as spreadsheets read them
@@ -587,7 +630,7 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
         for (a1, input) in &s.cells {
             let Some(at) = CellRef::parse(a1) else { continue };
             let cell = if input.starts_with('=') && input.len() > 1 {
-                formula_cell(&grid_names(c, &cols, input))
+                formula_cell(&grid_names(c, &cols, input), &c.fmt)
             } else {
                 // Text-formatted cells keep what was typed (001 stays 001); dates follow the plan's date format.
                 if s.fmt.get(a1).is_some_and(|f| f == "@") { Cell::value(Value::text(input.as_str())) }
@@ -603,7 +646,7 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     for (k, f) in extra.iter().enumerate() {
         let mut sh = Sheet::new(format!("__eval{k}"));
         let f = grid_names(c, &cols, &if f.starts_with('=') { f.clone() } else { format!("={f}") });
-        sh.set_cell(CellRef::new(0, 0), formula_cell(&f));
+        sh.set_cell(CellRef::new(0, 0), formula_cell(&f, &c.fmt));
         wb.sheets.push(Arc::new(sh));
     }
     gridcraft_calc::Calc::new().recalc_all(&mut wb);
