@@ -490,6 +490,21 @@ async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Ve
     Ok(Some((out(&a), names)))
 }
 
+/// Moves or copies sheet `k` of the plan shown into the open plan in tab `to` (a master's sheet into
+/// one of its subplans): it lands as that plan's last sheet, with its pictures and panes. Each plan
+/// undoes its own part. Says how many formulas read other sheets of this plan.
+#[tauri::command]
+fn sheet_to_plan(st: State<St>, k: usize, to: usize, copy: bool) -> R<(Out, String)> {
+    let mut a = st.lock();
+    if to == a.cur || to >= a.others.len() { return Err("Choose another open plan.".into()) }
+    let (op, reads) = datum_core::sheetmove::package(&a.doc.p, k).ok_or("That sheet does not exist.")?;
+    let (name, dest) = (a.doc.p.sheets[k].name.clone(), docs(&a)[to].p.name.clone());
+    apply_at(&mut a, to, op)?;
+    if !copy { let fmt = a.opts.date_fmt.clone(); a.doc.apply(Op::Sheet { k: Some(k), sheet: None }, &fmt)?; }
+    let note = if reads > 0 { format!(" {reads} formula{} read other sheets of this plan: in {dest} they read its sheets of the same name, or show #REF!.", if reads > 1 { "s" } else { "" }) } else { String::new() };
+    Ok((out(&a), format!("{name} {} {dest}; open its tab to see it.{note}", if copy { "copied to" } else { "moved to" })))
+}
+
 /// Saves the plan's sheets as a workbook to share (the plan data their formulas read on hidden sheets).
 #[tauri::command]
 async fn export_sheets(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
@@ -1502,7 +1517,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, copy, paste,
+            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
         ])

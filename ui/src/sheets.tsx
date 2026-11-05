@@ -4,7 +4,8 @@
 // Resources[Country], ProjectFinish. The GridCraft engine (in crates/core) calculates everything.
 import { JSX, For, Show, batch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
 import { SheetOut, SheetData, SheetPage } from "./api";
-import { act, call, grid, P, tick, openMenu, toast, Item } from "./store";
+import { act, call, grid, P, tick, openMenu, toast, Item, out, setOut } from "./store";
+import type { Out } from "./api";
 import * as F from "./fmt";
 import { parseTsv, toTsv, transpose, series, clip } from "./cells";
 import { createSel, aggregate } from "./selection";
@@ -818,9 +819,16 @@ export const Sheets = () => {
   };
   const putTab = (i: number, x: Partial<SheetData>) => act({ Sheet: { k: i, sheet: { ...P().sheets[i], ...x } } });
   const delSheet = async (i: number) => { if (await askYes("Delete Sheet", `Delete the sheet ${P().sheets[i].name}? Formulas on other sheets that read it will show #REF!.`, "Delete")) act({ Sheet: { k: i, sheet: null } }).then(() => setK(Math.max(0, Math.min(i, P().sheets.length - 1)))); };
+  /** Moves (or copies) a sheet into another open plan, such as a subplan of this master. */
+  const toPlan = async (i: number, j: number, copy: boolean) => { const r = await call<[Out, string]>("sheet_to_plan", { k: i, to: j, copy }); if (r) { setOut(r[0]); setK(Math.max(0, Math.min(i, P().sheets.length - 1))); toast(r[1], true); } };
   const moveCopy = (i: number) => openDialog(() => {
-    const [to, setTo] = createSignal(i), [copy, setCopy] = createSignal(false);
+    const [to, setTo] = createSignal(i), [copy, setCopy] = createSignal(false), [plan, setPlan] = createSignal(out()?.tab ?? 0);
+    // The other open plans: a master's sheet can go to one of its subplans (and back).
+    const plans = () => (out()?.tabs ?? []).map((t, j) => [j, t.name + (j === out()?.tab ? " (this plan)" : t.role === "master" ? " (master)" : t.role === "sub" ? " (subplan)" : "")] as [number, string]);
     return <Dialog title="Move or Copy" okText="OK" ok={async () => {
+      if (plan() !== out()?.tab) {
+        return toPlan(i, plan(), copy());
+      }
       const n = P().sheets.length, dest = Math.min(to(), n);
       if (copy()) {
         // A copy's name stays within 31 characters, so it fits a workbook.
@@ -831,8 +839,10 @@ export const Sheets = () => {
         setK(dest);
       } else { const t = dest > i ? dest - 1 : dest; if (t !== i) await act({ SheetMove: { from: i, to: t } }); setK(t); }
     }}>
+      <Show when={plans().length > 1}><Row label="To plan"><select class="mcplan" value={plan()} onChange={e => setPlan(+e.currentTarget.value)}><For each={plans()}>{([j, n]) => <option value={j}>{n}</option>}</For></select></Row></Show>
+      <Show when={plan() === out()?.tab} fallback={<p class="muted">The sheet goes after that plan's sheets, with its pictures. Its formulas on plan data (Tasks[…], ProjectFinish…) then read that plan. Save both plans to keep the change.</p>}>
       <p>Move <b>{P().sheets[i].name}</b> before sheet:</p>
-      <div class="mclist"><For each={[...P().sheets.map((x, j) => [j, x.name] as [number, string]), [P().sheets.length, "(move to end)"] as [number, string]]}>{([j, n]) => <button classList={{ on: to() === j }} onClick={() => setTo(j)}>{n}</button>}</For></div>
+      <div class="mclist"><For each={[...P().sheets.map((x, j) => [j, x.name] as [number, string]), [P().sheets.length, "(move to end)"] as [number, string]]}>{([j, n]) => <button classList={{ on: to() === j }} onClick={() => setTo(j)}>{n}</button>}</For></div></Show>
       <label class="chk"><input type="checkbox" checked={copy()} onChange={e => setCopy(e.currentTarget.checked)} /> Create a copy</label>
     </Dialog>;
   });
@@ -844,6 +854,7 @@ export const Sheets = () => {
       { label: "Delete", run: () => delSheet(i) },
       { label: "Rename", run: () => setRenaming(i) },
       { label: "Move or Copy…", run: () => moveCopy(i) },
+      ...((out()?.tabs ?? []).length > 1 ? [{ label: "Move to Plan", sub: (out()?.tabs ?? []).map((t, j) => ({ label: t.name + (t.role === "master" ? " (master)" : t.role === "sub" ? " (subplan)" : ""), off: j === out()?.tab, run: () => toPlan(i, j, false) })) }] : []),
       "-",
       { label: "Tab Color…", icon: "palette", swatch: P().sheets[i].color || undefined, run: () => colorPalette(e, P().sheets[i].color, c => tabColor(i, c), "No Color") },
       "-",

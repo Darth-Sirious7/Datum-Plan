@@ -835,11 +835,19 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .linkstates .pill.good, .subs .pill.good { background: #DCFCE7; color: #166534; } .linkstates .pill.bad, .subs .pill.bad { background: #FEF3C7; color: #92400E; }
 
 /* A project: a master and its subplans (0.5.8) */
-.plantab.proj, .plantab.proj.on { border-top: 3px solid var(--g); padding-top: 3px; }
-.plantab.proj:not(.on) { background: color-mix(in srgb, var(--g) 7%, transparent); }
-.plantab.gstart { margin-left: 10px; }
+/* A project's open plans in one framed group: the project's name on top, the master first with a filled badge, subplans with an outlined one. */
+.plantabs .pgroup { position: relative; display: flex; margin: 9px 4px 0; padding: 0 3px; border: 1px solid color-mix(in srgb, var(--g) 45%, var(--line)); border-bottom: 0; border-radius: 8px 8px 0 0; background: color-mix(in srgb, var(--g) 6%, transparent); flex: 0 0 auto; }
+.plantabs .pglabel { position: absolute; top: -7px; left: 10px; max-width: calc(100% - 20px); font: 600 9px/12px var(--mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: var(--g); padding: 0 5px; background: var(--panel); border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plantabs .pgtabs { display: flex; align-items: flex-end; gap: 2px; }
+.plantab.proj { margin-top: 5px; }
+.plantab.master { border-top: 3px solid var(--g); padding-top: 3px; }
+.plantab.master + .plantab.sub { margin-left: 6px; }
+.plantab.sub { border-top: 2px solid color-mix(in srgb, var(--g) 55%, transparent); padding-top: 4px; }
+.plantab.proj:not(.on) { background: color-mix(in srgb, var(--g) 8%, var(--panel)); }
+.plantab .pbadge { font: 700 8.5px/12px var(--mono, monospace); letter-spacing: .06em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; background: var(--g); color: #fff; }
+.plantab .pbadge.sub { background: transparent; color: var(--g); box-shadow: inset 0 0 0 1px var(--g); }
 .plantab .pm { font-style: normal; color: var(--g); font-size: 10px; }
-.plantab .ps { font-style: normal; color: var(--g); font-weight: 700; letter-spacing: -1px; }
+.plantab .ps { font-style: normal; color: var(--g); font-weight: 700; font-size: 10px; }
 .plantab.master .nm { font-weight: 600; }
 .tbl.subs tr { cursor: pointer; } .tbl.subs tr.on td { background: var(--sel, #E3EDFC); } .tbl.subs .acts { white-space: nowrap; text-align: right; }
 .subbar { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
