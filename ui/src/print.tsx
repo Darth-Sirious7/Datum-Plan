@@ -5,7 +5,7 @@ import { For, Show, Switch, Match, JSX, createMemo, createSignal, createResource
 import { Portal } from "solid-js/web";
 import { createStore } from "solid-js/store";
 import { Row, Net, Usage, SheetOut, Grid, fmtDay, iso, dateDay, dayDate, invoke } from "./api";
-import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick } from "./store";
+import { grid, out, opts, P, act, cols, zoom, call, view, toast, query, tick, sel } from "./store";
 import { NetDraw, netSize, netBox, setNetBox, netSums, netWbs, loadNet, NET_COLS, RES_COLS, fmtB } from "./views";
 import { sheetK } from "./sheetlayout";
 import { picData } from "./pictures";
@@ -27,6 +27,8 @@ export type PageSetup = {
   paper: string; landscape: boolean; margins: [number, number, number, number]; scale: number; fit: number;
   range: "all" | "dates"; from: string; to: string; pages: string; colKeys: string[] | null; repeat: boolean; unit: string;
   font: number; rowH: number; fitCols: boolean; wrap: boolean; notes: boolean;
+  /** Gantt text: columns as wide as their text; sizes (px) by row type and for chosen rows (task uid). */
+  fitText: boolean; kindPx: { top?: number; sum?: number; task?: number; ms?: number }; rowPx: Record<string, number>;
   header: Slots; footer: Slots; legend: "every" | "last" | "none"; legendText: string; clientLogo: string; grid: boolean; idCol: boolean;
   /** Header & footer: "simple" (pictures, title, footer choices) or "codes" (the three boxes with &[codes]). */
   hf: "simple" | "codes"; pics: [Pic[], Pic[], Pic[]]; titleOn: boolean; title: string; titleSize: number; subtitle: string;
@@ -37,7 +39,7 @@ export type PageSetup = {
 export const CODES: [string, string][] = [["&[Page]", "Page number"], ["&[Pages]", "Total pages"], ["&[Date]", "Today's date"], ["&[Project]", "Project name"], ["&[Company]", "Company"], ["&[Client]", "Client"],
   ["&[Manager]", "Manager"], ["&[Status]", "Status date"], ["&[Start]", "Project start"], ["&[Finish]", "Project finish"], ["&[Logo]", "Company logo"], ["&[Client Logo]", "Client logo"]];
 const defaults = (): PageSetup => ({
-  paper: opts().paper || "A4", landscape: opts().landscape !== false, margins: [12, 10, 12, 10], scale: 100, fit: 1, range: "all", from: "", to: "", pages: "", colKeys: null, repeat: true, unit: "auto", font: 10, rowH: 18, fitCols: false, wrap: false, notes: false,
+  paper: opts().paper || "A4", landscape: opts().landscape !== false, margins: [12, 10, 12, 10], scale: 100, fit: 1, range: "all", from: "", to: "", pages: "", colKeys: null, repeat: true, unit: "auto", font: 10, rowH: 18, fitCols: false, wrap: false, notes: false, fitText: true, kindPx: {}, rowPx: {},
   header: OLD_HEAD, footer: OLD_FOOT, legend: "every", legendText: "&[Project]\nStart &[Start] · Finish &[Finish]\nStatus date: &[Status]", clientLogo: "", grid: true, idCol: true,
   hf: "simple", pics: [[{ v: "@company", h: 40 }], [], []], titleOn: true, title: "", titleSize: 16, subtitle: "", fPrinted: true, fTime: false, fPage: true, fStatus: false, fCompany: false, fRev: "", fText: "", subs: "shown",
 });
@@ -141,32 +143,54 @@ const layout = createMemo(() => {
   const keys = ps.colKeys ?? g.cols.map(c => c.key).filter(x => x !== "mode");
   let colsP = keys.flatMap(key => { const x = byKey.get(key); return x ? [{ ...x, w: cols().find(c => c[0] === key)?.[1] ?? 90 }] : []; });
   let fs = ps.font;
+  // Text sizes: chosen rows, then sizes by row type, then a row's own font (Home › Font), then all text.
+  const kp = ps.kindPx ?? {}, rp = ps.rowPx ?? {}, zk = ps.font / 10;
+  const kindPx = (r: Row) => rp[r.uid] ?? (r.ms ? kp.ms : r.kind === "summary" || r.kind === "project" ? (r.lvl === 0 ? kp.top ?? kp.sum : kp.sum) : r.kind === "task" ? kp.task : undefined);
+  const over = g.rows.map(r => kindPx(r) !== undefined);
+  let zs = g.rows.map(r => { const z = F.parse(r.style?.["*"] ?? "").z; return kindPx(r) ?? (z ? z * 0.85 * zk : fs); });
+  if (ps.fitText) colsP = colsP.map(c => {
+    const name = c.c.key === "name", ind = (i: number) => (name ? g.rows[i].lvl * 10 : 0), hw = textW(c.c.name, fs - 0.5) + 10;
+    const top = g.rows.map((r, i) => [(r.cells[c.j] ?? "").length * zs[i] + ind(i), i]).sort((a, b) => b[0] - a[0]).slice(0, 8);
+    const w = Math.max(hw, ...top.map(([, i]) => textW(g.rows[i].cells[c.j] ?? "", zs[i]) + 10 + ind(i)));
+    return { ...c, w: Math.max(24, Math.ceil(name && ps.wrap ? Math.min(w, Math.max(hw, fs * 26)) : w)) };
+  });
   const tw0 = idw + colsP.reduce((a, c) => a + c.w, 0);
-  if (ps.fitCols && tw0 > W * 0.55) { const f = (W * 0.55 - idw) / (tw0 - idw); colsP = colsP.map(c => ({ ...c, w: c.w * f })); fs = Math.max(6.5, fs * Math.max(f, 0.7)); }
+  if (ps.fitCols && tw0 > W * 0.55) { const f = (W * 0.55 - idw) / (tw0 - idw), g2 = Math.max(6.5, fs * Math.max(f, 0.7)) / fs; colsP = colsP.map(c => ({ ...c, w: c.w * f })); fs *= g2; zs = zs.map(z => z * g2); }
+  const nameAt = colsP.findIndex(c => c.c.key === "name");
+  // Fit to N pages wide keeps the text size: long task names wrap first (the name column narrows,
+  // down to about 14 letters), and only then is the whole page shrunk.
+  let wrapOn = ps.wrap;
+  const over0 = idw + colsP.reduce((a, c) => a + c.w, 0) - (ps.fit - 0.25) * W;
+  if (ps.fit > 0 && ps.fitText && nameAt >= 0 && over0 > 0) {
+    const c = colsP[nameAt], cut = Math.min(over0, c.w - Math.max(textW(c.c.name, fs - 0.5) + 10, fs * 8));
+    if (cut > 0) { colsP[nameAt] = { ...c, w: c.w - cut }; wrapOn = true; }
+  }
   const lefts: number[] = []; let TW = idw; for (const c of colsP) { lefts.push(TW); TW += c.w; }
   // Fit to N pages wide: shrink the whole page when the table leaves too little room for the chart.
-  // (the chart keeps at least 35 % of the new page width, so the pages come out exactly `fit` wide)
-  if (ps.fit > 0 && TW > (ps.fit - 0.35) * W) { W = TW / (ps.fit - 0.35); k = W0 / W; H = H0 / k; }
-  const nameAt = colsP.findIndex(c => c.c.key === "name"), RW = ps.repeat && nameAt >= 0 && nameAt < 3 ? lefts[nameAt] + colsP[nameAt].w : 0;
+  // (the chart keeps at least 25 % of the new page width, so the pages come out exactly `fit` wide)
+  if (ps.fit > 0 && TW > (ps.fit - 0.25) * W) { W = TW / (ps.fit - 0.25); k = W0 / W; H = H0 / k; }
+  const RW = ps.repeat && nameAt >= 0 && nameAt < 3 ? lefts[nameAt] + colsP[nameAt].w : 0;
   const d0 = ps.range === "dates" && ps.from ? dateDay(new Date(ps.from)) : Math.floor(s.s) - 3;
   const d1 = Math.max(d0 + 1, ps.range === "dates" && ps.to ? dateDay(new Date(ps.to)) + 1 : Math.ceil(s.f) + 7);
-  const CW = ps.fit > 0 ? Math.max(W * 0.3, ps.fit * W - (ps.fit - 1) * RW - TW - 0.5) : (d1 - d0) * zoom(), pd = CW / (d1 - d0), total = TW + CW;
+  const CW = ps.fit > 0 ? Math.max(W * 0.22, ps.fit * W - (ps.fit - 1) * RW - TW - 0.5) : (d1 - d0) * zoom(), pd = CW / (d1 - d0), total = TW + CW;
   const across: [number, number][] = [];
   for (let x = 0; x < total - 1;) {
     let e = Math.min(total, x + (x ? W - RW : W));
     if (e < TW) { const edge = Math.max(...[...lefts, TW].filter(v => v > x + 20 && v <= e)); if (isFinite(edge)) e = edge; }
     across.push([x, e]); x = e;
   }
-  const RH = ps.rowH, ni = nameAt >= 0 ? colsP[nameAt] : null;
-  const rowsH = g.rows.map(r => (ps.wrap && ni && r.name.length * fs * 0.55 + r.lvl * 10 > ni.w - 8 ? Math.round(RH * 1.75) : RH));
-  const room = H - hH - fH - (ps.legend === "every" ? legH : 0) - SCALE_H - 6, pages: Page[] = [];
+  const RH = ps.rowH, ni = nameAt >= 0 ? colsP[nameAt] : null, SH = Math.max(SCALE_H, Math.round(fs * 3.4));
+  // Rows grow with their text; a long name wraps onto up to three lines.
+  const lines = g.rows.map((r, i) => (wrapOn && ni && textW(r.name, zs[i]) + r.lvl * 10 > ni.w - 8 ? wrapText(r.name, ni.w - 8 - r.lvl * 10, zs[i]) : null));
+  const rowsH = g.rows.map((_, i) => { const b = Math.max(RH, Math.ceil(zs[i] * 1.8)), n = lines[i]?.length ?? 1; return n > 1 ? Math.max(b, Math.ceil(n * zs[i] * 1.2 + 6)) : b; });
+  const room = H - hH - fH - (ps.legend === "every" ? legH : 0) - SH - 6, pages: Page[] = [];
   const fill = (r: number, max: number) => { let e = r, h = 0; while (e < g.rows.length && (h + rowsH[e] <= max || e === r)) h += rowsH[e++]; return Math.max(e, r + 1); }, chunks: [number, number][] = [];
   for (let r = 0; r < Math.max(1, g.rows.length);) { const e = fill(r, room); chunks.push([r, e]); r = e; }
   // A legend on the last page only: that page keeps room for it (a full last page cut off the legend and footer).
   const [r1, e1] = chunks[chunks.length - 1];
   if (ps.legend === "last" && rowsH.slice(r1, e1).reduce((a, b) => a + b, 0) > room - legH) { const m = fill(r1, room - legH); if (m < e1) chunks.splice(-1, 1, [r1, m], [m, e1]); }
   for (const [r, e] of chunks) for (const x of across) pages.push({ rows: [r, e], x, n: pages.length + 1 });
-  return { pw, ph, k, W, H, headH: hH, footH: fH, legH, colsP, lefts, TW, RW, CW, pd, d0, d1, pages, rows: g.rows, rowsH, fs, RH, idw };
+  return { pw, ph, k, W, H, headH: hH, footH: fH, legH, colsP, lefts, TW, RW, CW, pd, d0, d1, pages, rows: g.rows, rowsH, fs, RH, idw, SH, zs, lines, over, zk: zk * fs / ps.font };
 });
 /** Task notes for the last pages, when "Print notes" is on. */
 const [notes, setNotes] = createSignal<[string, string, string][]>([]);
@@ -187,17 +211,27 @@ const pick = <T extends { n: number }>(all: T[]) => {
 const chosen = () => pick(allPages());
 const unit = (pd: number): [Unit, Unit] => { const u = ps.unit; if (u === "day") return ["week", "day"]; if (u === "week") return ["month", "week"]; if (u === "month") return ["quarter", "month"]; if (u === "quarter") return ["year", "quarter"]; return pd >= 16 ? ["week", "day"] : pd >= 4 ? ["month", "week"] : pd >= 1.2 ? ["quarter", "month"] : ["year", "quarter"]; };
 const RIGHT = ["Num", "Int", "Dur", "Cost", "Pct", "Work"];
+let mctx: CanvasRenderingContext2D | null | undefined;
+/** The width of a text at a size in px (semi-bold, the widest the table draws). */
+const textW = (t: string, px: number) => { if (mctx === undefined) mctx = document.createElement("canvas").getContext("2d"); if (!mctx) return t.length * px * 0.56; mctx.font = `600 ${px}px 'IBM Plex Sans', 'Segoe UI', sans-serif`; return mctx.measureText(t).width; };
+/** A text cut into lines of at most `w` px at `px` (three lines at most; the third takes the rest). */
+const wrapText = (t: string, w: number, px: number) => {
+  const out: string[] = []; let cur = "";
+  for (const word of t.split(/\s+/)) { const nx = cur ? `${cur} ${word}` : word; if (cur && textW(nx, px) > w) { out.push(cur); cur = word; } else cur = nx; }
+  if (cur) out.push(cur);
+  return out.length > 3 ? [...out.slice(0, 2), out.slice(2).join(" ")] : out;
+};
 
 /** The strip between x = a and b, drawn at dx on the page (table cells and chart, each clipped). */
-const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[]; hs: number[]; bodyH: number }) => {
-  const L = layout()!, st = gstyle(), w = p.b - p.a, fs = L.fs;
+const Strip = (p: { a: number; b: number; dx: number; r0: number; rows: Row[]; ys: number[]; hs: number[]; bodyH: number }) => {
+  const L = layout()!, st = gstyle(), w = p.b - p.a, fs = L.fs, SH = L.SH, tz = Math.max(9.5, fs * 0.95);
   const C = (d: number) => (d - L.d0) * L.pd;
   const visCols = () => L.colsP.map((c, i) => ({ ...c, x: L.lefts[i] })).filter(c => c.x < p.b && c.x + c.w > p.a);
   const t0 = L.d0 + Math.max(0, p.a - L.TW) / L.pd, t1 = L.d0 + Math.max(0, p.b - L.TW) / L.pd;
-  const Bar = (q: { r: Row; y: number; h: number }) => {
-    const B = q.r.bar, y = q.y + (q.h - 18) / 2, crit = q.r.crit, x1 = C(B.s), x2 = C(B.f);
+  const Bar = (q: { r: Row; y: number; h: number; z: number }) => {
+    const B = q.r.bar, y = q.y + (q.h - 18) / 2, lz = Math.max(9, q.z * 0.9), crit = q.r.crit, x1 = C(B.s), x2 = C(B.f);
     if (B.f < t0 - 2 || B.s > t1 + 2) return null;
-    if (q.r.ms) return <g opacity={q.r.sub ? 0.6 : 1}><path d={`M${x1} ${y + 3}l6 6l-6 6l-6-6z`} fill={crit ? st.crit : st.sum} /><text x={x1 + 9} y={y + 13} font-size="9" fill="#333">{fmtDay(B.s)}</text></g>;
+    if (q.r.ms) return <g opacity={q.r.sub ? 0.6 : 1}><path d={`M${x1} ${y + 3}l6 6l-6 6l-6-6z`} fill={crit ? st.crit : st.sum} /><text x={x1 + 9} y={y + 9 + lz * 0.4} font-size={String(lz)} fill="#333">{fmtDay(B.s)}</text></g>;
     if (q.r.kind === "subplan") return <g fill="#6D3FC8"><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
     if (q.r.kind === "summary" || q.r.kind === "project") return <g fill={st.sum} opacity={q.r.sub ? 0.6 : 1}><rect x={x1} y={y + 5} width={Math.max(1, x2 - x1)} height={4} /><path d={`M${x1} ${y + 5}h5l-5 8z`} /><path d={`M${x2} ${y + 5}h-5l5 8z`} /></g>;
     const done = C(B.s + (B.f - B.s) * B.pct / 100);
@@ -205,24 +239,23 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
       {B.dl !== null && B.dl !== undefined && <g fill="#2E9D57"><path d={`M${C(B.dl) - 4} ${y}h8l-4 6z`} /><rect x={C(B.dl) - 0.5} y={y + 4} width={1} height={12} /></g>}
       <rect x={x1} y={y + 4} width={Math.max(1.5, x2 - x1)} height={10} fill={crit ? st.cfill : st.fill} stroke={crit ? st.crit : st.edge} stroke-width=".8" />
       {B.pct > 0 && <rect x={x1} y={y + 7} width={Math.max(0, done - x1)} height={4} fill={crit ? st.crit : st.edge} />}
-      {q.r.res && <text x={x2 + 4} y={y + 13} font-size="9" fill="#333">{q.r.res}</text>}</g>;
+      {q.r.res && <text x={x2 + 4} y={y + 9 + lz * 0.4} font-size={String(lz)} fill="#333">{q.r.res}</text>}</g>;
   };
   return (
     <svg x={p.dx} y={0} width={w} height={p.bodyH} viewBox={`${p.a} 0 ${w} ${p.bodyH}`} overflow="hidden">
       <Show when={p.a < L.TW}>
-        <rect x={0} y={0} width={L.TW} height={SCALE_H} fill="#EAF0F8" />
-        {L.idw > 0 && <><text x={IDW / 2} y={SCALE_H - 10} font-size={String(fs - 0.5)} font-weight="600" text-anchor="middle" fill="#0C1A2B">ID</text><For each={p.rows}>{(r, i) => <text x={IDW / 2} y={p.ys[i()] + p.hs[i()] / 2 + 3.5} font-size={String(fs - 0.5)} text-anchor="middle" fill="#55606E">{r.uid > 0 ? r.id : ""}</text>}</For></>}
+        <rect x={0} y={0} width={L.TW} height={SH} fill="#EAF0F8" />
+        {L.idw > 0 && <><text x={IDW / 2} y={SH - SH * 0.3} font-size={String(fs - 0.5)} font-weight="600" text-anchor="middle" fill="#0C1A2B">ID</text><For each={p.rows}>{(r, i) => <text x={IDW / 2} y={p.ys[i()] + p.hs[i()] / 2 + L.zs[p.r0 + i()] * 0.35} font-size={String(Math.min(fs, L.zs[p.r0 + i()]) - 0.5)} text-anchor="middle" fill="#55606E">{r.uid > 0 ? r.id : ""}</text>}</For></>}
         <For each={visCols()}>{c => (
           <svg x={c.x} y={0} width={c.w} height={p.bodyH} overflow="hidden">
-            <text x={4} y={SCALE_H - 10} font-size={String(fs - 0.5)} font-weight="600" fill="#0C1A2B">{c.c.name}</text>
+            <text x={4} y={SH - SH * 0.3} font-size={String(fs - 0.5)} font-weight="600" fill="#0C1A2B">{c.c.name}</text>
             <For each={p.rows}>{(r, i) => {
-              const rs = r.style ?? {}, f = F.parse([rs["*"], rs[c.c.key]].filter(Boolean).join(";")), ind = c.c.key === "name" ? r.lvl * 10 : 0, t = r.cells[c.j] ?? "", z = f.z ? f.z * 0.85 : fs;
-              const al = f.a || (RIGHT.includes(c.c.kind) ? "r" : ""), y = p.ys[i()], h = p.hs[i()], two = h > L.RH && c.c.key === "name";
-              const lines = two ? (() => { const n = Math.max(8, Math.floor((c.w - 8 - ind) / (z * 0.55))), cut = t.lastIndexOf(" ", n); const k = cut > 4 ? cut : n; return [t.slice(0, k), t.slice(k).trim()]; })() : [t];
+              const rs = r.style ?? {}, f = F.parse([rs["*"], rs[c.c.key]].filter(Boolean).join(";")), ind = c.c.key === "name" ? r.lvl * 10 : 0, t = r.cells[c.j] ?? "", n = p.r0 + i(), z = L.over[n] ? L.zs[n] : f.z ? f.z * 0.85 * L.zk : L.zs[n];
+              const al = f.a || (RIGHT.includes(c.c.kind) ? "r" : ""), y = p.ys[i()], h = p.hs[i()], lines = c.c.key === "name" ? L.lines[n] : null, two = !!lines && lines.length > 1;
               return <g>{f.f && <rect x={0} y={y} width={c.w} height={h} fill={f.f} />}
-                <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + 3.5)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.kind === "subplan" ? "#4C2A99" : r.off || r.sub ? "#7A8594" : "#1B2733")}
+                <text x={al === "r" ? c.w - 4 : al === "c" ? c.w / 2 : 4 + ind} y={y + (two ? 0 : h / 2 + z * 0.35)} font-size={String(z)} text-anchor={al === "r" ? "end" : al === "c" ? "middle" : "start"} fill={f.c || (r.kind === "subplan" ? "#4C2A99" : r.off || r.sub ? "#7A8594" : "#1B2733")}
                   style={{ ...(f.n ? { "font-family": `'${f.n}', sans-serif` } : {}), "font-weight": f.b || r.kind !== "task" ? 600 : 400, "font-style": f.i || (r.sub && r.kind !== "subplan") ? "italic" : "normal", "text-decoration": [f.u && "underline", f.s && "line-through"].filter(Boolean).join(" ") || "none" }}>
-                  {two ? <For each={lines}>{(l, n) => <tspan x={4 + ind} dy={n() ? z + 2 : z + 3}>{l}</tspan>}</For> : t}</text></g>;
+                  {two ? <For each={lines!}>{(l, m) => <tspan x={4 + ind} dy={m() ? z * 1.2 : (h - lines!.length * z * 1.2) / 2 + z * 0.95}>{l}</tspan>}</For> : t}</text></g>;
             }}</For>
           </svg>
         )}</For>
@@ -230,10 +263,10 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
       </Show>
       <Show when={p.b > L.TW}>
         <svg x={L.TW} y={0} width={L.CW} height={p.bodyH} overflow="hidden">
-          <rect x={0} y={0} width={L.CW} height={SCALE_H} fill="#F3F5F8" />
-          <Show when={L.pd >= 5}><For each={Array.from({ length: Math.ceil(t1 - t0) + 2 }, (_, i) => Math.floor(t0) + i).filter(d => off(d))}>{d => <rect x={C(d)} y={SCALE_H} width={L.pd} height={p.bodyH - SCALE_H} fill="#F2F4F6" />}</For></Show>
-          <For each={unit(L.pd)}>{(u, ti) => { const ticks: number[] = []; for (let d = floorU(t0, u); d < t1; d = nextU(d, u)) ticks.push(d); return <For each={ticks}>{d => { const a = C(d), b = C(nextU(d, u)), y = ti() * 17, t = label(d, u, ti() === 0, L.pd); return <g><line x1={a} x2={a} y1={y} y2={y + 17} stroke="#C9CFD8" stroke-width=".6" />{b - a > t.length * 5.6 && <text x={u === "day" ? (a + b) / 2 : Math.max(a, C(t0)) + 3} y={y + 12} font-size="9.5" fill="#33404F" text-anchor={u === "day" ? "middle" : "start"}>{t}</text>}</g>; }}</For>; }}</For>
-          <line x1={0} x2={L.CW} y1={17} y2={17} stroke="#C9CFD8" stroke-width=".6" />
+          <rect x={0} y={0} width={L.CW} height={SH} fill="#F3F5F8" />
+          <Show when={L.pd >= 5}><For each={Array.from({ length: Math.ceil(t1 - t0) + 2 }, (_, i) => Math.floor(t0) + i).filter(d => off(d))}>{d => <rect x={C(d)} y={SH} width={L.pd} height={p.bodyH - SH} fill="#F2F4F6" />}</For></Show>
+          <For each={unit(L.pd)}>{(u, ti) => { const ticks: number[] = []; for (let d = floorU(t0, u); d < t1; d = nextU(d, u)) ticks.push(d); return <For each={ticks}>{d => { const a = C(d), b = C(nextU(d, u)), y = ti() * SH / 2, t = label(d, u, ti() === 0, L.pd); return <g><line x1={a} x2={a} y1={y} y2={y + SH / 2} stroke="#C9CFD8" stroke-width=".6" />{b - a > t.length * tz * 0.59 && <text x={u === "day" ? (a + b) / 2 : Math.max(a, C(t0)) + 3} y={y + SH / 4 + tz * 0.36} font-size={String(tz)} fill="#33404F" text-anchor={u === "day" ? "middle" : "start"}>{t}</text>}</g>; }}</For>; }}</For>
+          <line x1={0} x2={L.CW} y1={SH / 2} y2={SH / 2} stroke="#C9CFD8" stroke-width=".6" />
           {/* links between tasks on this page (predecessor end → successor start), as on screen */}
           <For each={p.rows}>{(r, i) => <For each={r.bar.links}>{([pu, k]) => {
             const j = p.rows.findIndex(x => x.uid === pu); if (j < 0) return null;
@@ -244,12 +277,12 @@ const Strip = (p: { a: number; b: number; dx: number; rows: Row[]; ys: number[];
             const col = r.crit && pr.crit ? "#C73B3B" : "#7A8BA6";
             return <g><path d={pts} fill="none" stroke={col} stroke-width=".8" /><path d={`M${tx} ${y2}l${-inn * 4} -2.6v5.2z`} fill={col} /></g>;
           }}</For>}</For>
-          <For each={p.rows}>{(r, i) => <Bar r={r} y={p.ys[i()]} h={p.hs[i()]} />}</For>
-          {out()!.summary.status_day && <line x1={C(out()!.summary.status_day!)} x2={C(out()!.summary.status_day!)} y1={SCALE_H} y2={p.bodyH} stroke="#2E9D57" stroke-dasharray="4 3" stroke-width=".8" />}
+          <For each={p.rows}>{(r, i) => <Bar r={r} y={p.ys[i()]} h={p.hs[i()]} z={L.zs[p.r0 + i()]} />}</For>
+          {out()!.summary.status_day && <line x1={C(out()!.summary.status_day!)} x2={C(out()!.summary.status_day!)} y1={SH} y2={p.bodyH} stroke="#2E9D57" stroke-dasharray="4 3" stroke-width=".8" />}
         </svg>
       </Show>
       {ps.grid && <For each={p.ys}>{(y, i) => <line x1={p.a} x2={p.b} y1={y + p.hs[i()]} y2={y + p.hs[i()]} stroke="#E6E9EE" stroke-width=".5" />}</For>}
-      <line x1={p.a} x2={p.b} y1={SCALE_H} y2={SCALE_H} stroke="#8D99A8" stroke-width=".8" />
+      <line x1={p.a} x2={p.b} y1={SH} y2={SH} stroke="#8D99A8" stroke-width=".8" />
     </svg>
   );
 };
@@ -290,19 +323,45 @@ const GanttLegend = () => {
     </svg>);
 };
 
+/** A size in points on paper, kept in px (96 per inch); empty means "as the rest". */
+const PtIn = (p: { v?: number; set: (px: number | undefined) => void; ph?: string; title?: string }) =>
+  <input type="number" min="5" max="28" step="0.5" placeholder={p.ph} title={p.title} value={p.v ? +(p.v * 0.75).toFixed(1) : ""}
+    onChange={e => { const v = e.currentTarget.value.trim(); p.set(v && +v > 0 ? Math.min(28, Math.max(5, +v)) / 0.75 : undefined); }} />;
+/** Page Setup › Text (Gantt): the text size on paper, sizes by row type and for chosen rows. */
+const TextSizes = () => {
+  const base = () => +(ps.font * 0.75).toFixed(1), got = () => { const L = layout(); return L ? +(L.fs * L.k * 0.75).toFixed(1) : base(); };
+  const picked = () => sel().filter(u => u > 0), custom = () => Object.keys(ps.rowPx ?? {});
+  const same = () => { const v = picked().map(u => ps.rowPx?.[u]); return v.length && v.every(x => x === v[0]) ? v[0] : undefined; };
+  const setRows = (px: number | undefined, uids: (number | string)[]) => { for (const u of uids) setPs("rowPx", String(u), px as number); };
+  return <>
+    <label class="pl">Text size</label>
+    <div class="prow"><label>All text (pt)<PtIn v={ps.font} set={v => setPs("font", v ?? 10)} /></label><label>Smallest row height (px)<input type="number" min="12" max="80" value={ps.rowH} onChange={e => setPs("rowH", Math.min(80, Math.max(12, +e.currentTarget.value)))} /></label></div>
+    <p class="muted ptsize">Prints at <b>{got()} pt</b>{got() < base() - 0.2 ? `, smaller than ${base()} pt: the page is shrunk so the table and the dates fit ${ps.fit || 1} ${ps.fit > 1 ? "pages" : "page"} wide. For bigger text, fit more pages wide, choose fewer columns (View) or wrap long task names.` : "."} Rows grow with their text; the timescale and bar labels follow it.</p>
+    <Check label="Columns as wide as their text (otherwise as on screen)" value={ps.fitText} set={v => setPs("fitText", v)} />
+    <Check label="Wrap long task names (up to three lines)" value={ps.wrap} set={v => setPs("wrap", v)} />
+    <label class="pl">Size by row type (pt; empty = all text)</label>
+    <div class="prow"><label>Top summaries<PtIn v={ps.kindPx?.top} ph={String(base())} set={v => setPs("kindPx", "top", v)} /></label><label>Other summaries<PtIn v={ps.kindPx?.sum} ph={String(base())} set={v => setPs("kindPx", "sum", v)} /></label></div>
+    <div class="prow"><label>Tasks<PtIn v={ps.kindPx?.task} ph={String(base())} set={v => setPs("kindPx", "task", v)} /></label><label>Milestones<PtIn v={ps.kindPx?.ms} ph={String(base())} set={v => setPs("kindPx", "ms", v)} /></label></div>
+    <label class="pl">Rows you choose</label>
+    <p class="muted">Select rows in the task sheet, come back to Print and give them a size. {picked().length ? `${picked().length} selected now.` : "No rows are selected now."}</p>
+    <div class="prow"><label>Selected rows (pt)<PtIn v={same()} ph={picked().length ? "as their type" : "select rows"} set={v => picked().length ? setRows(v, picked()) : toast("Select rows in the task sheet first.")} /></label>
+      <button class="btn sm" disabled={!custom().length} onClick={() => setRows(undefined, custom())}>Clear chosen sizes ({custom().length})</button></div>
+  </>;
+};
+
 /** One Gantt page. */
 const Sheet = (p: { pg: Page; pages: number }) => {
   const L = layout()!;
   const rows = () => L.rows.slice(p.pg.rows[0], p.pg.rows[1]), hs = () => L.rowsH.slice(p.pg.rows[0], p.pg.rows[1]);
-  const ys = () => { let y = SCALE_H; return hs().map(h => { const v = y; y += h; return v; }); };
-  const bodyH = () => SCALE_H + hs().reduce((a, b) => a + b, 0) + 1;
+  const ys = () => { let y = L.SH; return hs().map(h => { const v = y; y += h; return v; }); };
+  const bodyH = () => L.SH + hs().reduce((a, b) => a + b, 0) + 1;
   const rep = () => p.pg.x[0] > 0 ? L.RW : 0, w = () => rep() + p.pg.x[1] - p.pg.x[0];
   return (
     <Frame {...L} n={p.pg.n} pages={p.pages} legend={!p.pg.notes && legendOn(p.pg.n, L.pages.length) && <GanttLegend />}>
       <Show when={!p.pg.notes} fallback={<div class="pnotes"><h3>Notes</h3><For each={p.pg.notes}>{n => <div><b>{n[0]} {n[1]}</b><p>{n[2]}</p></div>}</For></div>}>
         <svg width={w()} height={bodyH()} class="psvg" text-rendering="geometricPrecision" font-family="'IBM Plex Sans', 'Segoe UI', sans-serif">
-          {rep() > 0 && <Strip a={0} b={L.RW} dx={0} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />}
-          <Strip a={p.pg.x[0]} b={p.pg.x[1]} dx={rep()} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />
+          {rep() > 0 && <Strip a={0} b={L.RW} dx={0} r0={p.pg.rows[0]} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />}
+          <Strip a={p.pg.x[0]} b={p.pg.x[1]} dx={rep()} r0={p.pg.rows[0]} rows={rows()} ys={ys()} hs={hs()} bodyH={bodyH()} />
           <rect x={0} y={0} width={w()} height={bodyH()} fill="none" stroke="#8D99A8" stroke-width=".8" />
         </svg>
       </Show>
@@ -693,7 +752,7 @@ export const PrintPage = () => {
             </div>; }}</Show>
           <div class="prow" classList={{ hidden: !!sheetPage() }}><label>Paper<Pick value={ps.paper} set={v => setPs("paper", v)} options={PAPERS.map(p => p[0])} /></label><label>Orientation<Pick value={ps.landscape ? "1" : "0"} set={v => setPs("landscape", v === "1")} options={[["1", "Landscape"], ["0", "Portrait"]]} /></label></div>
           <h4>Page Setup</h4>
-          <Seg value={tab()} set={setTab} options={[["page", "Page"], ["margins", "Margins"], ["hf", "Header & footer"], ["legend", "Legend"], ["view", "View"]]} />
+          <Seg value={tab()} set={setTab} options={[["page", "Page"], ...(pkind() === "gantt" ? [["text", "Text"] as [string, string]] : []), ["margins", "Margins"], ["hf", "Header & footer"], ["legend", "Legend"], ["view", "View"]]} />
           <div class="ptab">
             <Show when={tab() === "page"}>
               <label class="pl">Scaling</label>
@@ -701,6 +760,7 @@ export const PrintPage = () => {
               <div class="prow"><label><input type="radio" checked={ps.fit > 0} onChange={() => setPs("fit", 1)} /> {pkind() === "gantt" ? "Fit timescale to" : "Fit to"} <input type="number" min="1" max="20" style={{ width: "52px" }} value={ps.fit || 1} onChange={e => setPs("fit", Math.max(1, +e.currentTarget.value))} /> page(s) wide</label></div>
               <p class="muted">{pkind() === "gantt" ? "Adjust prints at that size with the Gantt chart's current zoom. Fit sizes the dates (and shrinks the page if needed) so table and chart fill that many pages wide." : pkind() === "net" ? "Fit sizes the diagram to that many pages wide; it never goes below half size so the boxes stay readable, and continues on more pages instead." : "Adjust scales the whole page."}</p>
             </Show>
+            <Show when={tab() === "text" && pkind() === "gantt"}><TextSizes /></Show>
             <Show when={tab() === "margins"}>
               <label class="pl">Margins (mm)</label>
               <div class="prow">{(["Top", "Right", "Bottom", "Left"] as const).map((l, i) => <label>{l}<input type="number" min="0" max="60" value={ps.margins[i]} onChange={e => setPs("margins", i, +e.currentTarget.value)} /></label>)}</div>
@@ -725,9 +785,8 @@ export const PrintPage = () => {
                   <Show when={on()}><button class="x" title="Move up" onClick={() => { const v = [...ps.colKeys!], j = i(); if (j > 0) { [v[j - 1], v[j]] = [v[j], v[j - 1]]; setPs("colKeys", v); } }}>↑</button></Show></div>; }}</For></div></Show>
               <Check label="Repeat ID and Task Name on every page" value={ps.repeat} set={v => setPs("repeat", v)} />
               <Check label="Shrink the columns to fit the page" value={ps.fitCols} set={v => setPs("fitCols", v)} />
-              <Check label="Wrap long task names" value={ps.wrap} set={v => setPs("wrap", v)} />
               <Check label="Print task notes on the last pages" value={ps.notes} set={v => { setPs("notes", v); loadNotes(); }} />
-              <div class="prow"><label>Text size<input type="number" min="6" max="14" step="0.5" value={ps.font} onChange={e => setPs("font", Math.min(14, Math.max(6, +e.currentTarget.value)))} /></label><label>Row height<input type="number" min="12" max="40" value={ps.rowH} onChange={e => setPs("rowH", Math.min(40, Math.max(12, +e.currentTarget.value)))} /></label></div>
+              <p class="muted">Text size, row sizes and wrapping: <button class="link" onClick={() => setTab("text")}>Text</button>.</p>
               <Check label="Show the ID column" value={ps.idCol} set={v => setPs("idCol", v)} />
               <Check label="Gridlines between rows" value={ps.grid} set={v => setPs("grid", v)} />
               <label class="pl">Timescale</label><Pick value={ps.unit} set={v => setPs("unit", v)} options={[["auto", "Automatic"], ["day", "Days"], ["week", "Weeks"], ["month", "Months"], ["quarter", "Quarters"]]} />

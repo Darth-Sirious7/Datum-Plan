@@ -1039,14 +1039,39 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   };
   const num = async (label, v) => { await p.fill(`.ptab label:has-text('${label}') input`, v); await p.press(`.ptab label:has-text('${label}') input`, "Tab"); await p.waitForTimeout(200); };
   // A Gantt shrunk to one page wide that runs to two pages: page 1 lost its chart and table (only the header printed).
-  const tall = await printView("Gantt", async () => { await p.click(".pset .seg button:has-text('View')"); await num("Row height", "40"); });
+  const tall = await printView("Gantt", async () => { await p.click(".pset .seg button:has-text('Text')"); await num("Row height", "40"); });
   check("a shrunk Gantt over several pages prints the chart on every page, page 1 too", tall.texts.length > 1 && tall.texts.every(n => n > 150), JSON.stringify(tall.texts));
-  const trk = await printView("Tracking", async () => { await p.click(".pset .seg button:has-text('View')"); await num("Row height", "40"); });
+  const trk = await printView("Tracking", async () => { await p.click(".pset .seg button:has-text('Text')"); await num("Row height", "40"); });
   check("…and so does the Tracking Gantt", trk.texts.length > 1 && trk.texts.every(n => n > 150), JSON.stringify(trk.texts));
+  // 0.5.29: text size on paper; columns fit their text; rows grow; sizes by row type and for chosen rows.
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300);
+  await p.click(".row:has-text('Kickoff') .c.idc"); await p.waitForTimeout(150);
+  await p.click(".tabs .file"); await p.waitForTimeout(150); await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(500);
+  await p.click(".pset button:has-text('Reset to defaults')"); await p.waitForTimeout(150);
+  await p.click(".pset .seg button:has-text('Page')"); await p.click(".ptab input[type=radio] >> nth=0"); await p.waitForTimeout(150);
+  await p.click(".pset .seg button:has-text('Text')"); await p.waitForTimeout(150);
+  const sizes = () => p.$$eval(".pprev .psvg text", ts => [...new Set(ts.map(t => +(+t.getAttribute("font-size")).toFixed(2)))].sort((a, b) => b - a));
+  const pagesAt = async () => (await p.$$(".pprev .ppage")).length, p0 = await pagesAt(), at0 = await p.textContent(".ptsize");
+  await num("All text", "12"); const s12 = await sizes(), p12 = await pagesAt();
+  check("Print › Text sets the text size in points on paper, and says what it prints at", s12.includes(16) && /Prints at [\d.]+ pt/.test(await p.textContent(".ptsize")) && /Prints at 7\.5 pt/.test(at0), JSON.stringify(s12) + at0);
+  check("bigger text makes taller rows (more pages), never clipped rows", p12 > p0, `${p0} → ${p12}`);
+  await num("Milestones", "16"); const sm = await sizes();
+  check("a size by row type (milestones) prints those rows at it", sm.includes(21.33), JSON.stringify(sm));
+  await num("Selected rows", "20"); const sr = await sizes();
+  check("rows chosen in the task sheet print at their own size", sr.includes(26.67) && (await p.textContent(".ptab")).includes("1 selected now"), JSON.stringify(sr));
+  await p.click(".ptab button:has-text('Clear chosen sizes')"); await p.waitForTimeout(200);
+  check("Clear chosen sizes takes them back", !(await sizes()).includes(26.67));
+  // Fit to one page wide keeps the size: long names wrap before the page shrinks.
+  await p.click(".pset .seg button:has-text('Page')"); await p.click(".ptab input[type=radio] >> nth=1"); await p.waitForTimeout(150);
+  await p.click(".pset .seg button:has-text('Text')"); await num("All text", "8"); await num("Milestones", "");
+  const fitAt = +((await p.textContent(".ptsize")).match(/Prints at ([\d.]+) pt/) ?? [])[1];
+  check("fit to one page wide keeps the text size, wrapping long task names first", fitAt === 8 && (await p.$$(".pprev .psvg tspan")).length > 0, `${fitAt} pt`);
+  if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-ptext.png") });
+  await p.click(".pset button:has-text('Reset to defaults')"); await p.click(".bs aside .back"); await p.waitForTimeout(150);
   // The legend on the last page only: a full last page kept no room for it, cutting off the legend and the footer.
   await p.click(".tabs .file"); await p.waitForTimeout(150); await p.click(".bs aside button:has-text('Print')"); await p.waitForTimeout(500);
   await p.click(".pset .seg button:has-text('Page')"); await p.click(".ptab input[type=radio]"); await p.click(".pset .seg button:has-text('Legend')"); await p.click(".ptab .seg button:has-text('Last page')");
-  await p.click(".pset .seg button:has-text('View')"); let cutAt = [];
+  await p.click(".pset .seg button:has-text('Text')"); let cutAt = [];
   for (const r of ["26", "27"]) { await num("Row height", r); cutAt.push(await p.evaluate(() => [...document.querySelectorAll(".pprev .ppage")].filter(pg => { const b = pg.querySelector(".pin").getBoundingClientRect().bottom; return [...pg.querySelector(".pin").children].some(e => e.getBoundingClientRect().bottom > b + 1); }).length)); }
   check("a legend on the last page only never pushes the footer off the page", cutAt.every(n => n === 0), JSON.stringify(cutAt));
   await p.selectOption(".pset .prow label:has-text('Orientation') select", "0"); await p.click(".pset .seg button:has-text('Margins')");

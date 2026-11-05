@@ -287,6 +287,8 @@ Nothing else is printed: no program name and no web address. **Advanced** gives 
 
 The **legend** lists only what the pages show: tasks, critical tasks, progress, milestones, summaries, subplans, baselines, deadlines, links and the status date, with the project's name, start, finish and status date beside them. Bars print with their baseline and deadline, as on screen.
 
+**Text** (Page Setup) sets the size of the table's text in points on paper and shows the size it really prints at. Rows grow with their text, and the timescale and bar labels grow with it. Columns are as wide as their text, so the chart gets the rest of the page. With **Fit to** pages wide the text keeps its size: long task names wrap onto up to three lines before the page is shrunk. You can also give sizes by row type (top summaries, other summaries, tasks, milestones) and to rows you choose: select them in the task sheet, then type their size under **Rows you choose**.
+
 A master plan prints its subplans as on screen: expand a subplan in the Gantt and it prints expanded. **Subplans** (under What to print) can instead print them one row each, with all their tasks, or leave them out.
 
 ### Pictures and logos

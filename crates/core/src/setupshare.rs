@@ -36,9 +36,9 @@ pub fn adopt(p: &mut Project, from: &Project, parts: &[String]) -> Result<(), St
     if has("print") {
         if let Some(pg) = page {
             let mut pg = pg.clone();
-            // The plan keeps its own title and subtitle.
+            // The plan keeps its own title, subtitle and row sizes (they name its own tasks).
             let own = p.ui.get("page").cloned().unwrap_or_default();
-            for k in ["title", "subtitle"] { if let Some(o) = pg.as_object_mut() { match own.get(k) { Some(v) => { o.insert(k.into(), v.clone()); } None => { o.remove(k); } } } }
+            for k in ["title", "subtitle", "rowPx"] { if let Some(o) = pg.as_object_mut() { match own.get(k) { Some(v) => { o.insert(k.into(), v.clone()); } None => { o.remove(k); } } } }
             let text = ids.iter().fold(pg.to_string(), |s, (a, b)| s.replace(&format!("\"@pic:{a}\""), &format!("\"@pic:#{b}\"")));
             pg = serde_json::from_str(&text.replace("\"@pic:#", "\"@pic:")).map_err(|e| e.to_string())?;
             if !p.ui.is_object() { p.ui = serde_json::json!({}); }

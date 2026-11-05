@@ -30,7 +30,7 @@
     "Resources, man-hours and costs with workload and manpower by trade; Tracking Gantt with 11 baselines; earned value, earned schedule and S-curves from each period's progress.",
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
-    "Dashboard, progress reports and a report builder; print to PDF from every view.",
+    "Dashboard, progress reports and a report builder; print to PDF from every view; printed Gantt text sized in points, by row type or row by row, with columns that fit their text.",
     "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel (.xlsx) export with formulas.",
     "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",
     "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide).",

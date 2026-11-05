@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.29 — 2026-11-05
+
+Bigger, clearer text on printed Gantt charts.
+
+- **Print › Page Setup › Text** (Gantt, Tracking Gantt, Timeline): the text size in **points on paper**, and the size it really prints at.
+- **Fit to pages wide keeps the text size:** long task names wrap onto up to three lines and the chart can narrow to a quarter of the page before the page is shrunk. When it still has to shrink, Print says so and what to change.
+- **Columns as wide as their text** (on by default), so the table takes only the room it needs and the chart gets the rest. Turn it off to print columns as wide as on screen.
+- **Rows grow with their text**; the timescale, milestone dates and resource labels on the bars grow with it.
+- **Sizes by row type:** top summaries, other summaries, tasks and milestones, each in points (empty = the text size).
+- **Rows you choose:** select rows in the task sheet, then give them a size in Print › Text. **Clear chosen sizes** takes them back. Rows formatted with Home › Font keep their size relative to the text size.
+- Text size and row height moved from Page Setup › View to Text. A master's Apply Setup to Subplans never gives its chosen rows' sizes (they name its own tasks).
+
 ## 0.5.28 — 2026-11-05
 
 A master's setup goes to its subplans in one step.
