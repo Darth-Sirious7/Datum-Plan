@@ -3,7 +3,7 @@
 //! cells, column widths, row heights, tab colour, frozen panes, page setup and pictures. A workbook
 //! written by Datum Plan also brings back what only Datum Plan knows (country flags), from its hidden
 //! "DatumPlan" sheet.
-use crate::model::{Picture, SheetData, SheetImage, SheetPage};
+use crate::model::{DefName, Picture, SheetData, SheetImage, SheetPage};
 use calamine::{open_workbook_auto, Data, Reader, Sheets};
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
@@ -14,10 +14,10 @@ pub const META_SHEET: &str = "DatumPlan";
 /// Sheets an export adds for the plan itself; they are not brought back as tabs.
 const PLAN_SHEETS: [&str; 3] = ["Tasks", "Plan", "Resources"];
 
-/// What a workbook brings: the sheets, the pictures they use (ids 1, 2, … within this import) and
-/// each sheet's frozen rows and columns.
+/// What a workbook brings: the sheets, the pictures they use (ids 1, 2, … within this import),
+/// each sheet's frozen rows and columns, and the workbook's defined names.
 #[derive(Debug, Default)]
-pub struct Imported { pub sheets: Vec<SheetData>, pub pictures: Vec<Picture>, pub freeze: Vec<(String, u32, u32)> }
+pub struct Imported { pub sheets: Vec<SheetData>, pub pictures: Vec<Picture>, pub freeze: Vec<(String, u32, u32)>, pub names: Vec<DefName> }
 
 pub fn import(path: &Path) -> Result<Imported, String> {
     let mut wb = open_workbook_auto(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
@@ -107,6 +107,16 @@ pub fn import(path: &Path) -> Result<Imported, String> {
             s.hidden = p.hidden;
             s.page = p.page.clone().map(Box::new);
             (s.notes, s.filter, s.valid) = (p.notes.clone(), p.filter.clone(), p.valid.clone());
+            // Hyperlinks: the address alone, or HYPERLINK(address, text) when the cell shows other text.
+            for (a, url) in &p.links {
+                let Some(url) = crate::sheetx::link(url) else { continue };
+                let q = |t: &str| format!("\"{}\"", t.replace('"', "\"\""));
+                match s.cells.get(a).cloned() {
+                    Some(t) if t.starts_with('=') || t == url => {}
+                    Some(t) if !t.trim().is_empty() => { s.cells.insert(a.clone(), format!("=HYPERLINK({},{})", q(&url), q(t.trim_start_matches('\'')))); }
+                    _ => { s.cells.insert(a.clone(), url); }
+                }
+            }
             if let Some((r, c)) = p.freeze { out.freeze.push((name.clone(), r, c)); }
             for (cell, w, h, data, mime) in &p.pictures {
                 let id = out.pictures.len() as u32 + 1;
@@ -123,6 +133,8 @@ pub fn import(path: &Path) -> Result<Imported, String> {
         out.sheets.push(s);
     }
     if out.sheets.is_empty() { return Err("That workbook has no sheets to bring in.".into()) }
+    // Its defined names (not the plan's own, which an export writes too).
+    out.names = parts.map(|p| p.names).unwrap_or_default().into_iter().filter(|n| crate::sheetx::name_problem(&n.name).is_none()).collect();
     Ok(out)
 }
 
@@ -183,8 +195,8 @@ fn style_text(st: &calamine::Style) -> String {
 
 /// The layout a workbook keeps outside the cells, read straight from its parts.
 #[derive(Default)]
-struct Layout { notes: BTreeMap<String, String>, filter: Option<crate::model::SheetFilter>, valid: Vec<crate::model::Validation>, span: u64, hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
-struct Parts { sheets: HashMap<String, Layout> }
+struct Layout { links: Vec<(String, String)>, notes: BTreeMap<String, String>, filter: Option<crate::model::SheetFilter>, valid: Vec<crate::model::Validation>, span: u64, hide_rows: Vec<u32>, hide_cols: Vec<u32>, widths: BTreeMap<u32, u16>, heights: BTreeMap<u32, u16>, color: String, hidden: bool, freeze: Option<(u32, u32)>, page: Option<SheetPage>, pictures: Vec<(String, u16, u16, Vec<u8>, String)> }
+struct Parts { sheets: HashMap<String, Layout>, names: Vec<DefName> }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
     let k = format!(" {name}=\"");
@@ -223,13 +235,20 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
     let rel: HashMap<String, String> = tags(&rels, "Relationship").filter_map(|t| Some((attr(t, "Id")?, attr(t, "Target")?))).collect();
     // Print areas and title rows are defined names local to a sheet.
     let mut names: HashMap<(usize, String), String> = HashMap::new();
-    for (i, _) in book.match_indices("<definedName ") {
+    let mut global = vec![];
+    let unxml = |t: &str| t.replace("&apos;", "'").replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+    for (i, _) in book.match_indices("<definedName ").take(5_000) {
         let Some(end) = book[i..].find("</definedName>") else { continue };
         let el = &book[i..i + end];
-        let (Some(n), Some(id)) = (attr(el, "name"), attr(el, "localSheetId").and_then(|x| x.parse().ok())) else { continue };
-        if let Some(gt) = el.find('>') { names.insert((id, n), el[gt + 1..].replace("&apos;", "'").replace("&amp;", "&")); }
+        let (Some(n), Some(gt)) = (attr(el, "name"), el.find('>')) else { continue };
+        match attr(el, "localSheetId").and_then(|x| x.parse().ok()) {
+            Some(id) => { names.insert((id, n), unxml(&el[gt + 1..])); }
+            // A workbook name (Excel's own, _xlnm., are print settings; hidden ones are its machinery).
+            None if !n.starts_with("_xlnm.") && attr(el, "hidden").as_deref() != Some("1") => global.push(DefName { name: n, formula: format!("={}", unxml(&el[gt + 1..]).trim_start_matches('=')), comment: attr(el, "comment").unwrap_or_default() }),
+            None => {}
+        }
     }
-    let mut out = Parts { sheets: HashMap::new() };
+    let mut out = Parts { sheets: HashMap::new(), names: global };
     for (idx, t) in tags(&book, "sheet").enumerate() {
         let (Some(name), Some(id)) = (attr(t, "name"), attr(t, "r:id")) else { continue };
         let Some(target) = rel.get(&id) else { continue };
@@ -299,13 +318,21 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         }
         for dv in xml.split("<dataValidation ").skip(1).take(500) {
             let head = format!(" {}", &dv[..dv.find('>').unwrap_or(0)]);
-            if attr(&head, "type").as_deref() != Some("list") { continue }
-            let Some(f1) = dv.find("<formula1>").and_then(|i| dv[i + 10..].find("</formula1>").map(|j| dv[i + 10..i + 10 + j].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&"))) else { continue };
+            let body = &dv[..dv.find("</dataValidation>").unwrap_or(dv.len())];
+            let formula = |k: &str| { let (o, c) = (format!("<{k}>"), format!("</{k}>")); body.find(&o).and_then(|i| body[i + o.len()..].find(&c).map(|j| unxml(&body[i + o.len()..i + o.len() + j]))) };
             let warn = attr(&head, "errorStyle").is_some_and(|x| x != "stop");
-            let (list, src) = match f1.strip_prefix('"').and_then(|x| x.strip_suffix('"')) { Some(t) => (t.split(',').map(|x| x.trim().to_string()).collect::<Vec<_>>(), String::new()), None => (vec![], f1.clone()) };
-            for rg in attr(&head, "sqref").unwrap_or_default().split_whitespace() {
-                l.valid.push(crate::model::Validation { range: rg.to_string(), list: list.clone(), src: src.clone(), warn });
+            let kind = match attr(&head, "type").as_deref() { Some("list") => "", Some("whole") => "whole", Some("decimal") => "decimal", Some("date") => "date", Some("time") => "time", Some("textLength") => "len", None | Some("none") if attr(&head, "promptTitle").is_some() || attr(&head, "prompt").is_some() => "any", _ => continue };
+            let op = match attr(&head, "operator").as_deref() { Some("notBetween") => "notbetween", Some("equal") => "eq", Some("notEqual") => "ne", Some("greaterThan") => "gt", Some("lessThan") => "lt", Some("greaterThanOrEqual") => "ge", Some("lessThanOrEqual") => "le", _ => "between" };
+            // A bound: a number as it is, anything else (a reference or formula) as a formula.
+            let bound = |f: Option<String>| f.map(|f| if f.trim().parse::<f64>().is_ok() { f.trim().to_string() } else { format!("={}", f.trim().trim_start_matches('=')) }).unwrap_or_default();
+            let mut v = crate::model::Validation { kind: kind.into(), warn, prompt: attr(&head, "prompt").unwrap_or_default(), error: attr(&head, "error").unwrap_or_default(), ..Default::default() };
+            if kind.is_empty() {
+                let Some(f1) = formula("formula1") else { continue };
+                (v.list, v.src) = match f1.strip_prefix('"').and_then(|x| x.strip_suffix('"')) { Some(t) => (t.split(',').map(|x| x.trim().to_string()).collect::<Vec<_>>(), String::new()), None => (vec![], f1.clone()) };
+            } else if kind != "any" {
+                (v.op, v.a, v.b) = (op.into(), bound(formula("formula1")), bound(formula("formula2")));
             }
+            for rg in attr(&head, "sqref").unwrap_or_default().split_whitespace() { l.valid.push(crate::model::Validation { range: rg.to_string(), ..v.clone() }); }
         }
         // Notes: the sheet's comments part, by cell.
         let srel = text(read(&resolve(&part, &format!("_rels/{}.rels", part.rsplit('/').next().unwrap_or("")))));
@@ -316,6 +343,14 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
                 let body: String = c.split("<t").skip(1).filter(|t| t.starts_with('>') || t.starts_with(' ')).filter_map(|t| { let t = &t[t.find('>')? + 1..]; Some(t[..t.find("</t>")?].to_string()) }).collect();
                 let body = body.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&");
                 if !body.trim().is_empty() { l.notes.insert(at, body.trim_end().to_string()); }
+            }
+        }
+        // Hyperlinks to web and mail addresses (the sheet's relationships hold the addresses).
+        if let Some(i) = xml.find("<hyperlinks>") {
+            let hl = &xml[i..i + xml[i..].find("</hyperlinks>").unwrap_or(0)];
+            for t in tags(hl, "hyperlink").take(20_000) {
+                let (Some(at), Some(id)) = (attr(t, "ref"), attr(t, "r:id")) else { continue };
+                if let Some(url) = tags(&srel, "Relationship").find(|r| attr(r, "Id").as_deref() == Some(id.as_str())).and_then(|r| attr(r, "Target")) { l.links.push((at.split(':').next().unwrap_or("").to_string(), url)); }
             }
         }
         // Pictures: the sheet's drawing, each picture's top-left cell and size.

@@ -485,7 +485,10 @@ async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Ve
     let names: Vec<String> = got.sheets.iter().map(|s| s.name.clone()).collect();
     let mut a = st.lock();
     let fmt = a.opts.date_fmt.clone();
-    a.doc.apply(Op::AddSheets { sheets: got.sheets, pictures: got.pictures, freeze: got.freeze }, &fmt)?;
+    let add = Op::AddSheets { sheets: got.sheets, pictures: got.pictures, freeze: got.freeze };
+    // The workbook's defined names join the plan's (a name the plan has keeps its own meaning).
+    let op = if got.names.is_empty() { add } else { Op::Batch(vec![add, Op::Names { names: datum_core::sheetx::merge_names(&a.doc.p.names, got.names) }]) };
+    a.doc.apply(op, &fmt)?;
     regroup(&mut a);
     Ok(Some((out(&a), names)))
 }
@@ -830,9 +833,16 @@ fn sheet_view(st: State<St>, k: usize) -> Option<datum_core::sheet::SheetOut> {
     datum_core::sheet::sheet_view(&calc(&st.lock()), k)
 }
 
+/// A value typed into a sheet cell against the cell's data validation: None when it may go in,
+/// otherwise the message and whether it is only a warning.
+#[tauri::command]
+fn sheet_check(st: State<St>, k: usize, cell: String, input: String) -> Option<(String, bool)> {
+    datum_core::sheet::check_input(&calc(&st.lock()), k, &cell, &input)
+}
+
 /// What a sheet formula can name: functions (with signatures), the plan's names and table columns.
 #[derive(serde::Serialize)]
-struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(&'static str, &'static str)>, tasks: Vec<String>, resources: Vec<&'static str> }
+struct SheetCatalog { functions: Vec<(&'static str, &'static str, &'static str, String)>, names: Vec<(String, String)>, tasks: Vec<String>, resources: Vec<&'static str> }
 
 #[tauri::command]
 fn sheet_catalog(st: State<St>) -> SheetCatalog {
@@ -840,7 +850,8 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
     let c = calc(&a);
     SheetCatalog {
         functions: datum_core::sheet::functions(),
-        names: datum_core::sheet::project_names(&c).into_iter().map(|(n, _, d)| (n, d)).collect(),
+        names: datum_core::sheet::project_names(&c).into_iter().map(|(n, _, d)| (n.to_string(), d.to_string()))
+            .chain(a.doc.p.names.iter().map(|n| (n.name.clone(), if n.comment.is_empty() { n.formula.clone() } else { format!("{} ({})", n.comment, n.formula) }))).collect(),
         tasks: datum_core::sheet::task_columns(&c).into_iter().map(|x| x.1).collect(),
         resources: datum_core::sheet::RES_COLS.iter().map(|x| x.1).collect(),
     }
@@ -1443,6 +1454,18 @@ fn open_url(url: String) -> R<()> {
     r.map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Opens a link from a sheet cell in the browser, after the window has shown the address and asked:
+/// only web and mail addresses (http, https, mailto), never files, scripts or other programs.
+#[tauri::command]
+fn open_link(url: String) -> R<()> {
+    let Some(url) = datum_core::sheetx::link(&url) else { return Err("Only web (http, https) and mail (mailto) links can be opened.".into()) };
+    #[cfg(windows)]
+    let r = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", &url]).spawn();
+    #[cfg(not(windows))]
+    let r = std::process::Command::new("xdg-open").arg(&url).spawn();
+    r.map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -1503,8 +1526,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
-            options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, quit, check_update, install_update, guide
+            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())
         .expect("Datum Plan failed to start");

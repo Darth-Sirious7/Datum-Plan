@@ -1044,3 +1044,15 @@ button.link { color: var(--blue); text-decoration: underline; padding: 0; }
 .fltvals .chk { margin: 2px 0; }
 .sortlv { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .sortlv .muted { width: 60px; }
+/* Sheets: line breaks while typing, links, validation messages and circles, names */
+textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit; line-height: 17px; padding: 1px 4px; min-height: 0; }
+.fbar:has(textarea.fbin) { height: auto; min-height: 28px; align-items: stretch; }
+.fbar textarea.fbin { flex: 1; border: 0 !important; resize: none; overflow: auto; white-space: pre; min-height: 27px; padding: 5px 8px !important; font: 12.5px/17px var(--mono); background: transparent !important; outline: none !important; }
+.sheetgrid .c.lnk > span { color: #0563C1; text-decoration: underline; cursor: pointer; }
+:root[data-theme="dark"] .sheetgrid .c.lnk > span { color: #6CB4FF; }
+.vcircle { position: absolute; border: 2px solid #D12F2F; border-radius: 50%; pointer-events: none; z-index: 3; }
+.vmsg { position: absolute; z-index: 6; max-width: 240px; padding: 5px 8px; background: #FFFDE7; color: #1B2733; border: 1px solid #C9B458; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); font-size: 12px; white-space: pre-wrap; pointer-events: none; }
+.linkurl code { display: block; padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); word-break: break-all; font-size: 12px; }
+.tbl.names tr.on td { background: var(--sel); }
+.tbl.names tr { cursor: pointer; }
+.tbl.names code { font-size: 11.5px; }

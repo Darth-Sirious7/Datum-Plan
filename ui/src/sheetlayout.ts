@@ -9,16 +9,18 @@ const parseA1 = (s: string): [number, number] | null => { const m = /^([A-Z]+)(\
 /** Lines a text needs in a column at a font size (an estimate from average character width). */
 const lines = (text: string, z: number, w: number) => text.split("\n").reduce((n, part) => n + Math.max(1, Math.ceil((part.length * z * 0.55) / Math.max(20, w - 10))), 0);
 
-/** Rows that need more than the standard height for their fonts or wrapped text: row → height (px). */
-export const autoHeights = (sh: SheetData | undefined, shown: (a1: string) => string): Map<number, number> => {
+/** Rows that need more than the standard height for their fonts, wrapped text or line breaks (Alt+Enter): row → height (px). */
+export const autoHeights = (sh: SheetData | undefined, shown: (a1: string) => string, all: Iterable<string> = Object.keys(sh?.cells ?? {})): Map<number, number> => {
   const out = new Map<number, number>();
   if (!sh) return out;
-  for (const [a1, st] of Object.entries(sh.style ?? {})) {
-    const p = F.parse(st), rc = parseA1(a1);
-    if (!rc || (!p.w && !(p.z && p.z > 13))) continue;
+  const st = sh.style ?? {}, todo = new Set(Object.keys(st));
+  for (const a1 of all) if (shown(a1).includes("\n")) todo.add(a1);
+  for (const a1 of todo) {
+    const p = F.parse(st[a1]), rc = parseA1(a1), t = shown(a1), nl = t.includes("\n");
+    if (!rc || (!p.w && !nl && !(p.z && p.z > 13))) continue;
     if (sh.heights?.[rc[0]] !== undefined || (sh.merges ?? []).some(m => m.startsWith(`${a1}:`))) continue;
-    const z = p.z || 12, t = shown(a1);
-    const need = Math.ceil((p.w && t ? lines(t, z, sh.widths?.[rc[1]] ?? COL_W) : 1) * z * 1.3 + 6);
+    const z = p.z || 12;
+    const need = Math.ceil((p.w && t ? lines(t, z, sh.widths?.[rc[1]] ?? COL_W) : nl ? t.split("\n").length : 1) * z * 1.3 + 6);
     if (need > ROW_H && need > (out.get(rc[0]) ?? 0)) out.set(rc[0], Math.min(600, need));
   }
   return out;
@@ -26,7 +28,7 @@ export const autoHeights = (sh: SheetData | undefined, shown: (a1: string) => st
 let cache: { sh?: SheetData; map?: Map<number, number> } = {};
 /** The height of row r as printed (cells: the shown values, for wrapped text). */
 export const sheetRowH = (sh: SheetData, r: number, cells: Map<string, [string, string, string, ...unknown[]]>) => {
-  if (cache.sh !== sh) cache = { sh, map: autoHeights(sh, a => cells.get(a)?.[2] ?? "") };
+  if (cache.sh !== sh) cache = { sh, map: autoHeights(sh, a => cells.get(a)?.[2] ?? "", cells.keys()) };
   return sh.heights?.[r] ?? cache.map!.get(r) ?? ROW_H;
 };
 /** A picture placed in its cell: the size that fits inside the cell (or the merged range it starts), keeping its shape. */

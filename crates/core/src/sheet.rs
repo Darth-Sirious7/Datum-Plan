@@ -252,6 +252,10 @@ pub struct SheetOut {
     /// Rows the AutoFilter hides, and the values of each drop-down list (see `sheetx`).
     pub filtered: Vec<u32>,
     pub lists: Vec<Vec<String>>,
+    /// Cells that are links (a typed web or mail address, or `=HYPERLINK(address, text)`): cell and address.
+    pub links: Vec<(String, String)>,
+    /// Cells whose value breaks their data validation (Circle Invalid Data).
+    pub invalid: Vec<String>,
 }
 
 /// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
@@ -564,6 +568,59 @@ fn show(v: &Value, fmt: &str, input: &str, auto: &Dates, k: Option<usize>, sys: 
     (f.text, f.numeric)
 }
 
+/// What a value typed in a cell is: text-formatted cells keep what was typed (001 stays 001); dates
+/// follow the plan's date format; amounts may carry a currency symbol.
+fn typed(c: &Calc, s: &SheetData, a1: &str, input: &str) -> Value {
+    if s.fmt.get(a1).is_some_and(|f| f == "@") { Value::text(input) }
+    else if let Some(n) = typed_date(input, &c.fmt) { Value::number(n) }
+    else if let Some((n, _)) = typed_money(input, &c.p.currency.symbol) { Value::number(n) }
+    else if date_shaped(input) { Value::text(input) }
+    else { gridcraft_core::parse::parse_input(input, gridcraft_core::DateSystem::default()).value }
+}
+
+/// A validation's bound for the cell `at` of tab `k`: a value typed as in a cell (5, 31/12/2026, 13:30),
+/// or a reference or formula ("=B1", "$B$1", "Lists!A1"), written for the range's first cell `first`.
+fn bound(c: &Calc, wb: &Workbook, k: usize, first: CellRef, at: CellRef, x: &str) -> Option<f64> {
+    let x = x.trim();
+    if x.is_empty() { return None }
+    let refish = x.starts_with('=') || x.contains('!') || CellRef::parse(&x.replace('$', "")).is_some();
+    let v = if refish {
+        let f = shift(&format!("={}", x.trim_start_matches('=')), at.row as i64 - first.row as i64, at.col as i64 - first.col as i64);
+        gridcraft_calc::evaluate(wb, k + BUILT_IN, at, &if f.contains('[') { grid_names(c, &task_columns(c), &f) } else { f })
+    } else { typed(c, &c.p.sheets[k], "", x) };
+    match v { Value::Number(n) if n.is_finite() => Some(n), Value::Bool(b) => Some(b as u8 as f64), _ => None }
+}
+
+/// A validation's bound as a workbook formula (without =): a number for a typed value (a date as its
+/// serial), the reference or formula itself otherwise, quoted text when it is neither.
+pub fn bound_text(c: &Calc, k: usize, x: &str) -> String {
+    let x = x.trim();
+    if x.starts_with('=') || x.contains('!') || CellRef::parse(&x.replace('$', "")).is_some() { return excel_formula(c, &format!("={}", x.trim_start_matches('='))).trim_start_matches('=').to_string() }
+    match c.p.sheets.get(k).map(|s| typed(c, s, "", x)) { Some(Value::Number(n)) => n.to_string(), _ if x.is_empty() => "0".into(), _ => format!("\"{}\"", x.replace('"', "\"\"")) }
+}
+
+/// Whether cell `at` of tab `k`, showing `text` with the number `n`, passes validation `i`.
+fn passes(c: &Calc, wb: &Workbook, k: usize, i: usize, at: CellRef, (text, n): (&str, Option<f64>), lists: &[Vec<String>]) -> bool {
+    let v = &c.p.sheets[k].valid[i];
+    let first = crate::model::sheet_range(&v.range).map_or(at, |g| CellRef::new(g.0, g.1));
+    let empty = vec![];
+    crate::sheetx::valid(v, text, n, bound(c, wb, k, first, at, &v.a), bound(c, wb, k, first, at, &v.b), lists.get(i).unwrap_or(&empty))
+}
+
+/// Checks a value typed into cell `a1` of tab `k` against the cell's data validation: None when it may
+/// go in; otherwise the message and whether it is only a warning (the user may keep it).
+pub fn check_input(c: &Calc, k: usize, a1: &str, input: &str) -> Option<(String, bool)> {
+    let s = c.p.sheets.get(k)?;
+    let at = CellRef::parse(a1)?;
+    let i = s.valid.iter().position(|v| crate::model::sheet_range(&v.range).is_some_and(|g| at.row >= g.0 && at.row <= g.2 && at.col >= g.1 && at.col <= g.3))?;
+    let wb = book(c);
+    let v = if input.starts_with('=') && input.len() > 1 { gridcraft_calc::evaluate(&wb, k + BUILT_IN, at, &grid_names(c, &task_columns(c), input)) } else { typed(c, s, a1, input) };
+    let n = match v { Value::Number(x) if x.is_finite() => Some(x), _ => None };
+    let lists = if s.valid[i].kind.is_empty() { sheet_view(c, k).map(|o| o.lists).unwrap_or_default() } else { vec![] };
+    let text = if input.starts_with('=') { v.display() } else { input.to_string() };
+    (!passes(c, &wb, k, i, at, (&text, n), &lists)).then(|| (crate::sheetx::message(&s.valid[i]), s.valid[i].warn))
+}
+
 /// A workbook for the plan: the Plan and Resources sheets with their tables, the project names,
 /// then the user's tabs, all calculated.
 pub fn book(c: &Calc) -> Workbook {
@@ -629,20 +686,16 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
         };
         wb.names.push(gridcraft_model::DefinedName { name: name.into(), scope: None, formula, comment: String::new(), hidden: false });
     }
+    // The plan's defined names (Rates, VAT), read like formulas (`Tasks[Total Slack]` works too).
+    for n in &p.names {
+        let f = grid_names(c, &cols, &n.formula);
+        wb.names.push(gridcraft_model::DefinedName { name: n.name.clone(), scope: None, formula: f.trim_start_matches('=').to_string(), comment: n.comment.clone(), hidden: false });
+    }
     for s in &p.sheets {
         let mut sh = Sheet::new(s.name.as_str());
         for (a1, input) in &s.cells {
             let Some(at) = CellRef::parse(a1) else { continue };
-            let cell = if input.starts_with('=') && input.len() > 1 {
-                formula_cell(&grid_names(c, &cols, input), &c.fmt)
-            } else {
-                // Text-formatted cells keep what was typed (001 stays 001); dates follow the plan's date format.
-                if s.fmt.get(a1).is_some_and(|f| f == "@") { Cell::value(Value::text(input.as_str())) }
-                else if let Some(n) = typed_date(input, &c.fmt) { Cell::value(Value::number(n)) }
-                else if let Some((n, _)) = typed_money(input, &p.currency.symbol) { Cell::value(Value::number(n)) }
-                else if date_shaped(input) { Cell::value(Value::text(input.as_str())) }
-                else { Cell::value(gridcraft_core::parse::parse_input(input, wb.date_system).value) }
-            };
+            let cell = if input.starts_with('=') && input.len() > 1 { formula_cell(&grid_names(c, &cols, input), &c.fmt) } else { Cell::value(typed(c, s, a1, input)) };
             sh.set_cell(at, cell);
         }
         wb.sheets.push(Arc::new(sh));
@@ -750,7 +803,28 @@ pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
         }
     }
     let (filtered, lists) = crate::sheetx::for_view(s, &cells, |n, r, k| Some(wb.sheet(wb.sheet_index(n)?)?.value(CellRef::new(r, k)).display()));
-    Some(SheetOut { name: s.name.clone(), rows, cols, cells, filtered, lists })
+    // Links: a typed address, or HYPERLINK's first argument worked out on this sheet.
+    let links = s.cells.iter().filter_map(|(a1, input)| {
+        let url = match input.strip_prefix('=') {
+            Some(body) if body.trim_start().to_ascii_uppercase().starts_with("HYPERLINK") => match parse(body) {
+                Some(Expr::Call(name, args)) if name == "HYPERLINK" => gridcraft_calc::recalc::evaluate_expr(&wb, k + BUILT_IN, CellRef::parse(a1)?, args.first()?).display(),
+                _ => return None,
+            },
+            Some(_) => return None,
+            None => input.clone(),
+        };
+        crate::sheetx::link(&url).map(|u| (a1.clone(), u))
+    }).take(20_000).collect();
+    // Cells that break their validation (only cells with something in them; blanks pass).
+    let mut invalid = vec![];
+    for (i, v) in s.valid.iter().enumerate() {
+        let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&v.range) else { continue };
+        for x in cells.iter().filter(|x| !x.2.is_empty()) {
+            let Some(at) = CellRef::parse(&x.0).filter(|a| a.row >= r0 && a.row <= r1 && a.col >= c0 && a.col <= c1) else { continue };
+            if invalid.len() < 5_000 && !invalid.contains(&x.0) && !passes(c, &wb, k, i, at, (if x.1.starts_with('=') || x.1.is_empty() { &x.2 } else { &x.1 }, x.4), &lists) { invalid.push(x.0.clone()) }
+        }
+    }
+    Some(SheetOut { name: s.name.clone(), rows, cols, cells, filtered, lists, links, invalid })
 }
 
 /// Every worksheet function: name, signature, one-line description and category.
