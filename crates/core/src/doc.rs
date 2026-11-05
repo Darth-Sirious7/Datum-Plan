@@ -766,6 +766,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if crate::sheet::is_excel(&def.formula) {
                 let c = crate::fields::Calc::new(p, fmt, p.start);
                 crate::sheet::check(&def.formula, |n| c.key_of(n).is_some())?;
+                crate::sheet::check_column_names(p, &def.formula)?;
             } else if !def.formula.trim().is_empty() {
                 crate::formula::parse(&def.formula).map_err(|e| format!("Formula: {e}"))?;
             }
@@ -1009,6 +1010,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             (None, Some(s)) => {
                 sheet_name_ok(&s.name)?;
                 if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || RESERVED.contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
+                rules_ok(&s)?;
                 p.sheets.push(s);
                 p.normalize();
             }
@@ -1018,7 +1020,10 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                     sheet_name_ok(&s.name)?;
                     if p.sheets.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) || RESERVED.contains(&s.name.to_lowercase().as_str()) { return Err(format!("There is already a sheet called {}.", s.name)); }
                     rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, &s.name, &[]));
+                    // The sheet's own names go with it.
+                    p.names.iter_mut().filter(|n| n.sheet.eq_ignore_ascii_case(&old)).for_each(|n| n.sheet = s.name.clone());
                 }
+                rules_ok(&s)?;
                 // Cells, formats, styles and pictures have their own edits: a change to the tab's layout never
                 // overwrites them (a copy from the window a moment old would undo an edit just made).
                 let o = &mut p.sheets[k];
@@ -1029,6 +1034,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             (Some(k), None) if k < p.sheets.len() => {
                 let order: Vec<String> = ["Plan", "Resources"].iter().map(|x| x.to_string()).chain(p.sheets.iter().map(|x| x.name.clone())).collect();
                 let old = p.sheets.remove(k).name;
+                p.names.retain(|n| !n.sheet.eq_ignore_ascii_case(&old));
                 rewrite_sheets(p, |f, _| crate::sheet::rename(f, &old, "", &order));
             }
             _ => return Err("That sheet does not exist.".into()),
@@ -1058,6 +1064,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if count > 0 && used.chain(s.widths.keys().copied().filter(|_| cols)).any(|pos| pos >= at && pos.saturating_add(n) > last) {
                 return Err(if cols { "Inserting these columns would push cells past the last column (XFD). Clear the cells at the right first." } else { "Inserting these rows would push cells past the last row (1,048,576). Clear the cells at the bottom first." }.into());
             }
+            if count < 0 { rebase_rules(&mut p.sheets[k], |r0, c0, r1, c1| { let (pos, last, end) = if cols { (c0, c1, at.saturating_add(n)) } else { (r0, r1, at.saturating_add(n)) }; (pos >= at && pos < end && last >= end).then(|| end - pos).map(|d| if cols { (0, d) } else { (d, 0) }) }); }
             rewrite_sheets(p, |f, host| crate::sheet::adjust(f, host, &target, &edit));
             let s = &mut p.sheets[k];
             // Moves every keyed map of the tab: cells, formats, styles (and column widths).
@@ -1194,9 +1201,13 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             // Their formulas follow the tabs that had to take another name (through stand-in names, so
             // Sheet1 → Sheet1 (2) and Sheet1 (2) → Sheet1 (2) (2) do not run into each other).
             let moved: Vec<(&String, &String)> = renamed.iter().filter(|(o, n)| o != n).collect();
-            for v in p.sheets[first..].iter_mut().flat_map(|s| s.cells.values_mut()).filter(|v| v.starts_with('=') && !moved.is_empty()) {
-                let tmp = moved.iter().enumerate().fold(v.clone(), |f, (i, (o, _))| crate::sheet::rename(&f, o, &format!("DatumRenamed{i}"), &[]));
-                *v = moved.iter().enumerate().fold(tmp, |f, (i, (_, n))| crate::sheet::rename(&f, &format!("DatumRenamed{i}"), n, &[]));
+            let follow = |v: &str| {
+                let tmp = moved.iter().enumerate().fold(v.to_string(), |f, (i, (o, _))| crate::sheet::rename(&f, o, &format!("DatumRenamed{i}"), &[]));
+                moved.iter().enumerate().fold(tmp, |f, (i, (_, n))| crate::sheet::rename(&f, &format!("DatumRenamed{i}"), n, &[]))
+            };
+            for s in p.sheets[first..].iter_mut().filter(|_| !moved.is_empty()) {
+                for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = follow(v) }
+                crate::sheetx::rule_formulas(s, &mut |_, v| follow(v));
             }
             if !freeze.is_empty() {
                 if !p.ui.is_object() { p.ui = serde_json::json!({}); }
@@ -1249,6 +1260,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let range = gridcraft_core::RangeRef::new(gridcraft_core::CellRef::new(r0, c0), gridcraft_core::CellRef::new(r1, c1));
             let axis = if down { Axis::Rows } else { Axis::Cols };
             let edit = if del { Edit::DeleteCells { axis, range } } else { Edit::InsertCells { axis, range } };
+            if del {
+                rebase_rules(&mut p.sheets[k], |r0, c0, r1, c1| {
+                    let (p0, p1, a0, a1) = if down { (r0, r1, c0, c1) } else { (c0, c1, r0, r1) };
+                    (a0 >= lo && a1 <= hi && p0 >= start && p0 <= end && p1 > end).then(|| end + 1 - p0).map(|d| if down { (d, 0) } else { (0, d) })
+                });
+            }
             rewrite_sheets(p, |f, host| crate::sheet::adjust(f, host, &target, &edit));
             let s = &mut p.sheets[k];
             let shift = |x: &str| gridcraft_core::CellRef::parse(x).and_then(|x| mv(x.row, x.col)).map(|(r, c)| format!("{}{}", crate::sheet::col_name(c), r + 1));
@@ -1294,7 +1311,9 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let mut seen = std::collections::HashSet::new();
             for n in &names {
                 if let Some(e) = crate::sheetx::name_problem(&n.name) { return Err(e) }
-                if !seen.insert(n.name.trim().to_lowercase()) { return Err(format!("There is already a name {}.", n.name.trim())) }
+                let sheet = n.sheet.trim();
+                if !sheet.is_empty() && !p.sheets.iter().any(|s| s.name.eq_ignore_ascii_case(sheet)) { return Err(format!("There is no sheet called {sheet} for the name {}.", n.name.trim())) }
+                if !seen.insert((n.name.trim().to_lowercase(), sheet.to_lowercase())) { return Err(format!("There is already a name {}{}.", n.name.trim(), if sheet.is_empty() { String::new() } else { format!(" on the sheet {sheet}") })) }
                 let body = n.formula.trim().trim_start_matches('=');
                 if body.is_empty() { return Err(format!("Say what {} refers to: a range (=Prices!$B$2:$B$20), a value (=0.05) or a formula.", n.name.trim())) }
                 if body.len() > 8_000 || gridcraft_formula::parse(body).is_err() { return Err(format!("What {} refers to does not read as a formula: {body}", n.name.trim())) }
@@ -1311,14 +1330,35 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Before the first cells of a rule's range are deleted: its formulas are written for its first cell,
+/// so they are first moved to the cell that becomes first (`by(range)` gives how far, rows and columns,
+/// when the first cell goes and others stay).
+fn rebase_rules(s: &mut SheetData, by: impl Fn(u32, u32, u32, u32) -> Option<(u32, u32)>) {
+    crate::sheetx::rule_formulas(s, &mut |g, f| match g.and_then(crate::model::sheet_range).and_then(|(r0, c0, r1, c1)| by(r0, c0, r1, c1)) {
+        Some((dr, dc)) => crate::sheet::shift(f, dr as i64, dc as i64),
+        None => f.to_string(),
+    });
+}
+
+/// A sheet's custom validation formulas must read as formulas.
+fn rules_ok(s: &SheetData) -> Result<(), String> {
+    for v in s.valid.iter().filter(|v| v.kind == "custom") {
+        let body = v.a.trim().trim_start_matches('=');
+        if body.is_empty() || crate::sheet::too_deep(body) || gridcraft_formula::parse(body).is_err() { return Err(format!("The validation formula for {} does not read as a formula: ={body}", v.range)) }
+    }
+    Ok(())
+}
+
 /// Rewrites every formula on every spreadsheet tab: `f(formula, host sheet name)`.
 fn rewrite_sheets(p: &mut Project, f: impl Fn(&str, &str) -> String) {
     for s in &mut p.sheets {
         let host = s.name.clone();
         for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = f(v, &host); }
+        // The references inside its rules too (validation bounds, list sources, conditional formatting values).
+        crate::sheetx::rule_formulas(s, &mut |_, x| f(x, &host));
     }
-    // Defined names live on no sheet: their references name theirs.
-    for n in &mut p.names { n.formula = f(&n.formula, "__names"); }
+    // Plan-wide names live on no sheet (their references name theirs); a sheet's own names read their sheet.
+    for n in &mut p.names { n.formula = f(&n.formula, if n.sheet.is_empty() { "__names" } else { &n.sheet }); }
     // Dashboard tiles hold formulas too (ui.dashboards[].tiles[]); they live on no sheet of their own.
     let tiles = p.ui.get_mut("dashboards").and_then(|d| d.as_array_mut()).into_iter().flatten().filter_map(|d| d.get_mut("tiles")?.as_array_mut()).flatten();
     for t in tiles.filter_map(|t| t.as_object_mut()) {

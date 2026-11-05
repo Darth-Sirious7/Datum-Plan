@@ -86,8 +86,9 @@ pub fn for_view(s: &SheetData, cells: &[(String, String, String, bool, Option<f6
     (filtered(s, get), lists(s, |r, c| get(r, c).0, other))
 }
 
-/// What validated cells can take besides a list: whole numbers, decimals, dates, times, a text length, anything (a message only).
-pub const VALID_KINDS: [&str; 6] = ["whole", "decimal", "date", "time", "len", "any"];
+/// What validated cells can take besides a list: whole numbers, decimals, dates, times, a text length,
+/// values for which a formula is TRUE, anything (a message only).
+pub const VALID_KINDS: [&str; 7] = ["whole", "decimal", "date", "time", "len", "custom", "any"];
 /// How a validated value compares with `a` (and `b`).
 pub const VALID_OPS: [&str; 8] = ["between", "notbetween", "eq", "ne", "gt", "lt", "ge", "le"];
 
@@ -103,12 +104,14 @@ pub fn compare(op: &str, n: f64, a: Option<f64>, b: Option<f64>) -> bool {
 }
 
 /// Whether a value passes a validation: `text` as typed or shown, `n` its number, `lo` and `hi` the
-/// bounds worked out, `list` the drop-down's values. Blank cells always pass.
+/// bounds worked out (for a custom rule `lo` is its formula's result: TRUE is 1), `list` the drop-down's
+/// values. Blank cells always pass.
 pub fn valid(v: &Validation, text: &str, n: Option<f64>, lo: Option<f64>, hi: Option<f64>, list: &[String]) -> bool {
     if text.trim().is_empty() { return true }
     match v.kind.as_str() {
         "" => list.iter().any(|x| x.eq_ignore_ascii_case(text.trim())),
         "any" => true,
+        "custom" => lo.is_some_and(|x| x != 0.0),
         "len" => compare(&v.op, text.chars().count() as f64, lo, hi),
         k => n.is_some_and(|n| (k != "whole" || n.fract() == 0.0) && (k != "time" || (0.0..1.0).contains(&n)) && compare(&v.op, n, lo, hi)),
     }
@@ -117,6 +120,7 @@ pub fn valid(v: &Validation, text: &str, n: Option<f64>, lo: Option<f64>, hi: Op
 /// The message when a value is refused: the validation's own, or what the cell takes.
 pub fn message(v: &Validation) -> String {
     if !v.error.trim().is_empty() { return v.error.trim().to_string() }
+    if v.kind == "custom" { return format!("This cell takes a value for which {} is TRUE.", v.a.trim().trim_start_matches('=')) }
     let what = match v.kind.as_str() { "" => return "This cell takes a value from its list.".into(), "whole" => "a whole number", "decimal" => "a number", "date" => "a date", "time" => "a time", "len" => "text whose length is", _ => "a value" };
     let (a, b) = (v.a.trim().trim_start_matches('='), v.b.trim().trim_start_matches('='));
     let how = match v.op.as_str() { "notbetween" => format!("not between {a} and {b}"), "eq" => format!("equal to {a}"), "ne" => format!("not equal to {a}"), "gt" => format!("greater than {a}"), "lt" => format!("less than {a}"), "ge" => format!("at least {a}"), "le" => format!("at most {a}"), _ => format!("between {a} and {b}") };
@@ -155,13 +159,41 @@ pub fn name_problem(name: &str) -> Option<String> {
     None
 }
 
-/// The names a workbook brings, added to the plan's: valid ones only, and none the plan already has.
-pub fn merge_names(have: &[DefName], new: Vec<DefName>) -> Vec<DefName> {
+/// The names a workbook brings, added to the plan's: valid ones only, none the plan already has in the
+/// same scope, and names local to a sheet only when that sheet is one of `sheets` (the tabs it brings
+/// under their own names).
+pub fn merge_names(have: &[DefName], new: Vec<DefName>, sheets: &[String]) -> Vec<DefName> {
     let mut out = have.to_vec();
     for n in new {
-        if name_problem(&n.name).is_none() && !out.iter().any(|x| x.name.eq_ignore_ascii_case(&n.name)) && out.len() < 1_000 { out.push(n) }
+        let scope = n.sheet.is_empty() || sheets.iter().any(|s| s.eq_ignore_ascii_case(&n.sheet));
+        if scope && name_problem(&n.name).is_none() && !out.iter().any(|x| x.name.eq_ignore_ascii_case(&n.name) && x.sheet.eq_ignore_ascii_case(&n.sheet)) && out.len() < 1_000 { out.push(n) }
     }
     out
+}
+
+/// Calls `f(range, formula)` for each reference or formula a sheet's rules hold, and keeps what it
+/// returns: validation bounds and custom formulas (`range` is the rule's), list sources (`range` None:
+/// a list reads the same cells for every cell) and conditional formatting values that start with "=".
+/// A bound typed without "=" ("$B$1", "Lists!A1") stays without it.
+pub fn rule_formulas(s: &mut SheetData, f: &mut dyn FnMut(Option<&str>, &str) -> String) {
+    let mut one = |x: &mut String, range: Option<&str>, loose: bool| {
+        let t = x.trim();
+        let eq = t.starts_with('=');
+        if t.len() < 2 || !(eq || loose && (t.contains('!') || sheet_range(&t.replace('$', "")).is_some())) { return }
+        let out = f(range, &format!("={}", t.trim_start_matches('=')));
+        *x = if eq { out } else { out.trim_start_matches('=').to_string() };
+    };
+    for v in &mut s.valid {
+        let custom = v.kind == "custom";
+        if custom && !v.a.trim().starts_with('=') { v.a.insert(0, '=') }
+        one(&mut v.a, Some(&v.range), true);
+        one(&mut v.b, Some(&v.range), true);
+        one(&mut v.src, None, true);
+    }
+    for c in s.cond.iter_mut().filter(|c| !matches!(c.op.as_str(), "bar" | "scale" | "date" | "top" | "bottom")) {
+        one(&mut c.a, Some(&c.range), false);
+        one(&mut c.b, Some(&c.range), false);
+    }
 }
 
 #[cfg(test)]
@@ -233,8 +265,11 @@ mod tests {
         for ok in ["Rates", "VAT", "_x", "Tax.Rate", "Rate2026Q1", "ABCD1", "Ständig"] { assert_eq!(name_problem(ok), None, "{ok}"); }
         for bad in ["", "2x", "A1", "tax2026", "XFD9", "R1C1", "r", "C", "R2C", "My name", "a-b", "TRUE", "ProjectFinish", "tasks", "SPI"] { assert!(name_problem(bad).is_some(), "{bad}"); }
         let have = vec![DefName { name: "VAT".into(), formula: "=0.05".into(), ..Default::default() }];
-        let m = merge_names(&have, vec![DefName { name: "vat".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "A1".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "Rate".into(), formula: "=2".into(), ..Default::default() }]);
-        assert_eq!(m.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(), vec!["VAT", "Rate"]);
+        let m = merge_names(&have, vec![DefName { name: "vat".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "A1".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "Rate".into(), formula: "=2".into(), ..Default::default() },
+            DefName { name: "VAT".into(), formula: "=0.2".into(), sheet: "Prices".into(), ..Default::default() }, DefName { name: "Fx".into(), formula: "=1".into(), sheet: "Gone".into(), ..Default::default() }], &["prices".into()]);
+        assert_eq!(m.iter().map(|n| (n.name.as_str(), n.sheet.as_str())).collect::<Vec<_>>(), vec![("VAT", ""), ("Rate", ""), ("VAT", "Prices")], "a sheet's own VAT joins the plan's; a name of a sheet not brought in does not");
+        assert_eq!(message(&Validation { kind: "custom".into(), a: "=AND(A2>0,A2<=B2)".into(), ..Default::default() }), "This cell takes a value for which AND(A2>0,A2<=B2) is TRUE.");
+        assert!(valid(&Validation { kind: "custom".into(), ..Default::default() }, "5", Some(5.0), Some(1.0), None, &[]) && !valid(&Validation { kind: "custom".into(), ..Default::default() }, "5", Some(5.0), Some(0.0), None, &[]));
     }
 
     #[test]

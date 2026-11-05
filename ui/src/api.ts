@@ -104,8 +104,9 @@ export interface ColFilter { col: number; values?: string[] | null; op: string; 
 /** A drop-down list on a range: typed values or cells (src). */
 /** Data validation: kind "" is a drop-down list (list or src); "whole", "decimal", "date", "time", "len" compare with a and b by op; "any" only shows the prompt. */
 export interface Validation { range: string; list: string[]; src: string; warn?: boolean; kind?: string; op?: string; a?: string; b?: string; prompt?: string; error?: string }
-/** A defined name: what every sheet formula can call it by, and what it refers to (=Prices!$B$2:$B$20, =0.05). */
-export interface DefName { name: string; formula: string; comment?: string }
+/** A defined name: what every sheet formula can call it by, and what it refers to (=Prices!$B$2:$B$20, =0.05);
+ *  `sheet` set: a name of that sheet only (it wins there over a plan-wide name spelt the same). */
+export interface DefName { name: string; formula: string; comment?: string; sheet?: string }
 /** A conditional formatting rule (see condfmt.tsx). */
 export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */
@@ -116,7 +117,7 @@ export interface Picture { id: number; name: string; role: string; data: string 
 export interface SheetImage { pic: number; cell: string; w: number; h: number; fit?: boolean }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
-export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][]; links?: [string, string][]; invalid?: string[] }
+export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][]; links?: [string, string][]; invalid?: string[]; cond?: [string, string][] }
 export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
 export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
 export interface PeriodReport {

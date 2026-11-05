@@ -3,7 +3,7 @@
 use crate::cal::DAY;
 use crate::fields::{money, Calc, Kind};
 use crate::formula::F;
-use crate::model::SheetData;
+use crate::model::{DefName, Project, SheetData};
 use gridcraft_core::{CellRef, Value};
 use gridcraft_formula::{BinOp, Expr, Reference};
 use gridcraft_model::{Cell, Formula, Sheet, Workbook};
@@ -146,6 +146,8 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
         texts.push(t.ok());
     }
     if res { wb.sheets.push(Arc::new(res_sheet(c))) }
+    let used: std::collections::HashSet<String> = texts.iter().flatten().flat_map(|t| names_in(&t.replace("{ROW}", "1"))).collect();
+    if !used.is_empty() { column_names(c, &mut wb, &used) }
     let sheet: &mut Sheet = match wb.sheet_mut(0) { Some(s) => s, None => return HashMap::new() };
     for (key, &col) in cols.iter().filter(|(k, _)| !defs.iter().any(|(d, _)| &&format!("c:{d}") == k)) {
         for i in 0..n {
@@ -167,6 +169,80 @@ pub fn task_formulas(c: &Calc, defs: &[(String, String)]) -> HashMap<String, Vec
         let kind = c.kind(&format!("c:{key}"));
         (key.clone(), (0..n).map(|i| from_value(&sheet.value(CellRef::new(i as u32, k as u32)), kind, p.day_min)).collect())
     }).collect()
+}
+
+/// The names a formula calls (defined names, LAMBDA names called like functions), upper-cased.
+fn names_in(f: &str) -> Vec<String> {
+    let Some(e) = parse(f.trim().trim_start_matches('=')) else { return vec![] };
+    let mut out = vec![];
+    e.walk(&mut |x| match x { Expr::Name(n) | Expr::Call(n, _) => out.push(n.to_uppercase()), _ => {} });
+    out
+}
+
+/// A name's value as a workbook name's formula (a number, or quoted text).
+fn value_formula(v: &Value) -> String {
+    match v { Value::Number(x) => format!("{x}"), Value::Empty => "\"\"".into(), v => format!("\"{}\"", v.display().replace('"', "\"\"")) }
+}
+
+/// Why a plan-wide name cannot be used in a formula column (None: it can). A column is worked out task
+/// by task, away from the sheets, so its names may hold values and formulas and read cells of a named
+/// sheet, but not the Tasks or Resources tables, nor cells without a sheet (which sheet would they be?).
+fn column_name_problem(p: &Project, n: &DefName, depth: u8) -> Option<String> {
+    let Some(e) = parse(n.formula.trim().trim_start_matches('=')) else { return Some(format!("What {} refers to does not read as a formula.", n.name)) };
+    let tables = || Some(format!("The name {} reads the plan's Tasks or Resources tables; a formula column reads its task's own fields ([Cost]) instead.", n.name));
+    let mut out = None;
+    e.walk(&mut |x| {
+        if out.is_some() { return }
+        out = match x {
+            Expr::Struct(_) => tables(),
+            Expr::Ref(r) => match r.sheet_name() {
+                None => Some(format!("The name {} refers to cells without their sheet ({}); write the sheet too, as in =Prices!$B$2.", n.name, n.formula.trim_start_matches('='))),
+                Some(s) if s.eq_ignore_ascii_case("plan") || s.eq_ignore_ascii_case("resources") => tables(),
+                _ => None,
+            },
+            Expr::Name(m) if m.eq_ignore_ascii_case("tasks") || m.eq_ignore_ascii_case("resources") => tables(),
+            Expr::Name(m) | Expr::Call(m, _) => p.names.iter().find(|d| d.sheet.is_empty() && d.name.eq_ignore_ascii_case(m) && !d.name.eq_ignore_ascii_case(&n.name))
+                .filter(|_| depth < 8).and_then(|d| column_name_problem(p, d, depth + 1)),
+            _ => None,
+        };
+    });
+    out
+}
+
+/// Checks the names a formula column calls: a name of one sheet only, or a plan-wide name it cannot
+/// use (see [`column_name_problem`]), is an error that says why.
+pub fn check_column_names(p: &Project, src: &str) -> Result<(), String> {
+    let t = translate(src, |_| Some("A1".into()))?;
+    for n in names_in(&t) {
+        let mine = |d: &&DefName| d.name.eq_ignore_ascii_case(&n);
+        match p.names.iter().filter(mine).find(|d| d.sheet.is_empty()) {
+            Some(d) => if let Some(e) = column_name_problem(p, d, 0) { return Err(e) },
+            None => if let Some(d) = p.names.iter().find(mine) { return Err(format!("{} is a name of the sheet {} only; a formula column can use the plan's names (Scope: Whole plan in the Name Manager).", d.name, d.sheet)) },
+        }
+    }
+    Ok(())
+}
+
+/// Puts the names formula columns call into their workbook: the plan's numbers (ProjectFinish, SPI)
+/// and the plan-wide defined names a column may use; when these read sheet cells, the plan's sheets
+/// go in too, as the values they show (so `=[Cost]*VAT` and `=VLOOKUP([Name],Rates,2,FALSE)` work per task).
+fn column_names(c: &Calc, wb: &mut Workbook, used: &std::collections::HashSet<String>) {
+    let p = c.p;
+    let plan = crate::sheetx::PLAN_NAMES.iter().any(|n| used.contains(&n.to_uppercase()));
+    if !plan && !p.names.iter().any(|n| n.sheet.is_empty() && used.contains(&n.name.to_uppercase())) { return }
+    if plan { for (name, v, _) in project_names(c) { wb.names.push(gridcraft_model::DefinedName { name: name.into(), scope: None, formula: value_formula(&v), comment: String::new(), hidden: false }) } }
+    let ok: Vec<&DefName> = p.names.iter().filter(|n| n.sheet.is_empty() && column_name_problem(p, n, 0).is_none()).collect();
+    for n in &ok { wb.names.push(gridcraft_model::DefinedName { name: n.name.clone(), scope: None, formula: n.formula.trim_start_matches('=').to_string(), comment: String::new(), hidden: false }) }
+    if !ok.iter().any(|n| n.formula.contains('!')) { return }
+    let full = book(c);
+    if let Some(s) = wb.sheet_mut(0) { s.name = "DatumTasks".into() }
+    for (k, sd) in p.sheets.iter().enumerate() {
+        let Some(src) = full.sheet(k + BUILT_IN) else { continue };
+        let mut sh = Sheet::new(sd.name.as_str());
+        for at in sd.cells.keys().filter_map(|a1| CellRef::parse(a1)) { sh.set_value(at, src.value(at)) }
+        for (at, v) in &src.spill { sh.set_value(*at, v.clone()) }
+        wb.sheets.push(Arc::new(sh));
+    }
 }
 
 /// Columns of the "Plan" sheet and the `Tasks` table: field key and column name. The first 18
@@ -256,6 +332,9 @@ pub struct SheetOut {
     pub links: Vec<(String, String)>,
     /// Cells whose value breaks their data validation (Circle Invalid Data).
     pub invalid: Vec<String>,
+    /// Each conditional formatting rule's values as worked out (references and formulas such as =$B$1
+    /// read at the rule's first cell); empty when no rule has one.
+    pub cond: Vec<[String; 2]>,
 }
 
 /// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
@@ -604,7 +683,9 @@ fn passes(c: &Calc, wb: &Workbook, k: usize, i: usize, at: CellRef, (text, n): (
     let v = &c.p.sheets[k].valid[i];
     let first = crate::model::sheet_range(&v.range).map_or(at, |g| CellRef::new(g.0, g.1));
     let empty = vec![];
-    crate::sheetx::valid(v, text, n, bound(c, wb, k, first, at, &v.a), bound(c, wb, k, first, at, &v.b), lists.get(i).unwrap_or(&empty))
+    // A custom rule's formula is worked out for this cell (its relative references move with it).
+    let a = if v.kind == "custom" { format!("={}", v.a.trim().trim_start_matches('=')) } else { v.a.clone() };
+    crate::sheetx::valid(v, text, n, bound(c, wb, k, first, at, &a), bound(c, wb, k, first, at, &v.b), lists.get(i).unwrap_or(&empty))
 }
 
 /// Checks a value typed into cell `a1` of tab `k` against the cell's data validation: None when it may
@@ -613,8 +694,14 @@ pub fn check_input(c: &Calc, k: usize, a1: &str, input: &str) -> Option<(String,
     let s = c.p.sheets.get(k)?;
     let at = CellRef::parse(a1)?;
     let i = s.valid.iter().position(|v| crate::model::sheet_range(&v.range).is_some_and(|g| at.row >= g.0 && at.row <= g.2 && at.col >= g.1 && at.col <= g.3))?;
-    let wb = book(c);
-    let v = if input.starts_with('=') && input.len() > 1 { gridcraft_calc::evaluate(&wb, k + BUILT_IN, at, &grid_names(c, &task_columns(c), input)) } else { typed(c, s, a1, input) };
+    let mut wb = book(c);
+    let formula = input.starts_with('=') && input.len() > 1;
+    let v = if formula { gridcraft_calc::evaluate(&wb, k + BUILT_IN, at, &grid_names(c, &task_columns(c), input)) } else { typed(c, s, a1, input) };
+    // A custom rule's formula reads the sheet with the new value in its cell.
+    if s.valid[i].kind == "custom" {
+        if let Some(sh) = wb.sheet_mut(k + BUILT_IN) { sh.set_cell(at, if formula { formula_cell(&grid_names(c, &task_columns(c), input), &c.fmt) } else { Cell::value(v.clone()) }) }
+        gridcraft_calc::Calc::new().recalc_all(&mut wb);
+    }
     let n = match v { Value::Number(x) if x.is_finite() => Some(x), _ => None };
     let lists = if s.valid[i].kind.is_empty() { sheet_view(c, k).map(|o| o.lists).unwrap_or_default() } else { vec![] };
     let text = if input.starts_with('=') { v.display() } else { input.to_string() };
@@ -679,17 +766,14 @@ fn book_with(c: &Calc, extra: &[String]) -> Workbook {
     }
     wb.sheets.push(Arc::new(res_sheet(c)));
     for (name, v, _) in project_names(c) {
-        let formula = match &v {
-            Value::Number(x) => format!("{x}"),
-            Value::Empty => "\"\"".into(),
-            v => format!("\"{}\"", v.display().replace('"', "\"\"")),
-        };
-        wb.names.push(gridcraft_model::DefinedName { name: name.into(), scope: None, formula, comment: String::new(), hidden: false });
+        wb.names.push(gridcraft_model::DefinedName { name: name.into(), scope: None, formula: value_formula(&v), comment: String::new(), hidden: false });
     }
-    // The plan's defined names (Rates, VAT), read like formulas (`Tasks[Total Slack]` works too).
+    // The plan's defined names (Rates, VAT), read like formulas (`Tasks[Total Slack]` works too); a
+    // sheet's own names hold on that sheet.
     for n in &p.names {
+        let scope = if n.sheet.is_empty() { None } else { match p.sheets.iter().position(|s| s.name.eq_ignore_ascii_case(&n.sheet)) { Some(i) => Some(i + BUILT_IN), None => continue } };
         let f = grid_names(c, &cols, &n.formula);
-        wb.names.push(gridcraft_model::DefinedName { name: n.name.clone(), scope: None, formula: f.trim_start_matches('=').to_string(), comment: n.comment.clone(), hidden: false });
+        wb.names.push(gridcraft_model::DefinedName { name: n.name.clone(), scope, formula: f.trim_start_matches('=').to_string(), comment: n.comment.clone(), hidden: false });
     }
     for s in &p.sheets {
         let mut sh = Sheet::new(s.name.as_str());
@@ -824,7 +908,15 @@ pub fn sheet_view(c: &Calc, k: usize) -> Option<SheetOut> {
             if invalid.len() < 5_000 && !invalid.contains(&x.0) && !passes(c, &wb, k, i, at, (if x.1.starts_with('=') || x.1.is_empty() { &x.2 } else { &x.1 }, x.4), &lists) { invalid.push(x.0.clone()) }
         }
     }
-    Some(SheetOut { name: s.name.clone(), rows, cols, cells, filtered, lists, links, invalid })
+    // Conditional formatting values that are references or formulas (=$B$1), worked out at each rule's first cell.
+    let cond = if s.cond.iter().any(|r| r.a.starts_with('=') || r.b.starts_with('=')) {
+        s.cond.iter().map(|r| {
+            let at = crate::model::sheet_range(&r.range).map_or(CellRef::new(0, 0), |g| CellRef::new(g.0, g.1));
+            let one = |x: &str| if x.starts_with('=') && x.len() > 1 { match gridcraft_calc::evaluate(&wb, k + BUILT_IN, at, &excel_formula(c, x)) { Value::Number(n) => n.to_string(), v => v.display() } } else { x.to_string() };
+            [one(&r.a), one(&r.b)]
+        }).collect()
+    } else { vec![] };
+    Some(SheetOut { name: s.name.clone(), rows, cols, cells, filtered, lists, links, invalid, cond })
 }
 
 /// Every worksheet function: name, signature, one-line description and category.
