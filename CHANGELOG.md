@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.27 — 2026-11-05
+
+The last open items closed, and Ctrl+K back to Tell Me everywhere.
+
+- **Ctrl+K** opens Tell Me in Sheets too. Add a link with Insert › Link… or right-click › Link….
+- **Rules follow their cells:** validation limits, list sources and conditional formats that point at cells move with inserted, deleted and shifted cells and renamed sheets, and show #REF! when their cells go. Conditional formats can compare with a cell (`=$E$1`).
+- **Validation by a custom formula** (`=AND(A2>0,A2<=B2)`), checked for each cell, with Stop or Warn and Circle Invalid Data.
+- **Names for one sheet:** a defined name's scope is the plan or a single sheet. Sheet names go to and from Excel workbooks as local names, and move with their sheet to another plan.
+- **Defined names in task-sheet formula columns:** `=[Cost]*(1+VAT)`, lookups into named sheet ranges and the plan's own figures, worked out per task.
+- **Elapsed lags on links to other plans** (FS +7ed) in the Link to Plan dialog, scheduled in calendar time. Links to other plans now show their lags as the task sheet does (FS+5d, +4h).
+
 ## 0.5.26 — 2026-11-05
 
 Sheets move between plans, a clearer project tab group, and the open items from 0.5.25 closed.

@@ -19,6 +19,15 @@ pub fn package(p: &Project, k: usize) -> Option<(Op, usize)> {
     Some((Op::AddSheets { sheets: vec![s], pictures, freeze }, reads))
 }
 
+/// After the sheet landed in plan `to` (as its last sheet, perhaps renamed), the op that gives it
+/// the names it had on its own sheet in `from`; None when it had none.
+pub fn names_op(from: &Project, k: usize, to: &Project) -> Option<Op> {
+    let (old, new) = (&from.sheets.get(k)?.name, &to.sheets.last()?.name);
+    let local: Vec<_> = from.names.iter().filter(|n| n.sheet.eq_ignore_ascii_case(old)).map(|n| crate::model::DefName { sheet: new.clone(), ..n.clone() }).collect();
+    if local.is_empty() { return None }
+    Some(Op::Names { names: to.names.iter().cloned().chain(local).collect() })
+}
+
 #[cfg(test)]
 mod t {
     use super::*;
@@ -50,5 +59,9 @@ mod t {
         assert_eq!(sub.p.pictures.iter().find(|x| x.id == got.images[0].pic).map(|x| x.name.as_str()), Some("Vendor"));
         assert_eq!(sub.p.ui["freeze"]["1. Propane"], serde_json::json!([1, 0]));
         assert!(package(&m.p, 9).is_none());
+        // Names of the sheet's own go with it; plan-wide ones stay.
+        m.apply(Op::Names { names: vec![crate::model::DefName { name: "Rate".into(), formula: "=$B$1".into(), sheet: "1. Propane".into(), ..Default::default() }, crate::model::DefName { name: "VAT".into(), formula: "=0.05".into(), ..Default::default() }] }, "%d/%m/%Y").unwrap();
+        sub.apply(names_op(&m.p, 0, &sub.p).unwrap(), "%d/%m/%Y").unwrap();
+        assert_eq!(sub.p.names.iter().map(|n| (n.name.as_str(), n.sheet.as_str())).collect::<Vec<_>>(), vec![("Rate", "1. Propane")]);
     }
 }

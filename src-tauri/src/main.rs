@@ -505,6 +505,7 @@ fn sheet_to_plan(st: State<St>, k: usize, to: usize, copy: bool) -> R<(Out, Stri
     let (op, reads) = datum_core::sheetmove::package(&a.doc.p, k).ok_or("That sheet does not exist.")?;
     let (name, dest) = (a.doc.p.sheets[k].name.clone(), docs(&a)[to].p.name.clone());
     apply_at(&mut a, to, op)?;
+    if let Some(n) = datum_core::sheetmove::names_op(&a.doc.p, k, &docs(&a)[to].p) { apply_at(&mut a, to, n)?; }
     if !copy { let fmt = a.opts.date_fmt.clone(); a.doc.apply(Op::Sheet { k: Some(k), sheet: None }, &fmt)?; }
     let note = if reads > 0 { format!(" {reads} formula{} read other sheets of this plan: in {dest} they read its sheets of the same name, or show #REF!.", if reads > 1 { "s" } else { "" }) } else { String::new() };
     Ok((out(&a), format!("{name} {} {dest}; open its tab to see it.{note}", if copy { "copied to" } else { "moved to" })))
