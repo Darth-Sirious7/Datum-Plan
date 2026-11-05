@@ -114,7 +114,7 @@ export const HELP: Record<string, Topic> = {
       "From the plan: one click puts Project facts (start, finish, % complete, SPI…), Milestones, Critical, Late, Next 4 weeks, In progress or Resources at the selected cell; Task value… puts one value of one task. All of them stay live.",
       "Σ AutoSum adds up the numbers above (Alt+=). Right-click to insert or delete rows and columns; formulas follow.",
       "The Country with flag format shows a country's flag: type a code (DE) or a name (Germany).",
-      "Links: a typed web or mail address (https://…, mailto:…) or =HYPERLINK(address, text) shows as a link; Insert › Link… (Ctrl+K) adds or edits one. Ctrl+click (or right-click › Open Link) shows the full address and opens it in the browser when you say so; only web and mail links open."],
+      "Links: a typed web or mail address (https://…, mailto:…) or =HYPERLINK(address, text) shows as a link; Insert › Link… (or right-click › Link…) adds or edits one. Ctrl+click (or right-click › Open Link) shows the full address and opens it in the browser when you say so; only web and mail links open."],
     tip: "File › Export to Excel keeps the formulas and adds the Tasks and Resources tables, so the workbook works in other spreadsheet programs too." },
   sheet: { t: "Task sheet and Gantt chart", what: "The plan as rows on the left and bars on a timescale on the right.",
     how: ["Type in a cell to change it; drag to select, Ctrl+C / Ctrl+V with other spreadsheets, drag the small square to fill.", "Drag a bar to move it, its end to change the duration, its progress edge to set % complete, or down onto another bar to link them.", "Right-click a heading for column commands."] },

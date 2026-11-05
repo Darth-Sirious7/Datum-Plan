@@ -283,7 +283,6 @@ export const Sheets = () => {
     if (ctrl && e.key.toLowerCase() === "r") { e.preventDefault(); const [, b, , d] = range(); if (d > b) { const [r0, c0, r1] = range(); setCur([r0, c0]); setEnd([r1, c0]); fillRange(r1, d, true); } return; }
     if (ctrl && ["b", "i", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return F.toggle(e.key.toLowerCase() as "b"); }
     if (ctrl && e.key.toLowerCase() === "a") { e.preventDefault(); S.all(); return; }
-    if (ctrl && e.key.toLowerCase() === "k") { e.preventDefault(); e.stopPropagation(); return editLink(); }
     if (ctrl && (e.key.toLowerCase() === "f" || e.key.toLowerCase() === "h")) { e.preventDefault(); return findDialog(e.key.toLowerCase() === "h"); }
     if (!ctrl && !e.altKey && e.key.length === 1) { e.preventDefault(); startEdit(e.key, cur()[0], cur()[1], true); }
   };
@@ -606,7 +605,7 @@ export const Sheets = () => {
       { label: "Sort", icon: "az", sub: [{ label: "Sort A to Z", run: () => sortRows(true) }, { label: "Sort Z to A", run: () => sortRows(false) }, "-", { label: "Custom Sort…", run: customSort }] },
       { label: "Filter", icon: "filter", sub: [{ label: "Filter by Selected Cell's Value", run: filterByValue }, { label: sheet()?.filter ? "Remove Filter" : "Filter", keys: "Ctrl+Shift+L", on: !!sheet()?.filter, run: toggleFilter }, { label: "Clear Filter", off: !sheet()?.filter?.cols.length, run: clearFilter }] },
       { label: nt ? "Edit Note…" : "New Note…", keys: "Shift+F2", run: editNote }, ...(nt || anyNote() ? [{ label: "Delete Note", run: deleteNotes }] : []),
-      ...(linkOf(cr, cc) ? [{ label: "Open Link", keys: "Ctrl+click", run: () => openLink(linkOf(cr, cc)!) }] : []), { label: linkOf(cr, cc) ? "Edit Link…" : "Link…", icon: "link", keys: "Ctrl+K", run: editLink }, "-",
+      ...(linkOf(cr, cc) ? [{ label: "Open Link", keys: "Ctrl+click", run: () => openLink(linkOf(cr, cc)!) }] : []), { label: linkOf(cr, cc) ? "Edit Link…" : "Link…", icon: "link", run: editLink }, "-",
       { label: "Format Cells…", keys: "Ctrl+1", run: () => formatDlg() },
       { label: "Number Format", sub: fmtItems() },
       { label: "Borders", icon: "bd-all", sub: borderItems() },

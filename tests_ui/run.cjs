@@ -880,10 +880,13 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the cell menu of a link has Open Link and Edit Link", (await menuText()).includes("Open Link") && (await menuText()).includes("Edit Link…"), (await menuText()).join());
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   sq = await scell(5, 4); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+k"); await p.waitForTimeout(150);
+  check("Ctrl+K in a sheet opens Tell Me, as everywhere", !!(await p.$(".pal input")) && !(await p.$(".dlg input.laddr")));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150); await p.click(".menu button:has-text('Link…')"); await p.waitForTimeout(150);
   await p.fill(".dlg input.laddr", "https://example.com/a?x=\"1\""); await p.fill(".dlg input.ltext", "Spec"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(150);
   check("a link with spaces or quotes is refused by the Link dialog", !!(await p.$(".dlg input.laddr")));
   await p.fill(".dlg input.laddr", "https://example.com/a"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
-  check("Insert › Link… (Ctrl+K) writes =HYPERLINK(address, text)", (await lastApply()).includes('["E6","=HYPERLINK(\\"https://example.com/a\\",\\"Spec\\")"]'), await lastApply());
+  check("Link… writes =HYPERLINK(address, text)", (await lastApply()).includes('["E6","=HYPERLINK(\\"https://example.com/a\\",\\"Spec\\")"]'), await lastApply());
   // Defined names: Define Name from the selection, the Name Manager, the Name Box.
   await p.click(".fbar .fname"); await p.keyboard.type("B2:B3"); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
   sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);

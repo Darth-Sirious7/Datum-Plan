@@ -389,7 +389,7 @@ When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format
 - **Find All** lists every match to click through; **Look in** chooses the values shown or the formulas typed, and **Every sheet** searches all the tabs.
 - **Go To:** [[F5]] or [[Ctrl+G]], or type an address in the box left of the formula bar (B12, A1:D20, Sheet2!A1), or a defined name.
 - **Several lines in a cell:** [[Alt+Enter]] while typing starts a new line; the row grows to show them.
-- **Links:** a typed web or e-mail address, or `=HYPERLINK(address, text)`, shows as a link. [[Ctrl]]+click (or right-click › **Open Link**) shows the full address and opens it in your browser. **Link…** ([[Ctrl+K]] in a sheet) adds or edits one.
+- **Links:** a typed web or e-mail address, or `=HYPERLINK(address, text)`, shows as a link. [[Ctrl]]+click (or right-click › **Open Link**) shows the full address and opens it in your browser. **Link…** (Insert › Link…, or right-click) adds or edits one; [[Ctrl+K]] stays Tell Me.
 - **Defined names:** **Define Name…** names the selected cells or a value (`Rates`, `VAT = 0.05`) to use in any sheet formula and in dashboard tiles; the **Name Manager** lists, edits and deletes them. Names go into an exported workbook.
 - **Move a sheet to another plan:** right-click the sheet tab › **Move to Plan**, or **Move or Copy…** › **To plan**, sends the sheet to another open plan, for example from the master to a subplan, with its pictures. Its formulas on plan data (Tasks[…], ProjectFinish…) then read that plan; the message says if some formulas read other sheets of the first plan. Save both plans to keep the change.
 
