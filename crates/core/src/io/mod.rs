@@ -43,6 +43,25 @@ pub(crate) fn held(p: &Project, s: &sched::Sched, i: usize, ext: bool) -> (i64, 
     }
 }
 
+/// A link's lag in working minutes, for formats without percent or elapsed lags (XER, PMXML): a
+/// percent lag is that share of the predecessor's duration `pdur`; an elapsed lag the same share of
+/// the project calendar's working week (7 elapsed days are 5 working days on a five-day week).
+pub(crate) fn work_lag(p: &Project, l: &crate::model::Link, pdur: i64) -> i64 {
+    if l.pct { return pdur * l.lag / 100 }
+    if !l.elapsed { return l.lag }
+    let week: i64 = p.calendars.iter().find(|c| c.name == p.calendar).map_or(2400, |c| c.week.iter().flatten().map(|&(a, b)| b.saturating_sub(a) as i64).sum::<i64>()).max(1);
+    (l.lag as i128 * week as i128 / (7 * 1440)) as i64
+}
+
+/// What a format cannot hold of the plan, said after an export.
+pub fn export_notes(p: &Project, path: &Path) -> Vec<String> {
+    let n = p.tasks.iter().flat_map(|t| &t.preds).filter(|l| l.elapsed && l.lag != 0).count();
+    match ext(path).as_str() {
+        "xer" | "pmxml" if n > 0 => vec![format!("{n} elapsed lags were written as working time of the same share of a week (7 elapsed days are 5 working days on a five-day week): the format has no elapsed lags.")],
+        _ => vec![],
+    }
+}
+
 fn ext(path: &Path) -> String {
     path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
 }

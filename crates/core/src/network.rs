@@ -89,7 +89,7 @@ pub fn layout_with(c: &Calc, rows: &[usize], sums: &[usize], wbs: bool) -> Net {
         nodes: all.iter().map(|&i| Node { uid: p.tasks[i].uid, col: col[i], row: row[i] }).collect(),
         links: edges.iter().map(|&(k, e)| NetLink {
             from: p.tasks[e.p].uid, to: p.tasks[e.s].uid, kind: e.kind, crit: s.critical(p, e.p) && s.critical(p, e.s),
-            driving: s.drive.get(k).copied().unwrap_or(false), lag: if e.lag == 0 { String::new() } else { crate::parse::fmt_lag(e.lag, p.day_min) },
+            driving: s.drive.get(k).copied().unwrap_or(false), lag: if e.lag == 0 { String::new() } else { crate::parse::fmt_lag_el(e.lag, p.day_min, e.el) },
         }).collect(),
         cols, rows: height, bands,
     }

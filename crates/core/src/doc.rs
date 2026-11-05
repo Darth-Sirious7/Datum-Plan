@@ -682,7 +682,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
                 let pred = p.tasks[w[0]].uid;
                 let t = &mut p.tasks[w[1]];
                 if !t.preds.iter().any(|l| l.pred == pred) {
-                    t.preds.push(Link { pred, kind: LinkType::FS, lag: 0, pct: false });
+                    t.preds.push(Link { pred, kind: LinkType::FS, lag: 0, pct: false, elapsed: false });
                 }
             }
         }
@@ -692,12 +692,12 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             if pred == succ {
                 return Err("A task cannot be its own predecessor.".into());
             }
-            let (lag, pct) = parse::lag(&lag, p.day_min)?;
+            let (lag, pct, elapsed) = parse::lag(&lag, p.day_min)?;
             let t = &mut p.tasks[i];
             let at = t.preds.iter().position(|l| l.pred == pred);
             match (kind, at) {
-                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct },
-                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct }),
+                (Some(kind), Some(k)) => t.preds[k] = Link { pred, kind, lag, pct, elapsed },
+                (Some(kind), None) => t.preds.push(Link { pred, kind, lag, pct, elapsed }),
                 (None, Some(k)) => { t.preds.remove(k); }
                 (None, None) => {}
             }

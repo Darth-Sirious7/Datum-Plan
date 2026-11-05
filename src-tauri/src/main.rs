@@ -473,7 +473,7 @@ async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<Strin
     let Some(path) = app.dialog().file().add_filter(label, &[ext]).set_file_name(format!("{name}.{ext}")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let a = st.lock();
     io::export(&a.doc.p, &path, &a.opts.date_fmt, today(), &cols)?;
-    Ok(Some(path.display().to_string()))
+    Ok(Some(std::iter::once(path.display().to_string()).chain(io::export_notes(&a.doc.p, &path)).collect::<Vec<_>>().join(". ")))
 }
 
 /// Brings the sheets of a workbook (.xlsx, .xlsm, .xls, .xlsb, .ods) in as sheet tabs: one step to undo.
@@ -704,7 +704,7 @@ fn task_info(st: State<St>, uid: u32) -> Option<TaskInfo> {
     let t = &p.tasks[i];
     let rel = |k: usize, l: &datum_core::Link, driving: bool| Rel {
         uid: p.tasks[k].uid, id: k + 1, code: p.tasks[k].code.clone(), name: p.tasks[k].name.clone(), kind: l.kind,
-        lag: if l.pct { format!("{}%", l.lag) } else { datum_core::parse::fmt_lag(l.lag, p.day_min) }, driving, tf: c.text(k, "tf"),
+        lag: if l.pct { format!("{}%", l.lag) } else { datum_core::parse::fmt_lag_el(l.lag, p.day_min, l.elapsed) }, driving, tf: c.text(k, "tf"),
     };
     let drives = |a: usize, b: usize| c.s.edges.iter().enumerate().any(|(e, x)| x.p == a && x.s == b && c.s.drive[e]);
     let preds = t.preds.iter().filter_map(|l| p.idx(l.pred).map(|k| rel(k, l, drives(k, i)))).collect();

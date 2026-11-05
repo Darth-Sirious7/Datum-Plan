@@ -94,15 +94,16 @@ pub fn mpx(c: &Calc) -> String {
     o.push_str("60,Unique ID,ID,Name,Outline Level,Duration,Start,Finish,% Complete,Predecessors,Text1\r\n61,98,90,1,3,40,50,51,44,70,4\r\n");
     let id_of: std::collections::HashMap<u32, usize> = p.tasks.iter().enumerate().map(|(i, t)| (t.uid, i + 1)).collect();
     for (i, t) in p.tasks.iter().enumerate() {
-        // "3", "3SS" or "3FS+1.5d": a lag needs the type; a percent lag becomes days of the predecessor.
+        // "3", "3SS", "3FS+1.5d" or "3FS+7ed": a lag needs the type; a percent lag becomes days of the predecessor.
         let preds: Vec<String> = t.preds.iter().filter_map(|l| {
             let k = id_of.get(&l.pred)?;
             let j = k - 1;
             let lag = if l.pct { p.tasks[j].dur * l.lag / 100 } else { l.lag };
+            let (day, e) = if l.elapsed && !l.pct { (1440, "e") } else { (p.day_min, "") };
             Some(match (l.kind, lag) {
                 (LinkType::FS, 0) => k.to_string(),
                 (kind, 0) => format!("{k}{kind:?}"),
-                (kind, m) => format!("{k}{kind:?}{}{}d", if m > 0 { "+" } else { "" }, (m as f64 / p.day_min as f64 * 100.0).round() / 100.0),
+                (kind, m) => format!("{k}{kind:?}{}{}{e}d", if m > 0 { "+" } else { "" }, (m as f64 / day as f64 * 100.0).round() / 100.0),
             })
         }).collect();
         let _ = writeln!(o, "70,{},{},{},{},{}d,{},{},{},{},{}\r", t.uid, i + 1, q(&t.name), t.level + 1, (s.cals[s.ci[i]].between(s.es[i], s.ef[i]) as f64 / p.day_min as f64 * 100.0).round() / 100.0,
@@ -158,7 +159,7 @@ pub fn pmxml(c: &Calc) -> String {
     for (i, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
             let Some(&k) = idx.get(&l.pred) else { continue };
-            let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
+            let lag = super::work_lag(p, l, p.tasks[k].dur);
             let kind = match l.kind { LinkType::FS => "Finish to Start", LinkType::SS => "Start to Start", LinkType::FF => "Finish to Finish", LinkType::SF => "Start to Finish" };
             for b in under(i) { for a in under(k) {
                 n += 1;

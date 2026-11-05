@@ -237,3 +237,49 @@ fn phase_scurve_days_run_forward() {
         assert!(close(s.planned[0], 0.0) && close(*s.planned.last().unwrap(), 100.0));
     }
 }
+
+// Usage hours follow the progress: the work done lies between the actual start and the status date,
+// the rest after it; finished work in its actual dates; work not started where it is planned.
+#[test]
+fn usage_hours_split_at_the_status_date() {
+    let mut x = doc(&["10d", "3d", "2d"]);
+    x.p.resources.push(Resource { uid: 1, name: "Fitter".into(), max: 1.0, rate: 10.0, ..Default::default() });
+    x.p.resources.push(Resource { uid: 2, name: "Welder".into(), max: 1.0, ..Default::default() });
+    set(&mut x, 0, "res", "Fitter"); set(&mut x, 1, "res", "Welder"); set(&mut x, 2, "res", "Welder");
+    // T1 (80 h) started Mon 2 Nov, 20 % done at Wed 11 Nov; T2 done Mon 9 – Tue 10; T3 not started.
+    set(&mut x, 0, "pct", "20"); set(&mut x, 1, "astart", "09-Nov-26"); set(&mut x, 1, "afinish", "10-Nov-26");
+    status(&mut x, "2026-11-11");
+    let c = calc(&x, d(2026, 11, 11));
+    let (t2, t3) = (c.l.work[1] / 60.0, c.l.work[2] / 60.0);
+    // T1: 16 h done over the 8 working days Mon 2 – Wed 11 (2 h a day), 64 h left from Thu 12 (8 h a day)
+    // to Mon 23: weeks of 2, 9, 16 and 23 Nov get 10, 6 + 16, 40 and 8 h (evenly over its span it was 25, 25, 25, 5).
+    let u = report::usage(&c, "resource", "work", "week");
+    let row = |uid: u32| u.rows.iter().find(|r| r.of.is_none() && r.uid == uid).unwrap();
+    assert_eq!(u.buckets.len(), 4);
+    assert!(row(1).vals.iter().zip([10.0, 22.0, 40.0, 8.0]).all(|(a, b)| close(*a, b)), "{:?}", row(1).vals);
+    // Welder: T2 on its actual days and T3 after the status date (Thu 12 – Fri 13), all in the week of 9 Nov.
+    assert!(row(2).vals.iter().zip([0.0, t2 + t3, 0.0, 0.0]).all(|(a, b)| close(*a, b)) && close(t3, 16.0), "{:?}", row(2).vals);
+    // Day by day for T1, and its cost ($10/h) the same way; totals unchanged.
+    let days = report::usage(&c, "task", "work", "day");
+    let t1 = &days.rows.iter().find(|r| r.uid == x.p.tasks[0].uid && r.of.is_none()).unwrap();
+    let on = |m: u32, dd: u32| days.buckets.iter().position(|&b| b == crate::cal::at(d(2026, m, dd)) / crate::cal::DAY).map(|j| t1.vals[j]).unwrap();
+    assert!(close(on(11, 2), 2.0) && close(on(11, 11), 2.0) && close(on(11, 12), 8.0) && close(on(11, 23), 8.0) && close(on(11, 7), 0.0));
+    assert!(close(t1.total, 80.0) && close(c.l.awork[0] / 60.0, 16.0));
+    let cost = report::usage(&c, "task", "cost", "week");
+    let t1c = cost.rows.iter().find(|r| r.uid == x.p.tasks[0].uid && r.of.is_none()).unwrap();
+    assert!(t1c.vals.iter().zip([100.0, 220.0, 400.0, 80.0]).all(|(a, b)| close(*a, b)), "{:?}", t1c.vals);
+    // The weekly hours of the period report, the workload and the cost curve agree.
+    let r = report::period_report(&c, "week", None);
+    assert!(close(r.hours.iter().map(|h| h.1).sum(), 80.0 + t2 + t3), "{:?}", r.hours);
+    let w = load::workload(c.p, &c.s, true);
+    assert!(w.rows[0].load.iter().zip([10.0, 22.0, 40.0, 8.0]).all(|(a, b)| close(*a, b)), "{:?}", w.rows[0].load);
+    // Actual cost stays before the status date: T1's $160 in the first two weeks.
+    let cv = report::curve(&c, "week");
+    assert!(close(cv.actual.iter().sum(), 160.0) && close(cv.actual[0], 100.0) && close(cv.actual[1], 60.0), "{:?}", cv.actual);
+    // A started task with nothing done yet: all its hours after the status date.
+    set(&mut x, 0, "pct", "0"); set(&mut x, 0, "astart", "02-Nov-26");
+    let c = calc(&x, d(2026, 11, 11));
+    let u = report::usage(&c, "resource", "work", "week");
+    let row = u.rows.iter().find(|r| r.of.is_none() && r.uid == 1).unwrap();
+    assert!(close(row.vals[0], 0.0) && close(row.total, 80.0), "{:?}", row.vals);
+}

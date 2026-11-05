@@ -270,10 +270,14 @@ fn an_elapsed_lag_from_a_project_xml_file_keeps_its_length() {
     std::fs::write(&f, text).unwrap();
     let crate::io::Imported::Plan(q, notes) = crate::io::import(&f).unwrap() else { panic!() };
     std::fs::remove_dir_all(dir).ok();
-    assert!(notes.iter().any(|n| n.contains("elapsed lag")), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("elapsed")), "{notes:?}");
     // Fri 6 Nov 17:00 + 7 days round the clock = Fri 13 Nov 17:00: Strip forms starts Mon 16 Nov.
-    assert_eq!(q.tasks[1].preds[0].lag, 5 * 480);
+    let l = &q.tasks[1].preds[0];
+    assert_eq!((l.lag, l.elapsed, l.pct), (7 * 1440, true, false));
     assert_eq!(&dates(&q)[1][..11], "Nov16 08:00");
+    // Written back as it came: 7 edays.
+    let s = crate::sched::schedule(&q).unwrap();
+    assert!(crate::io::mspdi::write(&q, &s, &[0.0; 2]).contains("<LinkLag>100800</LinkLag><LagFormat>8</LagFormat>"));
 }
 
 #[test]

@@ -134,7 +134,7 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         }
         for l in &t.preds {
             let _ = write!(o, "<PredecessorLink><PredecessorUID>{}</PredecessorUID><Type>{}</Type><CrossProject>0</CrossProject><LinkLag>{}</LinkLag><LagFormat>{}</LagFormat></PredecessorLink>",
-                l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10, if l.pct { 19 } else { 7 });
+                l.pred, LINKS.iter().position(|k| *k == l.kind).unwrap(), l.lag * 10, if l.pct { 19 } else if l.elapsed { 8 } else { 7 });
         }
         for (n, b) in &t.bls {
             let _ = write!(o, "<Baseline><Number>{n}</Number><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><Cost>{:.2}</Cost>{}</Baseline>", dt(b.start), dt(b.finish), dur(b.dur), b.cost, b.work.map_or(String::new(), |w| format!("<Work>{}</Work>", dur(w.round() as i64))));
@@ -249,7 +249,6 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     }
     let unit = |c: &str| match c { "3" | "4" => Unit::M, "5" | "6" => Unit::H, "9" | "10" => Unit::W, "11" | "12" => Unit::Mo, _ => Unit::D };
     let mut tasks: Vec<(i64, Task)> = vec![];
-    let week_work: i64 = p.calendars.iter().find(|c| c.name == p.calendar).map_or(2400, |c| c.week.iter().flatten().map(|&(a, b)| b.saturating_sub(a) as i64).sum::<i64>()).max(1);
     for t in root.get("Tasks").into_iter().flat_map(|x| x.all("Task")) {
         let uid: u32 = t.val("UID").parse().unwrap_or(0);
         if uid == 0 || t.val("IsNull") == "1" || t.val("OutlineLevel") == "0" {
@@ -278,15 +277,11 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         }
         for l in t.all("PredecessorLink") {
             if let Ok(pred) = l.val("PredecessorUID").parse() {
-                let mut lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
+                let lag = l.val("LinkLag").parse::<i64>().unwrap_or(0) / 10;
                 let pct = matches!(l.val("LagFormat"), "19" | "20");
-                // An elapsed lag (clock time) becomes the working time of as long on the project calendar:
-                // 7 elapsed days are 5 working days on a five-day week.
-                if matches!(l.val("LagFormat"), "4" | "6" | "8" | "10" | "12" | "20") {
-                    elapsed += 1;
-                    if !pct { lag = (lag as i128 * week_work as i128 / (7 * 1440)) as i64 }
-                }
-                k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag, pct });
+                // An elapsed lag stays clock time; an elapsed percent lag is kept as a percent of the working duration.
+                elapsed += (l.val("LagFormat") == "20") as usize;
+                k.preds.push(Link { pred, kind: l.val("Type").parse::<usize>().ok().and_then(|i| LINKS.get(i).copied()).unwrap_or(LinkType::FS), lag, pct, elapsed: matches!(l.val("LagFormat"), "4" | "6" | "8" | "10" | "12") });
             }
         }
         for b in t.all("Baseline") {
@@ -330,7 +325,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();
     let missing: usize = p.tasks.iter_mut().map(|t| { let n = t.preds.len(); t.preds.retain(|l| uids.contains(&l.pred)); n - t.preds.len() }).sum();
     if missing > 0 { notes.push(format!("{missing} links point to tasks that are not in the file; they were left out.")) }
-    if elapsed > 0 { notes.push(format!("{elapsed} links have an elapsed lag (counted round the clock); Datum Plan counts each as the same share of a working week (7 elapsed days are 5 working days on a five-day week).")) }
+    if elapsed > 0 { notes.push(format!("{elapsed} links have an elapsed percent lag; Datum Plan counts each as that percent of the predecessor's working duration, on the lag calendar.")) }
     if late_bl > 0 { notes.push(format!("{late_bl} baseline values beyond Baseline 10 were left out.")) }
     p.normalize();
     Ok((p, notes))

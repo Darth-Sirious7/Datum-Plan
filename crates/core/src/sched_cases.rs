@@ -138,7 +138,7 @@ fn a_long_plan_schedules_in_linear_time() {
     let mut p = Project::new("Big", d(2026, 11, 2));
     for i in 0..20_000u32 {
         let mut t = p.new_task(&format!("T{i}"), 0, 480);
-        if i > 0 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false }) }
+        if i > 0 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
         p.tasks.push(t);
     }
     let t0 = std::time::Instant::now();
@@ -188,4 +188,51 @@ fn milestone_constrained_to_its_own_day() {
     // A link that would take it past its day still gives way to Must Start On (the predecessor shows the slip).
     let p = build(&["2d | |", "0 | 1 | ctype=MSO;cdate=02-Nov-26"], |_| {});
     assert_eq!(dates(&p), ["Nov02 08:00 Nov03 17:00 -1", "Nov02 17:00 Nov02 17:00 0"]);
+}
+
+// Elapsed lags ("+7ed") count round the clock, weekends and nights included, in both passes.
+#[test]
+fn elapsed_lags_count_round_the_clock() {
+    // Pour 5d (Mon 2 – Fri 6 17:00); Strip forms 7 elapsed days after it: Fri 13 17:00, so Mon 16 08:00.
+    // T3 (15d) ends Fri 20: Strip's late start Thu 19 08:00, less 7 × 24 h is Thu 12 08:00, so Pour's
+    // late finish is Wed 11 17:00: 3 days of float on both.
+    let p = build(&["5d||", "2d|1FS+7ed|", "15d||"], |_| {});
+    assert_eq!(dates(&p), ["Nov02 08:00 Nov06 17:00 3", "Nov16 08:00 Nov17 17:00 3", "Nov02 08:00 Nov20 17:00 0"]);
+    let s = schedule(&p).unwrap();
+    assert_eq!(s.ff[0], 0, "the lag takes Pour's free float");
+    // From Fri 6 17:00, 3 elapsed days end Mon 9 17:00 (start Tue 10); 3 working days end Wed 11 17:00 (start Thu 12).
+    let p = build(&["5d||", "1d|1FS+3ed|", "1d|1FS+3d|"], |_| {});
+    assert_eq!(dates(&p), ["Nov02 08:00 Nov06 17:00 0", "Nov10 08:00 Nov10 17:00 2", "Nov12 08:00 Nov12 17:00 0"]);
+    // Start to start 2 elapsed days: Mon 2 08:00 + 48 h = Wed 4 08:00. Finish to finish 1 elapsed day
+    // early: Fri 6 17:00 − 24 h = Thu 5 17:00, so the 2d task runs Wed 4 – Thu 5.
+    let p = build(&["5d||", "2d|1SS+2ed|", "2d|1FF-1ed|"], |_| {});
+    assert_eq!(dates(&p), ["Nov02 08:00 Nov06 17:00 0", "Nov04 08:00 Nov05 17:00 1", "Nov04 08:00 Nov05 17:00 1"]);
+    // Shown back as typed (a week as days, like working lags), also among the successors.
+    let p = build(&["5d||", "2d|1FS+7ed|", "2d|1SS-2ed, 2FS+12eh|", "1d|3FS+1ew|"], |_| {});
+    let c = crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 2));
+    assert_eq!([c.text(1, "preds"), c.text(2, "preds"), c.text(3, "preds")], ["1FS+7ed", "1SS-2ed, 2FS+12eh", "3FS+7ed"]);
+    assert_eq!(c.text(0, "succs"), "2FS+7ed, 3SS-2ed");
+    // The lag calendar option does not change an elapsed lag; 168 hours on the 24-hour lag calendar are the same.
+    let a = build(&["5d||", "2d|1FS+7ed|"], |p| p.opts.lag_cal = LagCal::Project);
+    let b = build(&["5d||", "2d|1FS+168h|"], |p| p.opts.lag_cal = LagCal::H24);
+    assert_eq!(dates(&a), dates(&b));
+    // Files from before elapsed lags open unchanged, and a percent lag is never elapsed.
+    let l: Link = serde_json::from_str(r#"{"pred":1,"kind":"FS","lag":960}"#).unwrap();
+    assert!(!l.elapsed && serde_json::to_string(&l).unwrap() == r#"{"pred":1,"kind":"FS","lag":960}"#);
+    assert_eq!(crate::parse::lag("+50%", 480), Ok((50, true, false)));
+    assert_eq!(crate::parse::lag("-1.5ed", 480), Ok((-2160, false, true)));
+    assert!(crate::parse::preds("1FS+7e", &[1], 480).is_err());
+}
+
+// The details pane edits a link's lag with LinkSet: an elapsed lag there too.
+#[test]
+fn an_elapsed_lag_set_in_the_details_pane() {
+    let mut dc = crate::doc::Doc::new(build(&["5d||", "2d||"], |_| {}));
+    let (a, b) = (dc.p.tasks[0].uid, dc.p.tasks[1].uid);
+    dc.apply(crate::doc::Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "7ed".into() }, "%d-%b-%y").unwrap();
+    assert_eq!(dates(&dc.p)[1], "Nov16 08:00 Nov17 17:00 0");
+    dc.apply(crate::doc::Op::LinkSet { pred: a, succ: b, kind: Some(LinkType::FS), lag: "7d".into() }, "%d-%b-%y").unwrap();
+    assert!(!dc.p.tasks[1].preds[0].elapsed);
+    // 7 working days from Fri 6 17:00 end Tue 17 17:00.
+    assert_eq!(dates(&dc.p)[1], "Nov18 08:00 Nov19 17:00 0");
 }

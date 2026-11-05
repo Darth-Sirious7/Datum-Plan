@@ -99,8 +99,8 @@ pub fn run(c: &Calc, lim: &Limits) -> Vec<Check> {
     let done = all.iter().filter(|&&i| c.pct[i] == 100).count();
     let bei = if due > 0 { done as f64 / due as f64 } else { 1.0 };
     out.push(Check { key: "bei", name: "14. BEI", about: "Baseline execution index: tasks finished ÷ tasks due by the status date in the baseline.", count: done, total: due, value: bei, limit: format!("≥ {}", lim.index), pass: bei >= lim.index, uids: vec![] });
-    // Checks that the DCMA list does not cover.
-    ratio(&mut out, p, "longlag", "Long lags", "Lags longer than the limit.", &open, dedup(links.iter().filter(|e| e.lag as f64 > lim.long_lag * day).map(|e| e.s).collect()), 0.0);
+    // Checks that the DCMA list does not cover. An elapsed lag counts as its share of a working week (7 elapsed days are 5 days).
+    ratio(&mut out, p, "longlag", "Long lags", "Lags longer than the limit.", &open, dedup(links.iter().filter(|e| e.lag as f64 * if e.el { 5.0 * day / (7.0 * 1440.0) } else { 1.0 } > lim.long_lag * day).map(|e| e.s).collect()), 0.0);
     ratio(&mut out, p, "sf", "Start-to-finish links", "SF links are rarely right.", &open, dedup(links.iter().filter(|e| e.kind == LinkType::SF).map(|e| e.s).collect()), 0.0);
     ratio(&mut out, p, "soft", "Soft constraints", "Start/Finish No Earlier Than and As Late As Possible.", &open,
         open.iter().copied().filter(|&i| matches!(p.tasks[i].constraint, Constraint::SNET | Constraint::FNET | Constraint::ALAP)).collect(), lim.pct);

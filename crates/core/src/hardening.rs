@@ -154,6 +154,7 @@ fn decorate(r: &mut Rng, p: &mut Project) {
             5 => t.cal = Some("Four tens".into()),
             6 => t.splits = vec![(t.dur / 2, 480)],
             7 => t.elapsed = true,
+            8 => t.preds.iter_mut().for_each(|l| (l.lag, l.elapsed) = (l.lag * 3, true)),
             _ => {}
         }
     }
@@ -165,7 +166,7 @@ fn links_hold_and_the_forward_pass_is_tight() {
     for round in 0..400 {
         let n = 2 + r.below(30) as usize;
         let mut p = random_plan(&mut r, n, false);
-        let free = round % 2 == 0; // half the plans have constraints, calendars, splits and elapsed tasks
+        let free = round % 2 == 0; // half the plans have constraints, calendars, splits, elapsed tasks and lags
         if !free { decorate(&mut r, &mut p) }
         let Ok(s) = schedule(&p) else { panic!("round {round}: a plan without loops failed") };
         let start = s.cals[0].next_start(crate::cal::at(p.start));
@@ -174,7 +175,8 @@ fn links_hold_and_the_forward_pass_is_tight() {
             let plain = t.constraint == Constraint::ASAP && t.cdate.is_none();
             let mut tight = s.es[i] == start || !plain;
             for e in s.edges.iter().filter(|e| e.s == i) {
-                let lc = &s.cals[s.ci[e.s]];
+                // Lags count on the successor's calendar; elapsed ones on the 24-hour calendar after the plan's.
+                let lc = &s.cals[if e.el { p.calendars.len() } else { s.ci[e.s] }];
                 let (from, to) = match e.kind {
                     LinkType::FS => (lc.add(s.ef[e.p], e.lag), s.es[i]),
                     LinkType::SS => (lc.add(s.es[e.p], e.lag), s.es[i]),
@@ -342,7 +344,7 @@ fn hostile_values_never_panic() {
     run("zero-length day", &|p| p.day_min = 0);
     run("day longer than a day", &|p| p.day_min = 100_000);
     run("nan costs", &|p| { p.tasks[1].fixed_cost = f64::NAN; p.tasks[1].qty = f64::INFINITY });
-    run("every task linked to itself", &|p| { for t in &mut p.tasks { let u = t.uid; t.preds.push(Link { pred: u, kind: LinkType::FS, lag: 0, pct: false }) } });
+    run("every task linked to itself", &|p| { for t in &mut p.tasks { let u = t.uid; t.preds.push(Link { pred: u, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) } });
     run("exception span", &|p| p.calendars[0].exceptions.push(Exception { name: "x".into(), from: NaiveDate::from_ymd_opt(1, 1, 1).unwrap_or_default(), to: NaiveDate::from_ymd_opt(9999, 1, 1).unwrap_or_default(), hours: vec![] }));
 }
 
@@ -395,7 +397,7 @@ fn extreme_edits_never_panic() {
     let base = sample();
     let (a, b) = (base.tasks[1].uid, base.tasks[2].uid);
     let mut evil = base.tasks[1].clone();
-    (evil.uid, evil.dur, evil.level, evil.preds) = (u32::MAX, i64::MAX, 250, vec![Link { pred: u32::MAX, kind: LinkType::SF, lag: i64::MIN, pct: false }]);
+    (evil.uid, evil.dur, evil.level, evil.preds) = (u32::MAX, i64::MAX, 250, vec![Link { pred: u32::MAX, kind: LinkType::SF, lag: i64::MIN, pct: false, elapsed: false }]);
     let ops = vec![
         Op::Insert { at: usize::MAX, name: "x".repeat(100_000), ms: false },
         Op::InsertRows { at: usize::MAX, rows: vec![vec![("dur".into(), "99999999d".into()), ("name".into(), "x".into())]; 2000] },
@@ -584,7 +586,7 @@ fn filling_progress_down_a_range_is_fast() {
     let mut p = Project::new("F", start());
     for i in 0..3000 {
         let mut t = p.new_task(&format!("T{i}"), 0, 480);
-        if i > 0 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false }) }
+        if i > 0 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
         p.tasks.push(t);
     }
     let mut d = Doc::new(p);
@@ -604,7 +606,7 @@ fn dates_at_the_end_of_the_calendar_stay_in_order() {
     for i in 0..3 { let t = p.new_task(&format!("T{i}"), 0, 5 * 480); p.tasks.push(t); }
     p.tasks[1].act_start = Some(cal::hi());
     p.tasks[1].pct = 50;
-    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2400, pct: false }];
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2400, pct: false, elapsed: false }];
     let s = schedule(&p).unwrap();
     assert!((0..3).all(|i| s.es[i] <= s.ef[i] && s.ls[i] <= s.lf[i]), "{:?}", (&s.es, &s.ef));
     let c = cal::WorkCal::new(&p.calendars[0]);
