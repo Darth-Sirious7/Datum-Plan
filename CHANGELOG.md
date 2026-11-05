@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.26 — 2026-11-05
+
+Sheets move between plans, a clearer project tab group, and the open items from 0.5.25 closed.
+
+- **Move a sheet to another plan:** right-click a sheet tab › **Move to Plan**, or **Move or Copy…** › **To plan**. The sheet goes, with its pictures and frozen panes, to another open plan, for example from the master to one of its subplans. Its formulas on plan data then read that plan. The message counts formulas that read other sheets of the first plan.
+- **Project tabs:** a project's open plans sit in one framed group with the project's name. The master comes first with a **Master** badge, and its subplans follow with **Sub** badges.
+- **Sheets:**
+  - **Alt+Enter** for several lines in a cell.
+  - **Links:** web and e-mail addresses and `=HYPERLINK()` show as links. Ctrl+click opens them after showing the full address. **Link…** (Ctrl+K in a sheet) adds or edits one.
+  - **Defined names** with a **Name Manager**: use them in any sheet formula and in dashboard tiles.
+  - **Data Validation:** whole numbers, decimals, dates, times and text length within limits. Each rule has an input message and a stop or warn error, and **Circle Invalid Data** marks cells that break their rules.
+  - Inserting or deleting cells, and Remove Duplicates, now also move conditional formatting, filters and validation.
+  - All of these go into an exported workbook and come back from one.
+- **Scheduling:**
+  - **Elapsed lags** such as `4FS+7ed`: calendar time, weekends included, as for curing. They go to and from Project XML.
+  - **Usage hours split at the status date:** a started task's work done sits between its actual start and the status date, and the remaining work runs from there to the finish. This applies in Task and Resource Usage, the resource graph, period hours and the cost curve.
+
 ## 0.5.25 — 2026-11-05
 
 Sheets that work like a full spreadsheet, a simpler ribbon, and a night of bug fixing across the app (more than 70 fixes, each with a test).

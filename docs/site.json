@@ -35,7 +35,7 @@
     "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",
     "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide).",
     "A guided tutorial: an example plan that uses every view, with a note on each saying how it was filled in (Help › Tutorial).",
-    "Sheets with the tools of a spreadsheet (fonts, borders, merged cells, cell styles, row heights, pictures) that read the plan live: click cells into formulas, 490 functions suggested as you type, plan data by name (Tasks[Finish], ProjectFinish, SPI), live task lists, country flags, notes, filters, drop-down lists and a Format Cells dialog, each sheet's own print setup with pages set by dragging the page breaks, and zoom.",
+    "Sheets with the tools of a spreadsheet (fonts, borders, merged cells, cell styles, row heights, pictures) that read the plan live: click cells into formulas, 490 functions suggested as you type, plan data by name (Tasks[Finish], ProjectFinish, SPI), live task lists, country flags, notes, filters, data validation, links, defined names and a Format Cells dialog, each sheet's own print setup with pages set by dragging the page breaks, and zoom.",
     "Your own dashboards: numbers, progress rings, charts, tables and country flags from the plan and your sheets, laid out as you like, several per plan.",
     "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
     "Logos and pictures kept in the plan file, by party (client, your company, vendors, sub-vendors), for print headers, dashboards and sheets.",

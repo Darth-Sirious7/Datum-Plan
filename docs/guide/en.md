@@ -116,7 +116,7 @@ There are four link types. Most links are Finish-to-Start.
 | Finish-to-Finish | FF | B finishes after A finishes. Example: documentation finishes with the build. |
 | Start-to-Finish | SF | B finishes after A starts. Rare; used for hand-overs between shifts. |
 
-A **lag** adds waiting time (`4FS+2d`: two days after task 4 finishes); a negative lag is a lead (`4FS-1d`: one day before). A lag can also be a share of the predecessor's duration (`4SS+50%`).
+A **lag** adds waiting time (`4FS+2d`: two days after task 4 finishes); a negative lag is a lead (`4FS-1d`: one day before). A lag can also be a share of the predecessor's duration (`4SS+50%`), or elapsed time that runs day and night, weekends included (`4FS+7ed`: seven calendar days, for example concrete curing).
 
 ### Constraints and deadlines
 
@@ -384,10 +384,14 @@ When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format
 - **Format Cells…** ([[Ctrl+1]]) has five tabs: **Number** (General, Number with decimals and the 1,000 separator, Currency, Percentage, Date, Time, Text, Country with flag, Custom, with the format code shown), **Alignment**, **Font**, **Border** and **Fill**. It changes only what you touched, in one step.
 - **Notes:** **New Note** ([[Shift+F2]]) writes a note on the cell; a red corner marks it and pointing at the cell shows it. Notes move with sorting and inserted cells, and go into an exported workbook as notes.
 - **Filter** ([[Ctrl+Shift+L]]) puts a button on each heading of the list around the cell. A button sorts, ticks the values to show (with a search box and blanks), or sets a condition: equals, greater than, between, contains, begins or ends with, blank, top N, above or below average. **Clear Filter** shows every row again. Copy, Clear and formatting skip the rows the filter hides. The filter goes into an exported workbook and comes back.
-- **Drop-down List:** the values to choose from, typed in or read from cells (also on another sheet, for example `Lists!A1:A9`). An arrow shows on the cell; [[Alt+Down]] opens it. Other values are refused, unless **Only warn** is ticked.
+- **Data Validation…:** what a cell may hold. A **list** (the values typed in or read from cells, also on another sheet, for example `Lists!A1:A9`; an arrow shows on the cell and [[Alt+Down]] opens it), a **whole number**, **decimal**, **date**, **time** or **text length** between, above or below limits (values or cells). An optional message shows while the cell is selected; a wrong value is refused (**Stop**) or asked about (**Warn**). **Circle Invalid Data** rings the cells that already break their rules.
 - **Remove Duplicates…** (Home › Sort) removes repeated rows, comparing the columns you choose.
 - **Find All** lists every match to click through; **Look in** chooses the values shown or the formulas typed, and **Every sheet** searches all the tabs.
-- **Go To:** [[F5]] or [[Ctrl+G]], or type an address in the box left of the formula bar (B12, A1:D20, Sheet2!A1).
+- **Go To:** [[F5]] or [[Ctrl+G]], or type an address in the box left of the formula bar (B12, A1:D20, Sheet2!A1), or a defined name.
+- **Several lines in a cell:** [[Alt+Enter]] while typing starts a new line; the row grows to show them.
+- **Links:** a typed web or e-mail address, or `=HYPERLINK(address, text)`, shows as a link. [[Ctrl]]+click (or right-click › **Open Link**) shows the full address and opens it in your browser. **Link…** ([[Ctrl+K]] in a sheet) adds or edits one.
+- **Defined names:** **Define Name…** names the selected cells or a value (`Rates`, `VAT = 0.05`) to use in any sheet formula and in dashboard tiles; the **Name Manager** lists, edits and deletes them. Names go into an exported workbook.
+- **Move a sheet to another plan:** right-click the sheet tab › **Move to Plan**, or **Move or Copy…** › **To plan**, sends the sheet to another open plan, for example from the master to a subplan, with its pictures. Its formulas on plan data (Tasks[…], ProjectFinish…) then read that plan; the message says if some formulas read other sheets of the first plan. Save both plans to keep the change.
 
 In **Page Breaks** view you set the pages by hand, on the cells:
 
@@ -469,7 +473,7 @@ Every plan you open or create gets a tab, in the row between the ribbon and the 
 
 A large job is one **project** made of plans: a **master plan** (often milestones) and its **subplans**, each in its own file, kept next to the master. The master keeps the list.
 
-1. **The project's tabs sit together, in one colour.** ◆ marks the master, › its subplans (» a subplan under another). A plan outside the project keeps a plain tab. When a subplan is open without its master, **Open master** appears beside the tabs.
+1. **A project's tabs sit in one framed group**, in the project's colour, with **Project · name** on the frame. The master comes first with a filled **Master** badge; its subplans follow with an outlined **Sub** badge (↳ for a subplan under another). A plan outside the project keeps a plain tab. When a subplan is open without its master, **Open master** appears beside the tabs.
 2. **Project › Subplans** shows the project's plans.
 3. Each subplan with its dates, % complete, number of tasks and whether it is open. **Show** or **Open** goes to it; × takes it out of the project (its file is kept).
 4. **↑ ↓** change the order; **Indent** puts a subplan under the one above (for example two engineering plans under Engineering), **Outdent** moves it back up.
