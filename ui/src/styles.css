@@ -1064,3 +1064,10 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .tbl.names tr.on td { background: var(--sel); }
 .tbl.names tr { cursor: pointer; }
 .tbl.names code { font-size: 11.5px; }
+
+/* Apply Setup to Subplans */
+.sharesetup { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; margin: 8px 0; }
+.sharesetup > div { display: flex; flex-direction: column; gap: 6px; }
+.sharesetup .chk { align-items: flex-start; gap: 6px; }
+.sharesetup small { display: block; font-size: 11.5px; }
+.sharesetup .btn { margin-top: 4px; }

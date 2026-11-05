@@ -29,6 +29,8 @@ pub enum Op {
     Snapshot { label: String, comment: String },
     /// Sets a project-level value (setup, currency, branding, options) from JSON.
     ProjectSet { field: String, value: serde_json::Value },
+    /// Takes the ticked parts of another plan's setup (a master's, for its subplans): details, logos, print, calendars, currency, periods, codes.
+    AdoptSetup { from: Box<Project>, parts: Vec<String> },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
     FieldDef { def: CustomDef },
     /// Deletes a custom field: its definition and every task's value.
@@ -754,6 +756,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             let total = leaf.iter().map(|&i| cost[i]).sum();
             p.snapshots.push(Snapshot { date: Some(p.status.unwrap_or_else(|| date_of(s.start))), label, comment, finish: s.finish, pct, cost: total, rows });
         }
+        Op::AdoptSetup { from, parts } => crate::setupshare::adopt(p, &from, &parts)?,
         Op::ProjectSet { field, value } => {
             let mut v = serde_json::to_value(&*p).map_err(|e| e.to_string())?;
             if v.get(&field).is_none() || matches!(field.as_str(), "tasks" | "resources" | "format" | "next_uid") {

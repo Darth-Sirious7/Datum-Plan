@@ -68,7 +68,7 @@ export const linkMenu = async (e: MouseEvent, uid: number) => {
 const tabMenu = (e: MouseEvent, k: number) => {
   const t = out()!.tabs[k], g = groupOf(k);
   openMenu(e, [
-    ...(t.role === "master" ? [{ label: "Open All Subplans", run: () => showTab(k).then(openAll) }, { label: "New Subplan…", run: () => showTab(k).then(newSubplan) }, { label: "Subplans…", run: () => showTab(k).then(subplans) }, "-" as const] : []),
+    ...(t.role === "master" ? [{ label: "Open All Subplans", run: () => showTab(k).then(openAll) }, { label: "Apply Setup to Subplans…", run: () => showTab(k).then(shareSetup) }, { label: "New Subplan…", run: () => showTab(k).then(newSubplan) }, { label: "Subplans…", run: () => showTab(k).then(subplans) }, "-" as const] : []),
     ...(t.role === "sub" && t.group < 0 && t.project ? [{ label: `Open Master (“${t.project}”)`, run: () => goToLink(`${t.project}.dplan`, 0) }, "-" as const] : []),
     { label: "Close", run: () => closeTab(k) },
     ...(g >= 0 ? [{ label: `Close Project (“${out()!.tabs[g].name}”)`, run: () => closeProject(g) }] : []),
@@ -106,6 +106,49 @@ export const openAll = async () => {
   if (!r) return;
   setOut(r[0]); useTable(table());
   if (r[1].length) toast(`Not found next to the master: ${r[1].join(", ")}. Subplans… shows where they were.`);
+};
+/** The parts of a master's setup it can give to its subplans (the engine's `setupshare::PARTS`). */
+const SETUP_PARTS: [string, string, string][] = [
+  ["details", "Project details", "Client, manager, company, location and the company logo"],
+  ["logos", "Logos and pictures", "The master's picture library; each plan's own pictures stay"],
+  ["print", "Print header, footer & page setup", "Pictures, paper, margins, footer; each plan keeps its own title and subtitle"],
+  ["calendars", "Calendars & working time", "The master's calendars (same names are replaced) and its project calendar"],
+  ["currency", "Currency", "Symbol, code and decimals"],
+  ["periods", "Reporting periods", "Week end, month end and how progress is weighted"],
+  ["codes", "Activity codes & custom fields", "Their definitions and values lists (same names are replaced)"],
+];
+const SETUP_KEY = "datum.shareSetup";
+/** Project › Apply Setup to Subplans: tick what the master gives, tick the subplans, OK. Name, code and description stay each plan's own. */
+export const shareSetup = () => {
+  const me = out()?.tab ?? 0;
+  if (out()?.tabs[me]?.role !== "master") return toast("Open the master plan's tab first: its setup goes to its subplans.");
+  let saved: string[] = ["details", "logos", "print"];
+  try { const v = JSON.parse(localStorage.getItem(SETUP_KEY) ?? "null"); if (Array.isArray(v)) saved = v; } catch { /* no storage */ }
+  openDialog(() => {
+    const subs = () => (out()?.tabs ?? []).map((t, k) => [k, t] as [number, TabInfo]).filter(([k, t]) => k !== me && t.role === "sub" && t.group === me);
+    const closed = () => Math.max(0, (P().subplans?.length ?? 0) - subs().length);
+    const [parts, setParts] = createSignal(saved), [tabs, setTabs] = createSignal(subs().map(([k]) => k));
+    const flip = <T,>(l: T[], x: T) => (l.includes(x) ? l.filter(y => y !== x) : [...l, x]);
+    const ok = async () => {
+      if (!parts().length || !tabs().length) { toast("Tick at least one part and one subplan."); return false; }
+      try { localStorage.setItem(SETUP_KEY, JSON.stringify(parts())); } catch { /* no storage */ }
+      const r = await call<[Out, string]>("share_setup", { parts: parts(), tabs: tabs() });
+      if (r) { setOut(r[0]); toast(r[1], true); }
+    };
+    return (
+      <Dialog title="Apply Setup to Subplans" wide help="subplans" okText="Apply" ok={ok}>
+        <p>Give the subplans this master's setup. Each keeps its own <b>name, code and description</b>, and its own logos.</p>
+        <div class="sharesetup">
+          <div><b>What to give</b>
+            <For each={SETUP_PARTS}>{([k, l, d]) => <label class="chk" title={d}><input type="checkbox" checked={parts().includes(k)} onChange={() => setParts(flip(parts(), k))} /><span>{l}<small class="muted">{d}</small></span></label>}</For></div>
+          <div><b>To these subplans</b>
+            <For each={subs()} fallback={<p class="muted">No subplan of this master is open.</p>}>{([k, t]) => <label class="chk"><input type="checkbox" checked={tabs().includes(k)} onChange={() => setTabs(flip(tabs(), k))} />{t.name}</label>}</For>
+            <Show when={closed()}><p class="muted">{closed()} subplan{closed() > 1 ? "s are" : " is"} not open. <button class="btn" onClick={async () => { await openAll(); setTabs(subs().map(([k]) => k)); }}>Open All</button></p></Show></div>
+        </div>
+        <p class="muted">The subplans change in their tabs; save them to keep it. Each one can undo it on its own.</p>
+      </Dialog>
+    );
+  });
 };
 /** After opening a plan: a master offers to open its subplans too. */
 export const afterOpen = () => {
@@ -157,7 +200,7 @@ export const subplans = () => openDialog(() => {
   const add = async () => { const o = await call<Out | null>("add_subplan"); if (o) { setOut(o); useTable(table()); refetch(); } };
   const master = () => P().master;
   return (
-    <Dialog title="Subplans" wide help="subplans" extra={<Show when={!master()}><button class="btn" onClick={() => { closeDialog(); newSubplan(); }}>New Subplan…</button><button class="btn" onClick={add}>Add Existing…</button><button class="btn pri" disabled={!list().length} onClick={() => { closeDialog(); openAll(); }}>Open All</button></Show>}>
+    <Dialog title="Subplans" wide help="subplans" extra={<Show when={!master()}><button class="btn" onClick={() => { closeDialog(); newSubplan(); }}>New Subplan…</button><button class="btn" onClick={add}>Add Existing…</button><button class="btn pri" disabled={!list().length} onClick={() => { closeDialog(); openAll(); }}>Open All</button><button class="btn" disabled={!list().length} onClick={() => { closeDialog(); shareSetup(); }}>Apply Setup to Subplans…</button></Show>}>
       <Show when={!master()} fallback={<>
         <p>“{P().name}” is a subplan of <b>{master()!.replace(/\.dplan$/i, "")}</b>. The master keeps the project's list of plans, their order and hierarchy.</p>
         <p><button class="btn pri" onClick={() => { closeDialog(); goToLink(master()!, 0); }}>Open the master</button></p></>}>

@@ -495,6 +495,25 @@ async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Ve
     Ok(Some((out(&a), names)))
 }
 
+/// The ticked parts of the shown plan's setup (a master's) given to the open plans in `tabs`
+/// (its subplans): each keeps its own name, code, description and pictures, and undoes it on its own.
+#[tauri::command]
+fn share_setup(st: State<St>, parts: Vec<String>, tabs: Vec<usize>) -> R<(Out, String)> {
+    let mut a = st.lock();
+    if parts.is_empty() || tabs.is_empty() { return Err("Tick at least one part and one subplan.".into()) }
+    let from = Box::new(a.doc.p.clone());
+    let cur = a.cur as i64;
+    // Only this master's own subplans take its setup.
+    let subs: Vec<usize> = tab_list(&a).iter().enumerate().filter(|(_, t)| t.role == "sub" && t.group == cur).map(|(k, _)| k).collect();
+    let mut names = vec![];
+    for &k in tabs.iter().filter(|k| subs.contains(k)) {
+        apply_at(&mut a, k, Op::AdoptSetup { from: from.clone(), parts: parts.clone() })?;
+        names.push(docs(&a)[k].p.name.clone());
+    }
+    if names.is_empty() { return Err("Open the subplans first (Project › Subplans › Open All).".into()) }
+    Ok((out(&a), format!("Setup given to {}: {}. Save them to keep it; each can undo it on its own.", if names.len() == 1 { "1 plan".into() } else { format!("{} plans", names.len()) }, names.join(", "))))
+}
+
 /// Moves or copies sheet `k` of the plan shown into the open plan in tab `to` (a master's sheet into
 /// one of its subplans): it lands as that plan's last sheet, with its pictures and panes. Each plan
 /// undoes its own part. Says how many formulas read other sheets of this plan.
@@ -1543,7 +1562,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, copy, paste,
+            state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
             query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])

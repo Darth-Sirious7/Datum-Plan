@@ -18,6 +18,7 @@ pub mod report;
 pub mod risk;
 pub mod sched;
 pub mod sheet;
+pub mod setupshare;
 pub mod sheetmove;
 pub mod sheetx;
 pub mod templates;

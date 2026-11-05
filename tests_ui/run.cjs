@@ -469,6 +469,14 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const pm = await p.textContent(".menu");
   check("a master's tab menu offers Open All Subplans, New Subplan and Close Project", ["Open All Subplans", "New Subplan", "Close Project"].every(t => pm.includes(t)), pm);
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  // 0.5.28: the master gives its setup (ticked parts) to the ticked subplans; name and code stay theirs.
+  await p.click(".plantabs .plantab >> nth=0", { button: "right" }); await p.waitForTimeout(200);
+  await p.click(".menu button:has-text('Apply Setup to Subplans')"); await p.waitForTimeout(300);
+  const ssd = await p.textContent(".dlg");
+  check("Apply Setup to Subplans ticks the parts and the open subplans, and says name and code stay", (await p.$$(".dlg .sharesetup label.chk")).length === 8 && ssd.includes("Engineering") && ssd.includes("name, code and description") && ssd.includes("not open"), ssd.slice(0, 300));
+  if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-sharesetup.png") });
+  await p.click(".dlg label.chk:has-text('Currency') input"); await p.click(".dlg .btn.pri:text-is('Apply')"); await p.waitForTimeout(300);
+  check("Apply sends the ticked parts to the ticked subplans", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "share_setup").pop()?.[1])) === JSON.stringify({ parts: ["details", "logos", "print", "currency"], tabs: [1] }) && !(await p.$(".dlg")));
   await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
   await p.click(".ribbon button:has-text('Subplans')"); await p.waitForTimeout(300);
   const sp = await p.textContent(".dlg");

@@ -1,5 +1,5 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
-import { linkSelected, linkedPlans, updateLinks, subplans } from "./plans";
+import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
 import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
 import { C, ALL_CMDS } from "./cmds";
@@ -282,7 +282,7 @@ export const Ribbon = () => (
       <G l="Properties" h="project"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="fields" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S><S><B i="image" l="Pictures" title="The plan's pictures: logos of the client, your company, vendors and sub-vendors" run={() => import("./pictures").then(m => m.pictureLibrary())} /></S>
         <S><B i="setup" l="Project Setup" run={C.setup} on={view() === "setup"} /><B i="opts" l="Schedule Options" run={() => D.scheduleOptions()} /></S></G>
       <G l="Schedule" h="baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
-      <G l="Linked Plans" h="linkedplans"><B big i="link" l="Link to Plan" title="Link the selected task to a task in another plan" run={() => linkSelected()} /><S><B i="list" l="Linked Plans" run={linkedPlans} /><B i="update" l="Update Links" run={() => updateLinks(true)} /><B i="proj" l="Subplans" title="The plans that make up this project: the master and its subplans" run={subplans} /></S></G>
+      <G l="Linked Plans" h="linkedplans"><B big i="link" l="Link to Plan" title="Link the selected task to a task in another plan" run={() => linkSelected()} /><S><B i="list" l="Linked Plans" run={linkedPlans} /><B i="update" l="Update Links" run={() => updateLinks(true)} /><B i="proj" l="Subplans" title="The plans that make up this project: the master and its subplans" run={subplans} /></S><S><B i="copy" l="Apply Setup to Subplans" title="Give the subplans this master's details, logos, print header and footer, calendars, currency, periods or codes; each keeps its own name and code" run={shareSetup} /></S></G>
       <G l="Proofing" h="portfolio"><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
     </Show>
     <Show when={tab() === "view"}>

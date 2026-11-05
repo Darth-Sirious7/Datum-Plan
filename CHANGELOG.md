@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.28 — 2026-11-05
+
+A master's setup goes to its subplans in one step.
+
+- **Project › Apply Setup to Subplans** (also on the master's tab menu and in **Subplans**): tick what to give and the subplans to give it to, then **Apply**. The parts are project details (client, manager, company, location, logo), logos and pictures, the print header, footer and page setup, calendars and working time, currency, reporting periods, and activity codes and custom fields.
+- Each subplan keeps its own **name, code and description**, its print title and subtitle, and its own logos; the master's pictures are added beside them once, and the header points at the subplan's copy.
+- The subplans change in their open tabs: save them to keep it, or undo it in any one of them. A note offers **Open All** when some subplans are closed. The ticked parts are remembered.
+
 ## 0.5.27 — 2026-11-05
 
 The last open items closed, and Ctrl+K back to Tell Me everywhere.

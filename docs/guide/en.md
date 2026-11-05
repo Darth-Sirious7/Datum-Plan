@@ -481,7 +481,9 @@ A large job is one **project** made of plans: a **master plan** (often milestone
 
 To start a project from scratch: save your master plan, then **Project › Subplans › New Subplan…** for each part (Engineering, Procurement…). Then link them: in the master, select a milestone and **Project › Link to Plan** to the subplan's task it waits for. The order and hierarchy only arrange the plans; dates always come from links.
 
-Opening a master offers to open its subplans. A tab's right-click menu has **Open All Subplans**, **New Subplan…** and **Close Project** (the master and its open subplans).
+Opening a master offers to open its subplans. A tab's right-click menu has **Open All Subplans**, **Apply Setup to Subplans…**, **New Subplan…** and **Close Project** (the master and its open subplans).
+
+**Project › Apply Setup to Subplans** gives the subplans the master's setup, so you fill it in once. Tick what to give (project details, logos and pictures, the print header, footer and page setup, calendars, currency, reporting periods, activity codes and custom fields) and the open subplans to give it to, then **Apply**. Each subplan keeps its own name, code, description, print title and logos. Save the subplans to keep the change; each can undo it on its own.
 
 ### The combined view
 
