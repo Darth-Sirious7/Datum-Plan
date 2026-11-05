@@ -1,6 +1,7 @@
-//! Sheets as lists: the AutoFilter (which rows a filter hides) and drop-down lists (the values a
-//! cell may take). The window shows the result; what a cell shows comes from `sheet::sheet_view`.
-use crate::model::{sheet_range, ColFilter, SheetData};
+//! Sheets as lists: the AutoFilter (which rows a filter hides), data validation (the values a cell
+//! may take), links in cells and defined names. The window shows the result; what a cell shows comes
+//! from `sheet::sheet_view`.
+use crate::model::{sheet_range, ColFilter, DefName, SheetData, Validation};
 use gridcraft_core::{CellRef, Value};
 use std::collections::{BTreeSet, HashMap};
 
@@ -85,6 +86,84 @@ pub fn for_view(s: &SheetData, cells: &[(String, String, String, bool, Option<f6
     (filtered(s, get), lists(s, |r, c| get(r, c).0, other))
 }
 
+/// What validated cells can take besides a list: whole numbers, decimals, dates, times, a text length, anything (a message only).
+pub const VALID_KINDS: [&str; 6] = ["whole", "decimal", "date", "time", "len", "any"];
+/// How a validated value compares with `a` (and `b`).
+pub const VALID_OPS: [&str; 8] = ["between", "notbetween", "eq", "ne", "gt", "lt", "ge", "le"];
+
+/// Whether `n` passes the comparison `op` with `a` and `b` (a bound that could not be read fails).
+pub fn compare(op: &str, n: f64, a: Option<f64>, b: Option<f64>) -> bool {
+    let Some(a) = a else { return false };
+    match op {
+        "" | "between" => b.is_some_and(|b| n >= a.min(b) && n <= a.max(b)),
+        "notbetween" => b.is_some_and(|b| n < a.min(b) || n > a.max(b)),
+        "eq" => n == a, "ne" => n != a, "gt" => n > a, "lt" => n < a, "ge" => n >= a, "le" => n <= a,
+        _ => true,
+    }
+}
+
+/// Whether a value passes a validation: `text` as typed or shown, `n` its number, `lo` and `hi` the
+/// bounds worked out, `list` the drop-down's values. Blank cells always pass.
+pub fn valid(v: &Validation, text: &str, n: Option<f64>, lo: Option<f64>, hi: Option<f64>, list: &[String]) -> bool {
+    if text.trim().is_empty() { return true }
+    match v.kind.as_str() {
+        "" => list.iter().any(|x| x.eq_ignore_ascii_case(text.trim())),
+        "any" => true,
+        "len" => compare(&v.op, text.chars().count() as f64, lo, hi),
+        k => n.is_some_and(|n| (k != "whole" || n.fract() == 0.0) && (k != "time" || (0.0..1.0).contains(&n)) && compare(&v.op, n, lo, hi)),
+    }
+}
+
+/// The message when a value is refused: the validation's own, or what the cell takes.
+pub fn message(v: &Validation) -> String {
+    if !v.error.trim().is_empty() { return v.error.trim().to_string() }
+    let what = match v.kind.as_str() { "" => return "This cell takes a value from its list.".into(), "whole" => "a whole number", "decimal" => "a number", "date" => "a date", "time" => "a time", "len" => "text whose length is", _ => "a value" };
+    let (a, b) = (v.a.trim().trim_start_matches('='), v.b.trim().trim_start_matches('='));
+    let how = match v.op.as_str() { "notbetween" => format!("not between {a} and {b}"), "eq" => format!("equal to {a}"), "ne" => format!("not equal to {a}"), "gt" => format!("greater than {a}"), "lt" => format!("less than {a}"), "ge" => format!("at least {a}"), "le" => format!("at most {a}"), _ => format!("between {a} and {b}") };
+    let how = if v.kind == "len" { how } else { format!(" {how}") };
+    format!("This cell takes {what}{}{how}.", if v.kind == "len" { " " } else { "" })
+}
+
+/// A link a cell may open: an http, https or mailto address, nothing else (no file:, no scripts), with
+/// no spaces, quotes or control characters, at most 2,000 characters.
+pub fn link(text: &str) -> Option<String> {
+    let t = text.trim();
+    let low = t.to_ascii_lowercase();
+    let ok = ["http://", "https://", "mailto:"].iter().any(|p| low.starts_with(p) && t.len() > p.len() + 1);
+    (ok && t.len() <= 2_000 && !t.chars().any(|c| c.is_whitespace() || c.is_control() || "\"<>`\\^{}|".contains(c))).then(|| t.to_string())
+}
+
+/// The plan's own names, which a defined name may not take.
+pub const PLAN_NAMES: [&str; 23] = ["ProjectName", "ProjectStart", "ProjectFinish", "StatusDate", "BaselineFinish", "FinishVariance", "PercentComplete", "PlannedPercent", "TotalCost", "PlannedValue", "EarnedValue",
+    "ActualCost", "SPI", "CPI", "TaskCount", "TasksDone", "TasksLate", "CriticalCount", "MilestoneCount", "Tasks", "Resources", "Plan", "DatumPlan"];
+
+/// Why a defined name cannot be used (None: it can): it starts with a letter, _ or \, holds only
+/// letters, digits, _ and ., is not a cell address (B12, TAX2026, R1C1) nor one of the plan's names.
+pub fn name_problem(name: &str) -> Option<String> {
+    let n = name.trim();
+    let mut ch = n.chars();
+    if n.is_empty() { return Some("Type a name.".into()) }
+    if n.chars().count() > 255 { return Some("A name has at most 255 characters.".into()) }
+    if !ch.next().is_some_and(|c| c.is_alphabetic() || c == '_' || c == '\\') || !ch.all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '\\') {
+        return Some(format!("{n} is not a valid name: start with a letter or _, then letters, digits, _ or . (no spaces)."));
+    }
+    let up = n.to_ascii_uppercase();
+    let rc = |s: &str| s.is_empty() || s.chars().all(|c| c.is_ascii_digit());
+    let r1c1 = up.strip_prefix('R').is_some_and(|x| x.split_once('C').map_or(rc(x), |(a, b)| rc(a) && rc(b))) || up.strip_prefix('C').is_some_and(rc);
+    if gridcraft_core::CellRef::parse(&up).is_some() || r1c1 || up == "TRUE" || up == "FALSE" { return Some(format!("{n} is a cell address; choose another name.")) }
+    if PLAN_NAMES.iter().any(|x| x.eq_ignore_ascii_case(n)) { return Some(format!("{n} is one of the plan's own names; choose another.")) }
+    None
+}
+
+/// The names a workbook brings, added to the plan's: valid ones only, and none the plan already has.
+pub fn merge_names(have: &[DefName], new: Vec<DefName>) -> Vec<DefName> {
+    let mut out = have.to_vec();
+    for n in new {
+        if name_problem(&n.name).is_none() && !out.iter().any(|x| x.name.eq_ignore_ascii_case(&n.name)) && out.len() < 1_000 { out.push(n) }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +197,44 @@ mod tests {
         assert_eq!(hid(vec![f(2, "above", "")]), vec![1, 2, 3], "average 322.5");
         // Two columns: both must pass.
         assert_eq!(hid(vec![f(1, "eq", "Germany"), f(2, "lt", "50")]), vec![1, 2, 4]);
+    }
+
+    #[test]
+    fn validation_compares_numbers_dates_times_and_lengths() {
+        let v = |kind: &str, op: &str| Validation { kind: kind.into(), op: op.into(), a: "1".into(), b: "10".into(), ..Default::default() };
+        let ok = |x: &Validation, t: &str, n: Option<f64>| valid(x, t, n, x.a.parse().ok(), x.b.parse().ok(), &[]);
+        assert!(ok(&v("whole", ""), "5", Some(5.0)) && !ok(&v("whole", ""), "5.5", Some(5.5)) && !ok(&v("whole", "between"), "11", Some(11.0)));
+        assert!(ok(&v("decimal", "notbetween"), "0.5", Some(0.5)) && !ok(&v("decimal", "notbetween"), "3", Some(3.0)));
+        assert!(ok(&v("decimal", "gt"), "2", Some(2.0)) && !ok(&v("decimal", "lt"), "2", Some(2.0)) && ok(&v("decimal", "le"), "1", Some(1.0)) && ok(&v("decimal", "ne"), "2", Some(2.0)));
+        assert!(!ok(&v("decimal", ""), "abc", None), "text is not a number");
+        assert!(ok(&v("whole", ""), "", None), "a blank cell passes");
+        assert!(!ok(&v("len", "le"), "abc", None) && ok(&v("len", "le"), "a", None) && !ok(&v("len", "lt"), "a", None) && ok(&v("len", "eq"), "a", None) && ok(&v("len", ""), "abcde", None));
+        let t = Validation { kind: "time".into(), op: "ge".into(), a: "0.5".into(), ..Default::default() };
+        assert!(ok(&t, "13:00", Some(13.0 / 24.0)) && !ok(&t, "09:00", Some(0.375)) && !ok(&t, "2", Some(2.0)), "a time is part of a day");
+        assert!(!valid(&v("whole", ""), "5", Some(5.0), None, Some(10.0), &[]), "a bound that cannot be read fails");
+        let l = Validation { list: vec!["Open".into()], ..Default::default() };
+        assert!(valid(&l, "open", None, None, None, &["Open".into()]) && !valid(&l, "Shut", None, None, None, &["Open".into()]));
+        assert_eq!(message(&v("whole", "")), "This cell takes a whole number between 1 and 10.");
+        assert_eq!(message(&Validation { kind: "len".into(), op: "le".into(), a: "=$B$1".into(), ..Default::default() }), "This cell takes text whose length is at most $B$1.");
+        assert_eq!(message(&Validation { error: "Up to 10 only".into(), ..v("whole", "") }), "Up to 10 only");
+    }
+
+    #[test]
+    fn only_web_and_mail_links_open() {
+        assert_eq!(link(" https://example.com/a?b=1#c "), Some("https://example.com/a?b=1#c".into()));
+        assert!(link("HTTP://x.org").is_some() && link("mailto:a@b.com").is_some());
+        for bad in ["file:///C:/x.exe", "javascript:alert(1)", "https://", "http://a b", "https://x\"onmouseover", "ftp://x.org", "\\\\server\\share", "C:\\x.exe", "data:text/html,x", "https://x\u{0}y", "www.example.com"] {
+            assert_eq!(link(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn defined_names_are_checked() {
+        for ok in ["Rates", "VAT", "_x", "Tax.Rate", "Rate2026Q1", "ABCD1", "Ständig"] { assert_eq!(name_problem(ok), None, "{ok}"); }
+        for bad in ["", "2x", "A1", "tax2026", "XFD9", "R1C1", "r", "C", "R2C", "My name", "a-b", "TRUE", "ProjectFinish", "tasks", "SPI"] { assert!(name_problem(bad).is_some(), "{bad}"); }
+        let have = vec![DefName { name: "VAT".into(), formula: "=0.05".into(), ..Default::default() }];
+        let m = merge_names(&have, vec![DefName { name: "vat".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "A1".into(), formula: "=1".into(), ..Default::default() }, DefName { name: "Rate".into(), formula: "=2".into(), ..Default::default() }]);
+        assert_eq!(m.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(), vec!["VAT", "Rate"]);
     }
 
     #[test]

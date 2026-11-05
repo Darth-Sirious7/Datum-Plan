@@ -23,7 +23,7 @@ import type { CondRule } from "./api";
 import { colorPalette } from "./colors";
 import { openDialog } from "./store";
 import * as X from "./sheetcells";
-import type { ColFilter, Validation } from "./api";
+import type { ColFilter, DefName, Validation } from "./api";
 
 const RH = 22, CW = 96, HW = 46;
 const COLORS = ["#2F6FDE", "#D64545", "#7A4FD8", "#1F9D55", "#C77700", "#C2185B"];
@@ -73,7 +73,7 @@ export { sheetK, setSheetK };
 export const Sheets = () => {
   const k = sheetK, setK = setSheetK;
   const [data] = createResource(() => [tick(), k(), P().sheets.length], () => (P().sheets.length ? call<SheetOut>("sheet_view", { k: Math.min(k(), P().sheets.length - 1) }) : undefined));
-  const [cat] = createResource(() => P().fields.length, () => call<Catalog>("sheet_catalog"));
+  const [cat] = createResource(() => `${P().fields.length}|${(P().names ?? []).map(n => `${n.name} ${n.formula} ${n.comment ?? ""}`).join("|")}`, () => call<Catalog>("sheet_catalog"));
   const cells = createMemo(() => new Map((data()?.cells ?? []).map(c => [c[0], c])));
   const sheet = () => P().sheets[k()];
   const looks = createMemo(() => condLooks(sheet(), cells()));
@@ -102,7 +102,7 @@ export const Sheets = () => {
   // Row heights: tops[r] is where row r starts (below the header); a row being dragged uses th.
   const [th, setTh] = createSignal<[number, number] | null>(null);
   // Rows grow to fit a bigger font or wrapped text, unless their height was set by hand.
-  const auto = createMemo(() => autoHeights(sheet(), a => cells().get(a)?.[2] ?? ""));
+  const auto = createMemo(() => autoHeights(sheet(), a => cells().get(a)?.[2] ?? "", cells().keys()));
   const rh = (r: number) => (hidR().has(r) ? 0 : th()?.[0] === r ? th()![1] : sheet()?.heights?.[r] ?? auto().get(r) ?? RH);
   const tops = createMemo(() => { let y = 0; const t = new Array<number>(nrows() + 1); for (let r = 0; r <= nrows(); r++) { t[r] = y; y += rh(r); } return t; });
   const top_ = (r: number) => tops()[Math.min(r, nrows())] ?? r * RH;
@@ -111,7 +111,7 @@ export const Sheets = () => {
   // Merged ranges: the top-left cell shows across the range.
   const merges = createMemo(() => (sheet()?.merges ?? []).map(m => { const [a, b = a] = m.split(":"); const [r0, c0] = parseA1(a), [r1, c1] = parseA1(b); return { r0, c0, r1, c1 }; }));
   const mergeAt = (r: number, c: number) => merges().find(m => r >= m.r0 && r <= m.r1 && c >= m.c0 && c <= m.c1);
-  let box!: HTMLDivElement, cellEl: HTMLInputElement | undefined, barEl!: HTMLInputElement, lastEl: "cell" | "bar" = "cell";
+  let box!: HTMLDivElement, cellEl: HTMLInputElement | HTMLTextAreaElement | undefined, barEl!: HTMLTextAreaElement, lastEl: "cell" | "bar" = "cell";
   const ro = new ResizeObserver(() => setH(box.clientHeight));
   // The shared grid engine's selection (as in the task sheet): several ranges, whole rows and columns.
   const S = createSel(() => [nrows() - 1, ncols()], (r, c) => reveal(r, c));
@@ -160,10 +160,16 @@ export const Sheets = () => {
     // "+A1*2" or "-SUM(B:B)" starts a formula, as in a spreadsheet; "-5" stays a number.
     const v2 = /^[+-](?=[A-Za-z$(])/.test(v) ? `=${v}` : v;
     const val = v2.startsWith("=") && v2.length > 1 ? closeParens(v2) : v2;
-    const li = hm.k === k() ? validAt(hm.r, hm.c) : -1, allowed = li >= 0 ? listOf(li) : [];
-    if (li >= 0 && val && !val.startsWith("=") && !allowed.some(x => x.toLowerCase() === val.toLowerCase())) {
-      if (!sheet().valid![li].warn) { toast(`This cell takes a value from its list: ${allowed.slice(0, 8).join(", ")}${allowed.length > 8 ? "…" : ""}.`); setEdit(v); setHome(hm); return; }
-      toast("That value is not in the cell's list.");
+    const li = hm.k === k() ? validAt(hm.r, hm.c) : -1, vd = li >= 0 ? sheet().valid![li] : undefined, allowed = vd && !vd.kind ? listOf(li) : [];
+    const back = () => { setEdit(v); setHome(hm); };
+    if (vd && !vd.kind && val && !val.startsWith("=") && !allowed.some(x => x.toLowerCase() === val.toLowerCase())) {
+      if (!vd.warn) { toast(vd.error || `This cell takes a value from its list: ${allowed.slice(0, 8).join(", ")}${allowed.length > 8 ? "…" : ""}.`); back(); return; }
+      toast(vd.error || "That value is not in the cell's list.");
+    }
+    // Numbers, dates, times and lengths: the engine checks the value as it will read it.
+    if (vd?.kind && vd.kind !== "any" && val && val !== input(hm.k, hm.r, hm.c)) {
+      const bad = await call<[string, boolean] | null>("sheet_check", { k: hm.k, cell: a1(hm.r, hm.c), input: val });
+      if (bad && (!bad[1] ? (toast(bad[0]), true) : !(await askYes("Data Validation", `${bad[0]} Keep this value anyway?`, "Keep")))) { back(); return; }
     }
     if (move) { const m = mergeAt(hm.r, hm.c), [fr, fc] = m ? [move[0] > 0 ? m.r1 : m.r0, move[1] > 0 ? m.c1 : m.c0] : [hm.r, hm.c]; go(Math.max(0, fr + move[0]), Math.max(0, fc + move[1])); box?.focus(); }
     if (val !== input(hm.k, hm.r, hm.c)) await put([[a1(hm.r, hm.c), val]], hm.k);
@@ -178,7 +184,7 @@ export const Sheets = () => {
     await put(at.map((a, i) => [a, moved?.[i] ?? val]));
     box?.focus();
   };
-  const typed = (e: HTMLInputElement) => batch(() => { setEdit(e.value); setCaret(e.selectionStart ?? e.value.length); setPoint(null); setSug(0); setHideSug(false); });
+  const typed = (e: HTMLInputElement | HTMLTextAreaElement) => batch(() => { setEdit(e.value); setCaret(e.selectionStart ?? e.value.length); setPoint(null); setSug(0); setHideSug(false); });
   const sugs = createMemo((): Suggestion[] => (edit() === null || hideSug() ? [] : suggest(edit()!, caret(), cat())));
   const accept = (s: Suggestion) => { const t = edit()!; setText(t.slice(0, s.from) + s.insert + t.slice(caret()), s.from + s.insert.length); };
   /** The function the caret is in: its signature split into arguments, the current one marked. */
@@ -208,11 +214,13 @@ export const Sheets = () => {
     if (list.length && e.key === "Tab") { e.preventDefault(); accept(list[sug()]); return; }
     if (e.key === "F4") { e.preventDefault(); const [t, c] = cycleAnchor(edit()!, caret()); setText(t, c); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === ";" || e.key === ":")) { e.preventDefault(); const t = edit()!, at = caret(), x = stamp(e.shiftKey); setText(t.slice(0, at) + x + t.slice(at), at + x.length); return; }
+    // Alt+Enter: a line break in the cell (not in a country cell, whose box suggests countries).
+    if (e.key === "Enter" && e.altKey) { e.preventDefault(); const t = edit()!, x = el(); if (x instanceof HTMLTextAreaElement) { const a = x.selectionStart ?? caret(), b = x.selectionEnd ?? a; setPoint(null); setText(t.slice(0, a) + "\n" + t.slice(b), a + 1); } return; }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fillSel(); return; }
     if (e.key === "Enter") { e.preventDefault(); commit([e.shiftKey ? -1 : 1, 0]); }
     else if (e.key === "Tab") { e.preventDefault(); commit([0, e.shiftKey ? -1 : 1]); }
     else if (e.key === "Escape") { e.preventDefault(); if (list.length) setHideSug(true); else cancel(); }
-    else if (quick() && !edit()!.startsWith("=") && e.key.startsWith("Arrow")) { e.preventDefault(); commit(({ ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key]); }
+    else if (quick() && !edit()!.startsWith("=") && !edit()!.includes("\n") && e.key.startsWith("Arrow")) { e.preventDefault(); commit(({ ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key]); }
   };
   const caretOf = (e: Event) => setCaret((e.currentTarget as HTMLInputElement).selectionStart ?? 0);
   const blur = (e: FocusEvent) => { const to = e.relatedTarget as HTMLElement | null; if (to?.closest(".sheetgrid, .fbar, .sheettabs, .dlg, .fhint")) return; if (edit() !== null) commit(null); };
@@ -245,7 +253,7 @@ export const Sheets = () => {
     if (ctrl && e.shiftKey && e.key.toLowerCase() === "l") { e.preventDefault(); return toggleFilter(); }
     if (e.key === "F5" || (ctrl && e.key.toLowerCase() === "g")) { e.preventDefault(); return X.goToDialog(goTo); }
     if (e.shiftKey && e.key === "F2") { e.preventDefault(); return editNote(); }
-    if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); const [r0, c0] = cur(), fb = fbox(); if (fb && r0 === fb.r0 && c0 >= fb.c0 && c0 <= fb.c1) return filterCol(c0); if (validAt(r0, c0) >= 0) return listMenu(); return; }
+    if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); const [r0, c0] = cur(), fb = fbox(); if (fb && r0 === fb.r0 && c0 >= fb.c0 && c0 <= fb.c1) return filterCol(c0); if (validAt(r0, c0) >= 0 && !sheet()?.valid?.[validAt(r0, c0)]?.kind) return listMenu(); return; }
     if (e.key === " " && (ctrl || e.shiftKey) && !(ctrl && e.shiftKey)) { e.preventDefault(); const [r0, c0] = cur(); return ctrl ? S.cols(c0, c0, false, false) : S.rows(r0, r0, false, false); }
     // Ctrl+arrow: to the edge of the data (the next filled cell after a gap, or the last of a filled run).
     const filled = (rr: number, cc: number) => !!cells().get(a1(rr, cc))?.[2];
@@ -275,6 +283,7 @@ export const Sheets = () => {
     if (ctrl && e.key.toLowerCase() === "r") { e.preventDefault(); const [, b, , d] = range(); if (d > b) { const [r0, c0, r1] = range(); setCur([r0, c0]); setEnd([r1, c0]); fillRange(r1, d, true); } return; }
     if (ctrl && ["b", "i", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return F.toggle(e.key.toLowerCase() as "b"); }
     if (ctrl && e.key.toLowerCase() === "a") { e.preventDefault(); S.all(); return; }
+    if (ctrl && e.key.toLowerCase() === "k") { e.preventDefault(); e.stopPropagation(); return editLink(); }
     if (ctrl && (e.key.toLowerCase() === "f" || e.key.toLowerCase() === "h")) { e.preventDefault(); return findDialog(e.key.toLowerCase() === "h"); }
     if (!ctrl && !e.altKey && e.key.length === 1) { e.preventDefault(); startEdit(e.key, cur()[0], cur()[1], true); }
   };
@@ -596,7 +605,8 @@ export const Sheets = () => {
       { label: "Insert…", keys: "Ctrl++", run: () => shiftDlg(false) }, { label: "Delete…", keys: "Ctrl+-", run: () => shiftDlg(true) }, { label: "Clear Contents", keys: "Delete", run: clear }, "-",
       { label: "Sort", icon: "az", sub: [{ label: "Sort A to Z", run: () => sortRows(true) }, { label: "Sort Z to A", run: () => sortRows(false) }, "-", { label: "Custom Sort…", run: customSort }] },
       { label: "Filter", icon: "filter", sub: [{ label: "Filter by Selected Cell's Value", run: filterByValue }, { label: sheet()?.filter ? "Remove Filter" : "Filter", keys: "Ctrl+Shift+L", on: !!sheet()?.filter, run: toggleFilter }, { label: "Clear Filter", off: !sheet()?.filter?.cols.length, run: clearFilter }] },
-      { label: nt ? "Edit Note…" : "New Note…", keys: "Shift+F2", run: editNote }, ...(nt || anyNote() ? [{ label: "Delete Note", run: deleteNotes }] : []), "-",
+      { label: nt ? "Edit Note…" : "New Note…", keys: "Shift+F2", run: editNote }, ...(nt || anyNote() ? [{ label: "Delete Note", run: deleteNotes }] : []),
+      ...(linkOf(cr, cc) ? [{ label: "Open Link", keys: "Ctrl+click", run: () => openLink(linkOf(cr, cc)!) }] : []), { label: linkOf(cr, cc) ? "Edit Link…" : "Link…", icon: "link", keys: "Ctrl+K", run: editLink }, "-",
       { label: "Format Cells…", keys: "Ctrl+1", run: () => formatDlg() },
       { label: "Number Format", sub: fmtItems() },
       { label: "Borders", icon: "bd-all", sub: borderItems() },
@@ -609,7 +619,8 @@ export const Sheets = () => {
       { label: "AutoSum", sub: sumItems() },
       { label: "Insert Function…", run: insertFn },
       { label: "Plan Data…", run: planData },
-      { label: "Drop-down List…", run: editList },
+      { label: "Define Name…", run: defineName },
+      { label: "Data Validation…", run: editList },
     ]);
   };
   // ---------- notes, filter, drop-down lists, sort, go to ----------
@@ -694,6 +705,32 @@ export const Sheets = () => {
     const b = bounds(), i = (sheet()?.valid ?? []).findIndex(v => { const g = cfBounds(v.range); return !!g && g.r0 <= b.r1 && b.r0 <= g.r1 && g.c0 <= b.c1 && b.c0 <= g.c1; });
     X.listDialog(selA1(), i >= 0 ? sheet().valid![i] : undefined, v => (refocus(), act({ Sheet: { k: k(), sheet: { ...sheet(), valid: [...(sheet().valid ?? []).filter((_, j) => j !== i), ...(v ? [v] : [])] as Validation[] } } })));
   };
+  /** The message a validated cell shows while it is selected. */
+  const vmsg = () => { if (edit() !== null) return ""; const i = validAt(...cur()); return i >= 0 ? sheet()?.valid?.[i]?.prompt ?? "" : ""; };
+  // Circle Invalid Data: red rings round the cells that break their rules (the engine says which).
+  const [circles, setCircles] = createSignal(false);
+  const circle = () => { const n = data()?.invalid?.length ?? 0; setCircles(true); toast(n ? `${n} cell${n === 1 ? "" : "s"} break${n === 1 ? "s" : ""} the sheet's data validation.` : "Every value passes the sheet's data validation.", true); };
+  // ---------- links ----------
+  const links = createMemo(() => new Map(data()?.links ?? []));
+  const linkOf = (r: number, c: number) => { const m = mergeAt(r, c); return links().get(m ? a1(m.r0, m.c0) : a1(r, c)); };
+  /** A link opens only after the app's own dialog has shown its full address. */
+  const openLink = (url: string) => X.openLinkDialog(url, () => { call("open_link", { url }); refocus(); });
+  const q = (t: string) => `"${t.replace(/"/g, '""')}"`;
+  const HL = /^=HYPERLINK\(\s*"((?:[^"]|"")*)"\s*(?:,\s*"((?:[^"]|"")*)"\s*)?\)$/i;
+  /** Insert › Link…: a web or mail address in the cell, with the text it shows (as =HYPERLINK). */
+  const editLink = () => {
+    const [r, c] = cur(), id = a1(r, c), inp = input(k(), r, c), m = HL.exec(inp), un = (t?: string) => (t ?? "").replace(/""/g, '"');
+    const now = m ? { url: un(m[1]), text: un(m[2]) } : linkOf(r, c) && !inp.startsWith("=") ? { url: inp, text: "" } : { url: "", text: inp.startsWith("=") ? "" : inp };
+    X.linkDialog(now, x => { refocus(); put([[id, !x ? (now.text || (now.url ? `'${now.url}` : "")) : x.text && x.text !== x.url ? `=HYPERLINK(${q(x.url)},${q(x.text)})` : x.url]]); });
+  };
+  // ---------- defined names ----------
+  const names = () => P().names ?? [];
+  const abs = (r: string) => r.split(":").map(x => x.replace(/^([A-Z]+)(\d+)$/, "$$$1$$$2")).join(":");
+  const here = () => `=${sheetRef(sheet().name)}!${abs(selA1())}`;
+  const saveNames = (l: DefName[]) => { refocus(); return act({ Names: { names: l } }); };
+  /** Define Name: the selection (or a value or formula) under a name every sheet's formulas can use. */
+  const defineName = () => X.nameDialog({ name: "", formula: here() }, n => (names().some(x => x.name.toLowerCase() === n.name.toLowerCase()) ? (toast(`There is already a name ${n.name}; change it in the Name Manager.`), false) : saveNames([...names(), n])));
+  const nameManager = () => X.nameManager(names(), here(), saveNames, f => { goTo(f.replace(/^=/, "")); });
   /** Insert… / Delete…: whole rows or columns when they are selected; otherwise ask how the other cells move. */
   const shiftDlg = (del: boolean) => {
     const g = S.last(), b = bounds();
@@ -715,8 +752,11 @@ export const Sheets = () => {
     if (r.fmt !== null) ops.push({ SheetCells: { k: k(), cells: ids.map(a => [a, ""]), fmt: r.fmt } });
     refocus(); if (ops.length) act({ Batch: ops });
   });
-  /** Go To and the Name Box: A1, A1:C9, or Sheet2!B4. */
+  /** Go To and the Name Box: A1, A1:C9, Sheet2!B4, or a defined name (a new name in the Name Box names the selection). */
   const goTo = (ref: string): boolean => {
+    const dn = names().find(x => x.name.toLowerCase() === ref.trim().toLowerCase());
+    if (dn) { if (!/^=?('(?:[^']|'')+'|[^!=(]+)?!?\$?[A-Z]+\$?\d+(:\$?[A-Z]+\$?\d+)?$/i.test(dn.formula)) { toast(`${dn.name} is ${dn.formula}: a value, not cells to go to.`); return false; } return goTo(dn.formula.replace(/^=/, "")); }
+    if (/^[A-Za-z_\\][\w.\\]*$/.test(ref.trim()) && !cfBounds(ref.trim().toUpperCase()) && ref.trim().length > 1 && !/^R\d*C\d*$/i.test(ref.trim())) { const n = { name: ref.trim(), formula: here() }; saveNames([...names(), n]).then(ok => { if (ok) toast(`${n.name} now names ${n.formula.slice(1)}.`, true); }); return true; }
     const t = ref.trim().replace(/\$/g, ""), bang = t.lastIndexOf("!"), name = bang > 0 ? t.slice(0, bang).replace(/^'|'$/g, "").replace(/''/g, "'") : "", g = cfBounds((bang > 0 ? t.slice(bang + 1) : t).toUpperCase());
     if (!g) { toast(`${ref} is not a cell or range (for example B12, A1:D20 or Sheet2!A1).`); return false; }
     const tab = name ? P().sheets.findIndex(x => x.name.toLowerCase() === name.toLowerCase()) : k();
@@ -779,6 +819,8 @@ export const Sheets = () => {
       return;
     }
     if (edit() !== null) commit(null);
+    // Ctrl+click on a link opens it (after showing where it goes).
+    if ((e.ctrlKey || e.metaKey) && c >= 0 && linkOf(r, c)) { e.preventDefault(); go(r, c); openLink(linkOf(r, c)!); return; }
     const mg = c >= 0 && !e.shiftKey ? mergeAt(r, c) : undefined;
     if (c < 0) S.rows(r, r, e.shiftKey, e.ctrlKey); else if (mg) { go(mg.r0, mg.c0, false, e.ctrlKey); setEnd([mg.r1, mg.c1]); } else go(r, c, e.shiftKey, e.ctrlKey);
     const mv = (m: MouseEvent) => { const [r2, c2] = at(m.clientX, m.clientY); setEnd([Math.max(0, r2), c < 0 ? ncols() - 1 : c2 < 0 ? end()[1] : c2]); };
@@ -989,6 +1031,7 @@ export const Sheets = () => {
     focus: () => { box?.focus(); F.setTarget(fmtTarget); },
     page, setPage, areaFromSel, titlesFromSel, breakHere, unbreakHere, condMenu: condMenuAt, hideLines, unhideAll, find: () => findDialog(false), replace: () => findDialog(true),
     formatCells: formatDlg, shiftDlg, customSort, dedupe, toggleFilter, clearFilter, filterByValue, filtering: () => !!sheet()?.filter, editNote, deleteNotes, editList, goTo: () => X.goToDialog(goTo),
+    editLink, defineName, nameManager, circle, clearCircles: () => setCircles(false), circling: () => circles(),
     insertShift: (del: boolean, down: boolean) => { const b = bounds(); act({ SheetShift: { k: k(), range: `${a1(b.r0, b.c0)}:${a1(b.r1, b.c1)}`, down, del } }); },
   };
   setSheetApi(api);
@@ -1005,10 +1048,11 @@ export const Sheets = () => {
   });
   /** A cell's look: its style, and how its text sits when wrapped, aligned up or down, or in a tall row. */
   const cellCss = (r: number, c: number, hgt: number, st = sheet()?.style?.[a1(r, c)]): JSX.CSSProperties => {
-    const p = F.parse(st), o = { ...(F.css(st) as Record<string, string>), ...lookCss(looks().get(a1(r, c))) }, flex = p.w || p.v || hgt !== RH;
+    // Line breaks typed with Alt+Enter show as lines (wrapped text also wraps).
+    const p = F.parse(st), o = { ...(F.css(st) as Record<string, string>), ...lookCss(looks().get(a1(r, c))) }, nl = (cells().get(a1(r, c))?.[2] ?? "").includes("\n"), flex = p.w || p.v || nl || hgt !== RH;
     if (!flex) return { ...o, "line-height": `${hgt - 1}px` };
     return { ...o, display: "flex", "align-items": p.v === "t" ? "flex-start" : p.v === "b" ? "flex-end" : "center", "justify-content": o["justify-content"] ?? (cells().get(a1(r, c))?.[3] ? "flex-end" : "flex-start"),
-      "line-height": p.w ? "1.25" : `${RH - 3}px`, "white-space": p.w ? "normal" : "nowrap", "text-align": o["text-align"] ?? "left", "padding-top": "1px", "padding-bottom": "1px" } as JSX.CSSProperties;
+      "line-height": p.w || nl ? "1.25" : `${RH - 3}px`, "white-space": p.w ? "pre-wrap" : nl ? "pre" : "nowrap", "text-align": o["text-align"] ?? "left", "padding-top": "1px", "padding-bottom": "1px" } as JSX.CSSProperties;
   };
   /** Text runs on over the empty cells to its right (unless it wraps, is a number or the next cell has something). */
   const spill = (r: number, c: number): JSX.CSSProperties => {
@@ -1034,10 +1078,13 @@ export const Sheets = () => {
     const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); const t = th(); if (t) saveHeights(t[0], t[1]).then(() => setTh(null)); };
     addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
-  const EditBox = () => (
-                <input class="edit" list={fmtOf(home()!.r, home()!.c) === "flag" ? "countries" : undefined} style={{ left: `${lefts()[home()!.c]}px`, top: `${top_(home()!.r)}px`, width: `${Math.max(mergeAt(home()!.r, home()!.c) ? lefts()[mergeAt(home()!.r, home()!.c)!.c1] + width(mergeAt(home()!.r, home()!.c)!.c1) - lefts()[home()!.c] : width(home()!.c), 180)}px`, height: `${Math.max(RH, rh(home()!.r))}px` }} value={edit()!}
-                  ref={e => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); }} onMouseDown={e => e.stopPropagation()}
-                  onFocus={() => { lastEl = "cell"; }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} />);
+  /** The in-cell editor: a box that grows with the lines typed (Alt+Enter); a country cell keeps its list of countries. */
+  const EditBox = () => {
+    const box2 = () => { const hm = home()!, m = mergeAt(hm.r, hm.c); return { left: `${lefts()[hm.c]}px`, top: `${top_(hm.r)}px`, width: `${Math.max(m ? lefts()[m.c1] + width(m.c1) - lefts()[hm.c] : width(hm.c), 180)}px`, height: `${Math.max(RH, rh(hm.r), (edit() ?? "").split("\n").length * 17 + 5)}px` }; };
+    const on = { onMouseDown: (e: MouseEvent) => e.stopPropagation(), onFocus: () => { lastEl = "cell"; }, onInput: (e: InputEvent) => typed(e.currentTarget as HTMLTextAreaElement), onKeyDown: edKey, onKeyUp: caretOf, onClick: caretOf, onBlur: blur };
+    const ref = (e: HTMLInputElement | HTMLTextAreaElement) => { cellEl = e; setTimeout(() => { if (document.activeElement !== barEl) { lastEl = "cell"; e.focus(); e.setSelectionRange(caret(), caret()); } }); };
+    return <Show when={fmtOf(home()!.r, home()!.c) === "flag"} fallback={<textarea class="edit" rows={1} spellcheck={false} style={box2()} value={edit()!} ref={ref} {...on} />}><input class="edit" list="countries" style={box2()} value={edit()!} ref={ref} {...on} /></Show>;
+  };
   const rowView = (r: number) => (
     <div class="row" classList={{ rhid: rh(r) === 0, rnext: hidR().has(r - 1) }} style={{ top: `${top_(r)}px`, height: `${rh(r)}px` }}>
       <div class="c idc rowh" classList={{ on: S.ranges().some(g => r >= Math.min(g.r0, g.r1) && r <= Math.max(g.r0, g.r1)) }} style={{ width: `${HW}px`, position: "sticky", left: "0", "z-index": 5, "text-align": "center", "line-height": `${rh(r) - 1}px` }}>{r + 1}<i class="rszr" title="Drag to change the row height; double-click for the standard height" onMouseDown={e => rowResize(e, r)} onDblClick={e => { e.stopPropagation(); saveHeights(r, null); }} /></div>
@@ -1045,7 +1092,8 @@ export const Sheets = () => {
         const x = () => cells().get(a1(r, c));
         const err = () => ERRORS[x()?.[2] ?? ""];
         const nt = () => sheet()?.notes?.[a1(r, c)], fh = () => { const b = fbox(); return !!b && r === b.r0 && c >= b.c0 && c <= b.c1; };
-        return <div class="c" classList={{ chid: width(c) === 0, r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "", note: !!nt(), fh: fh() }} title={err() ?? undefined} data-note={nt()}
+        const lk = () => links().get(a1(r, c));
+        return <div class="c" classList={{ chid: width(c) === 0, r: !!x()?.[3], sin: inR(r, c), at: cur()[0] === r && cur()[1] === c, err: !!err(), fz: c < frozen()[1], spill: x()?.[1] === "", note: !!nt(), fh: fh(), lnk: !!lk() }} title={err() ?? (lk() ? `${lk()}\nCtrl+click to open` : undefined)} data-note={nt()}
           style={{ width: `${width(c)}px`, ...cellCss(r, c, rh(r)), ...(c < frozen()[1] ? { position: "sticky", left: `${lefts()[c]}px`, "z-index": 3 } : {}), ...spill(r, c) }}>
           <Show when={!mergeAt(r, c)}><Show when={fmtOf(r, c) === "flag" && x()?.[2]} fallback={<span>{x()?.[2] ?? ""}</span>}><FlagText country={x()![2]} /></Show></Show>
           <Show when={fh()}><button class="fltb" classList={{ on: !!sheet()?.filter?.cols.some(f => f.col === c) }} title="Filter and sort this column (Alt+Down)" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); go(r, c); filterCol(c); }}>{sheet()?.filter?.cols.some(f => f.col === c) ? "▼" : "▾"}</button></Show></div>;
@@ -1056,6 +1104,7 @@ export const Sheets = () => {
   return (
     <section class="ganttview">
       <CountryList />
+      <datalist id="sheetnames"><For each={names()}>{n => <option value={n.name} />}</For></datalist>
       <div class="ptools sheettools">
         <b title="Type = and click cells to build a formula · plan data by name: Tasks[Finish], Resources[Country], ProjectFinish">Sheets</b><Help k="sheets" />
         <button class="btn sm" title="AutoSum (Alt+=): add up the numbers above" onMouseDown={e => e.preventDefault()} onClick={() => autoSum("SUM")}>Σ AutoSum</button>
@@ -1073,10 +1122,11 @@ export const Sheets = () => {
         <button class="btn sm" title="One value of one task (its finish, % complete…), live" onClick={taskValue}>Task value…</button>
       </div>
       <Show when={P().sheets.length} fallback={<div class="page"><p class="empty">No sheets yet. Sheets are spreadsheets inside the plan: dashboards, quantities, estimates, vendor lists. They read the plan live, so nothing is copied by hand.</p><div class="row2"><button class="btn pri" onClick={addSheet}>Add a sheet</button><button class="btn" onClick={() => import("./ribbon").then(m => m.importWorkbook())}>Bring in an Excel workbook…</button></div></div>}>
-        <div class="fbar"><input class="fname" title="Name Box: type a cell or range (B12, A1:D20, Sheet2!A1) and press Enter to go there" value={home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : selA1()}
+        <div class="fbar"><input class="fname" list="sheetnames" title="Name Box: type a cell, a range (B12, A1:D20, Sheet2!A1) or a defined name and press Enter to go there; a new name names the selection" value={home() ? `${home()!.k !== k() ? `${P().sheets[home()!.k]?.name}!` : ""}${a1(home()!.r, home()!.c)}` : selA1()}
           onFocus={e => e.currentTarget.select()} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); if (goTo(e.currentTarget.value)) box?.focus(); } if (e.key === "Escape") { e.currentTarget.value = selA1(); box?.focus(); } }} /><Show when={aggregate(S, (r, c) => { const x = cells().get(a1(r, c)); return x?.[3] ? x[2] : ""; })}>{t => <span class="agg">{t()}</span>}</Show>
           <button class="fx" title="Insert Function" onMouseDown={e => e.preventDefault()} onClick={insertFn}>fx</button>
-          <input ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
+          <textarea class="fbin" rows={1} spellcheck={false} ref={barEl} value={edit() ?? curCell()?.[1] ?? ""} placeholder={curCell() && curCell()![1] === "" ? "(the result of a formula above or to the left)" : ""}
+            style={{ height: `${Math.min(6, (edit() ?? curCell()?.[1] ?? "").split("\n").length) * 17 + 10}px` }}
             onFocus={() => { lastEl = "bar"; if (edit() === null) startEdit(input(k(), ...cur())); }} onInput={e => typed(e.currentTarget)} onKeyDown={edKey} onKeyUp={caretOf} onClick={caretOf} onBlur={blur} /></div>
         <Show when={sheetMode() === "layout"}><div class="slayoutwrap" title="The pages as they will print. Double-click to go back to the cells." onDblClick={() => setSheetMode("normal")}><SheetPagesView zoom={0.85 * sheetZoom()} /></div></Show>
         <div class="gscroll sheetgrid" classList={{ breaks: sheetMode() === "breaks", hidden: sheetMode() === "layout" }} ref={el => { box = el; ro.observe(el); el.addEventListener("wheel", e => { if (!e.ctrlKey) return; e.preventDefault(); zoomSheet(e.deltaY < 0 ? 1 : -1); }, { passive: false }); }} tabindex="0" onFocus={() => F.setTarget(fmtTarget)} onKeyDown={key} onMouseDown={down} onCopy={e => onCopy(e)} onCut={e => onCopy(e, true)} onPaste={onPaste} onScroll={() => { const z = sheetZoom(); setTop(box.scrollTop); if ((box.scrollTop + box.clientHeight) / z > top_(nrows()) - 300) setReach([nrows(), reach()[1]]); if ((box.scrollLeft + box.clientWidth) / z > (lefts()[ncols() - 1] ?? 0) - 200) setReach([reach()[0], ncols()]); }}
@@ -1117,7 +1167,9 @@ export const Sheets = () => {
               <Show when={back()}>{t => { const [a, b, c, d] = range(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(t()[1], b)]}px`, top: `${top_(Math.min(t()[0], a))}px`, width: `${lefts()[d] + width(d) - lefts()[Math.min(t()[1], b)]}px`, height: `${top_(c + 1) - top_(Math.min(t()[0], a))}px` }} />; }}</Show>
               <Show when={fillTo()}>{t => { const [a, b] = cur(); return <div class="fillprev" style={{ left: `${lefts()[Math.min(b, range()[1])]}px`, top: `${top_(Math.min(a, range()[0]))}px`, width: `${lefts()[t()[1]] + width(t()[1]) - lefts()[Math.min(b, range()[1])]}px`, height: `${top_(t()[0] + 1) - top_(Math.min(a, range()[0]))}px` }} />; }}</Show>
               <Show when={edit() === null}><i class="fill" title="Drag to fill (series; formulas follow); hold Ctrl to copy" style={{ left: `${lefts()[range()[3]] + width(range()[3]) - 4}px`, top: `${top_(range()[2] + 1) - 4}px` }} onMouseDown={fillDrag} /></Show>
-              <Show when={edit() === null && validAt(...cur()) >= 0}><button class="lstb" title="Pick from the list (Alt+Down)" style={{ left: `${lefts()[cur()[1]] + width(cur()[1]) + 1}px`, top: `${top_(cur()[0])}px`, height: `${rh(cur()[0])}px` }} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }} onClick={e => listMenu(e)}>▾</button></Show>
+              <For each={circles() ? data()?.invalid ?? [] : []}>{id => { const [r, c] = parseA1(id); return <div class="vcircle" title="This value breaks the cell's data validation" style={{ left: `${lefts()[c] - 3}px`, top: `${top_(r) - 2}px`, width: `${width(c) + 6}px`, height: `${rh(r) + 4}px` }} />; }}</For>
+              <Show when={vmsg()}>{t => <div class="vmsg" style={{ left: `${lefts()[cur()[1]] + 12}px`, top: `${top_(cur()[0] + 1) + 3}px` }}>{t()}</div>}</Show>
+              <Show when={edit() === null && validAt(...cur()) >= 0 && !sheet()?.valid?.[validAt(...cur())]?.kind}><button class="lstb" title="Pick from the list (Alt+Down)" style={{ left: `${lefts()[cur()[1]] + width(cur()[1]) + 1}px`, top: `${top_(cur()[0])}px`, height: `${rh(cur()[0])}px` }} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }} onClick={e => listMenu(e)}>▾</button></Show>
               <Show when={edit() !== null && home()?.k === k() && home()!.r >= frozen()[0]}>{EditBox()}</Show>
             </div>
           </div>

@@ -496,11 +496,29 @@ pub struct SheetFilter { pub range: String, pub cols: Vec<ColFilter> }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColFilter { pub col: u32, #[serde(skip_serializing_if = "Option::is_none")] pub values: Option<Vec<String>>, pub op: String, pub a: String, pub b: String }
-/// A drop-down list on a range: its values typed (`list`) or read from cells (`src`, "Lists!A1:A9").
-/// Other values are refused unless `warn` (then they are only flagged).
+/// Data validation on a range. `kind` "" is a drop-down list: its values typed (`list`) or read from
+/// cells (`src`, "Lists!A1:A9"). Otherwise the cells take a whole number, decimal, date, time or text
+/// length ("whole", "decimal", "date", "time", "len") compared by `op` (see `sheetx::VALID_OPS`; empty:
+/// between) with `a` and `b` (values, or references and formulas: "=B1", "$B$1"), or "any" value (only
+/// the message). `prompt` shows while a cell is selected; `error` when a value is refused. Other values
+/// are refused unless `warn` (then the user may keep them).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Validation { pub range: String, pub list: Vec<String>, pub src: String, #[serde(skip_serializing_if = "std::ops::Not::not")] pub warn: bool }
+pub struct Validation { pub range: String, pub list: Vec<String>, pub src: String, #[serde(skip_serializing_if = "std::ops::Not::not")] pub warn: bool,
+    #[serde(skip_serializing_if = "String::is_empty")] pub kind: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub op: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub a: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub b: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub prompt: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub error: String }
+
+/// A workbook name every sheet formula can use: `Rates` for `=Prices!$B$2:$B$20`, `VAT` for `=0.05`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DefName { pub name: String, pub formula: String, #[serde(skip_serializing_if = "String::is_empty")] pub comment: String }
+
+/// Cuts a text to at most `n` characters.
+fn cut(s: &mut String, n: usize) { if s.len() > n { *s = s.chars().take(n).collect() } }
 
 /// A range "A1:C2" as (row0, col0, row1, col1), 0-based and ordered.
 pub fn sheet_range(r: &str) -> Option<(u32, u32, u32, u32)> {
@@ -629,6 +647,9 @@ pub struct Project {
     /// Column titles chosen by the user (field key → title).
     pub titles: BTreeMap<String, String>,
     pub sheets: Vec<SheetData>,
+    /// Defined names for the sheets' formulas (Name Manager).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub names: Vec<DefName>,
     /// The plan's picture library (logos of the parties, images for dashboards and sheets).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pictures: Vec<Picture>,
@@ -688,7 +709,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
         }
     }
 
@@ -821,9 +842,16 @@ impl Project {
                 f.cols.truncate(500);
                 for x in &mut f.cols { if let Some(v) = &mut x.values { v.truncate(10_000); } x.a.truncate(500); x.b.truncate(500); }
             }
-            s.valid.retain(|v| sheet_range(&v.range).is_some() && (!v.list.is_empty() || !v.src.trim().is_empty()));
+            s.valid.retain(|v| sheet_range(&v.range).is_some() && (v.op.is_empty() || crate::sheetx::VALID_OPS.contains(&v.op.as_str())) && match v.kind.as_str() {
+                "" => !v.list.is_empty() || !v.src.trim().is_empty(),
+                "any" => !v.prompt.trim().is_empty(),
+                k => crate::sheetx::VALID_KINDS.contains(&k) && !v.a.trim().is_empty(),
+            });
             s.valid.truncate(500);
-            for v in &mut s.valid { v.list.truncate(1_000); v.list.iter_mut().for_each(|x| x.truncate(255)); v.src.truncate(200); }
+            for v in &mut s.valid {
+                v.list.truncate(1_000); v.list.iter_mut().for_each(|x| cut(x, 255)); cut(&mut v.src, 200);
+                cut(&mut v.a, 255); cut(&mut v.b, 255); cut(&mut v.prompt, 1_000); cut(&mut v.error, 1_000);
+            }
             for c in &mut s.cond { c.a.truncate(500); c.b.truncate(500); c.style.truncate(500); }
             if let Some(pg) = &mut s.page {
                 pg.scale = if pg.scale == 0 { 0 } else { pg.scale.clamp(10, 400) };
@@ -836,6 +864,11 @@ impl Project {
             }
             if !(s.color.len() == 7 && s.color.starts_with('#') && s.color[1..].chars().all(|c| c.is_ascii_hexdigit())) { s.color.clear() }
         }
+        // Defined names: valid, unique, at most 1,000, each a formula ("=0.05", "=Prices!$B$2:$B$9").
+        let mut seen = std::collections::HashSet::new();
+        for n in &mut self.names { n.name = n.name.trim().to_string(); n.formula = n.formula.trim().to_string(); if !n.formula.starts_with('=') { n.formula.insert(0, '=') } cut(&mut n.comment, 255); }
+        self.names.retain(|n| crate::sheetx::name_problem(&n.name).is_none() && n.formula.len() > 1 && n.formula.len() <= 8_000 && seen.insert(n.name.to_lowercase()));
+        self.names.truncate(1_000);
         // At least one tab stays visible.
         if !self.sheets.is_empty() && self.sheets.iter().all(|s| s.hidden) { self.sheets[0].hidden = false }
         if self.calendars.is_empty() {

@@ -106,6 +106,8 @@ pub enum Op {
     /// empty: every column) match an earlier row's goes, and the rows below move up within the range's
     /// columns. `header`: the first row is headings and stays.
     SheetDedupe { k: usize, range: String, cols: Vec<u32>, header: bool },
+    /// Sets the plan's defined names (the whole list, as the Name Manager edits it).
+    Names { names: Vec<DefName> },
     Batch(Vec<Op>),
 }
 
@@ -1255,6 +1257,25 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             }
             s.merges = std::mem::take(&mut s.merges).into_iter().filter_map(|m| { let (a, b) = m.split_once(':')?; Some(format!("{}:{}", shift(a)?, shift(b)?)) }).collect();
             s.images.retain_mut(|im| shift(&im.cell).map(|x| im.cell = x).is_some());
+            // Ranges follow as references do: conditional formatting, validation and the filter move or
+            // shrink when they lie within the shifted band, and go when all their cells go.
+            let moved = |g: &str| {
+                let (r0, c0, r1, c1) = crate::model::sheet_range(crate::sheet::adjust(&format!("={g}"), &target, &target, &edit).trim_start_matches('='))?;
+                let (a, b) = (format!("{}{}", crate::sheet::col_name(c0), r0 + 1), format!("{}{}", crate::sheet::col_name(c1), r1 + 1));
+                Some(if a == b { a } else { format!("{a}:{b}") })
+            };
+            s.cond = std::mem::take(&mut s.cond).into_iter().filter_map(|mut c| { c.range = moved(&c.range)?; Some(c) }).collect();
+            s.valid = std::mem::take(&mut s.valid).into_iter().filter_map(|mut v| { v.range = moved(&v.range)?; Some(v) }).collect();
+            s.filter = s.filter.take().and_then(|mut f| {
+                let (old, new) = (crate::model::sheet_range(&f.range)?, moved(&f.range)?);
+                if old != crate::model::sheet_range(&new)? {
+                    // A filtered column goes where its heading went (and goes with it).
+                    let col = |c: u32| crate::model::sheet_range(&moved(&format!("{}{}", crate::sheet::col_name(c), old.0 + 1))?).map(|g| g.1);
+                    f.cols.retain_mut(|x| col(x.col).map(|c| x.col = c).is_some());
+                }
+                f.range = new;
+                Some(f)
+            });
         }
         Op::SheetDedupe { k, range, cols, header } => {
             let s = p.sheets.get(k).ok_or("That sheet does not exist.")?;
@@ -1267,6 +1288,19 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             for r in dups.into_iter().rev() {
                 exec(p, Op::SheetShift { k, range: format!("{}{}:{}{}", crate::sheet::col_name(c0), r + 1, crate::sheet::col_name(c1), r + 1), down: true, del: true }, fmt)?;
             }
+        }
+        Op::Names { names } => {
+            if names.len() > 1_000 { return Err("A plan can have at most 1,000 names.".into()) }
+            let mut seen = std::collections::HashSet::new();
+            for n in &names {
+                if let Some(e) = crate::sheetx::name_problem(&n.name) { return Err(e) }
+                if !seen.insert(n.name.trim().to_lowercase()) { return Err(format!("There is already a name {}.", n.name.trim())) }
+                let body = n.formula.trim().trim_start_matches('=');
+                if body.is_empty() { return Err(format!("Say what {} refers to: a range (=Prices!$B$2:$B$20), a value (=0.05) or a formula.", n.name.trim())) }
+                if body.len() > 8_000 || gridcraft_formula::parse(body).is_err() { return Err(format!("What {} refers to does not read as a formula: {body}", n.name.trim())) }
+            }
+            p.names = names;
+            p.normalize();
         }
         Op::SheetImages { k, images } => {
             let ids: Vec<u32> = p.pictures.iter().map(|x| x.id).collect();
@@ -1283,6 +1317,8 @@ fn rewrite_sheets(p: &mut Project, f: impl Fn(&str, &str) -> String) {
         let host = s.name.clone();
         for v in s.cells.values_mut().filter(|v| v.starts_with('=')) { *v = f(v, &host); }
     }
+    // Defined names live on no sheet: their references name theirs.
+    for n in &mut p.names { n.formula = f(&n.formula, "__names"); }
     // Dashboard tiles hold formulas too (ui.dashboards[].tiles[]); they live on no sheet of their own.
     let tiles = p.ui.get_mut("dashboards").and_then(|d| d.as_array_mut()).into_iter().flatten().filter_map(|d| d.get_mut("tiles")?.as_array_mut()).flatten();
     for t in tiles.filter_map(|t| t.as_object_mut()) {

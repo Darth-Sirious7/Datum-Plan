@@ -39,6 +39,7 @@ pub fn catalog() -> Vec<OpInfo> {
         o("SheetShift", "Insert (or with del: delete) the cells of a range on tab k, moving the cells below (down: true) or to the right; formulas follow.", json!({"SheetShift": {"k": 0, "range": "B2:C3", "down": true, "del": false}})),
         o("SheetDedupe", "Remove duplicate rows of a range on tab k, comparing the columns listed (0-based; empty: all); header keeps the first row.", json!({"SheetDedupe": {"k": 0, "range": "A1:C40", "cols": [0], "header": true}})),
         o("SheetNotes", "Put notes on cells of tab k (empty text deletes the note).", json!({"SheetNotes": {"k": 0, "cells": [["B2", "Price confirmed by the vendor"]]}})),
+        o("Names", "Set the plan's defined names (the whole list): each a name and what it refers to, for any sheet formula.", json!({"Names": {"names": [{"name": "VAT", "formula": "=0.05"}, {"name": "Rates", "formula": "=S!$B$2:$B$20", "comment": "Day rates"}]}})),
         o("ApplyCredit", "Give tasks the weighted steps of a rule of credit (Concrete, Cable, Piping…).", json!({"ApplyCredit": {"uids": [3], "rule": "Cable"}})),
     ]
 }

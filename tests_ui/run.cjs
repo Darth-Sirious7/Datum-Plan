@@ -386,11 +386,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const offered = await p.$$eval(".fhint button b", b => b.map(x => x.textContent));
   check("typing =SU suggests SUM and friends", offered.includes("SUM") && offered.includes("SUMIFS"), offered.join());
   await p.keyboard.press("Tab"); await p.waitForTimeout(150);
-  check("Tab inserts the function with its bracket", (await p.inputValue("input.edit")) === "=SUM(");
+  check("Tab inserts the function with its bracket", (await p.inputValue(".sheetgrid .edit")) === "=SUM(");
   check("the hint shows the function's arguments", (await p.textContent(".fhint .fsig").catch(() => "")).includes("number1"));
   const a2 = await sc(1, 2), a3 = await sc(2, 2);
   await p.mouse.move(a2.x, a2.y); await p.mouse.down(); await p.mouse.move(a3.x, a3.y, { steps: 4 }); await p.mouse.up(); await p.waitForTimeout(150);
-  check("clicking and dragging cells adds their range to the formula", (await p.inputValue("input.edit")) === "=SUM(C2:C3" && (await p.$$(".refbox")).length === 1, await p.inputValue("input.edit"));
+  check("clicking and dragging cells adds their range to the formula", (await p.inputValue(".sheetgrid .edit")) === "=SUM(C2:C3" && (await p.$$(".refbox")).length === 1, await p.inputValue(".sheetgrid .edit"));
   await p.keyboard.press("Enter"); await p.waitForTimeout(200);
   check("Enter closes the bracket and saves the formula", (await lastApply()).includes('["D6","=SUM(C2:C3)"]'), await lastApply());
   q = await sc(7, 0); await p.mouse.click(q.x, q.y); await p.keyboard.type("=Tasks["); await p.waitForTimeout(200);
@@ -620,7 +620,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Backspace"); await p.waitForTimeout(150);
-  check("Backspace on a cell clears it and starts typing there", !!(await p.$(".sheetgrid input.edit")) && (await p.inputValue(".sheetgrid input.edit")) === "");
+  check("Backspace on a cell clears it and starts typing there", !!(await p.$(".sheetgrid .edit")) && (await p.inputValue(".sheetgrid .edit")) === "");
   await p.keyboard.press("Escape"); await p.waitForTimeout(100);
   // 0.5.21: conditional formatting, Find.
   await p.click(".sheettabs button >> nth=0"); await p.waitForTimeout(300);
@@ -750,7 +750,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const menuText = () => p.$$eval(".menu button span", b => b.map(x => x.textContent));
   sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
-  { const m = await menuText(), want = ["Cut", "Copy", "Paste", "Paste Special", "Insert…", "Delete…", "Clear Contents", "Sort", "Filter", "New Note…", "Format Cells…", "Number Format", "Borders", "Merge & Center", "Wrap Text", "Rows and Columns", "Freeze Panes", "AutoSum", "Insert Function…", "Plan Data…", "Drop-down List…"];
+  { const m = await menuText(), want = ["Cut", "Copy", "Paste", "Paste Special", "Insert…", "Delete…", "Clear Contents", "Sort", "Filter", "New Note…", "Format Cells…", "Number Format", "Borders", "Merge & Center", "Wrap Text", "Rows and Columns", "Freeze Panes", "AutoSum", "Insert Function…", "Plan Data…", "Link…", "Define Name…", "Data Validation…"];
     check("the cell menu has a full spreadsheet's commands", want.every(w => m.includes(w)) && m.length <= 26, want.filter(w => !m.includes(w)).join() + " / " + m.join()); }
   await p.hover(".menu button:has-text('Paste Special')"); await p.waitForTimeout(150);
   check("Paste Special offers Values, Formatting and Transpose", (await menuText()).includes("Transpose") && (await menuText()).includes("Values"));
@@ -802,12 +802,12 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Delete"); await p.waitForTimeout(200);
   { const a = await lastApply(); check("Clear Contents on a filtered list leaves the hidden rows alone", a.includes('["C2",""]') && a.includes('["C4",""]') && !a.includes('"C3"'), a); }
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
-  check("Sheet Tools › Format has a Data group: Filter, Drop-down List, Note", !!(await p.$(".ribbon .grp:has(.cap:text('Data')) button:has-text('Drop-down List')")));
+  check("Sheet Tools › Format has a Data group: Filter, Validation, Note, Names", !!(await p.$(".ribbon .grp:has(.cap:text('Data')) button:has-text('Validation')")) && !!(await p.$(".ribbon .grp:has(.cap:text('Data')) button:has-text('Names')")));
   await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Filter')"); await p.waitForTimeout(300);
   check("Filter again removes the filter and shows every row", (await p.$$(".sheetgrid .fltb")).length === 0 && (await p.$$(".sheetgrid .row.rhid")).length === 0);
   // A drop-down list.
   sq = await scell(1, 3); await p.mouse.click(sq.x, sq.y); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
-  await p.click(".menu button:has-text('Drop-down List…')"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Data Validation…')"); await p.waitForTimeout(150);
   await p.fill(".dlg textarea", "Open\nClosed"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
   check("Drop-down List saves the list on the cells", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.valid)) === '[{"range":"D2","list":["Open","Closed"],"src":"","warn":false}]');
   await p.click(".sheetgrid .lstb"); await p.waitForTimeout(150);
@@ -845,6 +845,90 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Remove Duplicates lists the list's columns by their headings", (await p.$$(".dlg .fltvals label")).length === 3 && (await p.textContent(".dlg .fltvals")).includes("Column A: Vendor"));
   await p.click(".dlg .fltvals label:has-text('Column C') input"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
   check("Remove Duplicates asks the engine to drop the repeated rows", (await lastApply()).includes('"SheetDedupe":{"k":0,"range":"A1:C4","cols":[0,1],"header":true}'), await lastApply());
+  // Alt+Enter line breaks, links, defined names, data validation beyond lists, Circle Invalid Data.
+  await p.evaluate(() => {
+    const inv = window.__TAURI__.core.invoke; window.__names = []; window.__check = null;
+    window.__TAURI__.core.invoke = async (c, a) => {
+      if (c === "sheet_check") { window.__calls.push([c, a]); return window.__check; }
+      if (c === "open_link") { window.__calls.push([c, a]); return null; }
+      let r = await inv(c, a);
+      if (c === "apply" && a.op && a.op.Names) window.__names = a.op.Names.names;
+      if (r && r.project) r = { ...r, project: { ...r.project, names: window.__names } };
+      if (c === "sheet_view" && r) r = { ...r, cells: [...r.cells.filter(x => x[0] !== "A9" && x[0] !== "A2"), ["A9", "Line one\nLine two", "Line one\nLine two", false, null], ["A2", "https://example.com/spec", "https://example.com/spec", false, null]], links: [["A2", "https://example.com/spec"]], invalid: ["C2"] };
+      return r;
+    };
+  });
+  await p.click(".sheettabs button >> nth=0"); await p.waitForTimeout(300);
+  sq = await scell(9, 0); await p.mouse.click(sq.x, sq.y); await p.keyboard.type("Line one"); await p.keyboard.press("Alt+Enter"); await p.keyboard.type("Line two");
+  check("Alt+Enter puts a line break in the cell being typed in", (await p.inputValue(".sheetgrid textarea.edit")) === "Line one\nLine two", await p.inputValue(".sheetgrid .edit"));
+  await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("…and Enter saves the cell with its line break", (await lastApply()).includes('["A10","Line one\\nLine two"]'), await lastApply());
+  sq = await scell(10, 0); await p.mouse.click(sq.x, sq.y); await p.click(".fbar textarea.fbin"); await p.keyboard.type("a"); await p.keyboard.press("Alt+Enter"); await p.keyboard.type("b"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("Alt+Enter works in the formula bar too", (await lastApply()).includes('["A11","a\\nb"]'), await lastApply());
+  { const r = await p.$$eval(".sheetgrid .gbody .row", rows => { const x = rows.find(r => r.children[1]?.textContent.includes("Line one")); return x ? [parseFloat(x.style.height), getComputedStyle(x.children[1]).whiteSpace] : null; });
+    check("a cell with line breaks shows its lines and its row grows", !!r && r[0] > 30 && r[1] === "pre", JSON.stringify(r)); }
+  sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+  check("a country cell still edits in a box that suggests countries", (await p.$$(".sheetgrid input.edit[list=countries]")).length === 1);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  // Links: shown as links; Ctrl+click asks with the full address, then opens it.
+  check("a cell with a web address shows as a link", (await p.$$(".sheetgrid .c.lnk")).length === 1 && (await p.$eval(".sheetgrid .c.lnk span", e => getComputedStyle(e).textDecorationLine)) === "underline");
+  sq = await scell(1, 0); await p.keyboard.down("Control"); await p.mouse.click(sq.x, sq.y); await p.keyboard.up("Control"); await p.waitForTimeout(150);
+  check("Ctrl+click on a link shows the full address first", ((await p.textContent(".dlg header")) ?? "").includes("Open Link") && (await p.textContent(".dlg .linkurl")).includes("https://example.com/spec") && !(await p.evaluate(() => window.__calls.some(c => c[0] === "open_link"))));
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(150);
+  check("…and opens it when asked", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "open_link").pop())).includes('"url":"https://example.com/spec"'));
+  await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  check("the cell menu of a link has Open Link and Edit Link", (await menuText()).includes("Open Link") && (await menuText()).includes("Edit Link…"), (await menuText()).join());
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  sq = await scell(5, 4); await p.mouse.click(sq.x, sq.y); await p.keyboard.press("Control+k"); await p.waitForTimeout(150);
+  await p.fill(".dlg input.laddr", "https://example.com/a?x=\"1\""); await p.fill(".dlg input.ltext", "Spec"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(150);
+  check("a link with spaces or quotes is refused by the Link dialog", !!(await p.$(".dlg input.laddr")));
+  await p.fill(".dlg input.laddr", "https://example.com/a"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  check("Insert › Link… (Ctrl+K) writes =HYPERLINK(address, text)", (await lastApply()).includes('["E6","=HYPERLINK(\\"https://example.com/a\\",\\"Spec\\")"]'), await lastApply());
+  // Defined names: Define Name from the selection, the Name Manager, the Name Box.
+  await p.click(".fbar .fname"); await p.keyboard.type("B2:B3"); await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+  sq = await scell(1, 1); await p.mouse.click(sq.x, sq.y, { button: "right" }); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Define Name…')"); await p.waitForTimeout(150);
+  const tab = await p.evaluate(() => document.querySelector(".sheettabs button.on")?.textContent ?? ""), ref = `=${/^[A-Za-z_][\w.]*$/.test(tab) ? tab : `'${tab}'`}!$B$2:$B$3`;
+  check("Define Name refers to the selection", (await p.inputValue(".dlg input.nref")) === ref, await p.inputValue(".dlg input.nref") + " / " + ref);
+  await p.fill(".dlg input.nname", "Countries"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  check("…and saves it as the plan's names (one step)", (await lastApply()).includes(JSON.stringify({ Names: { names: [{ name: "Countries", formula: ref }] } })), await lastApply());
+  sq = await scell(8, 3); await p.mouse.click(sq.x, sq.y);
+  await p.click(".fbar .fname"); await p.keyboard.type("Countries"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("typing a defined name in the Name Box goes to its cells", (await p.inputValue(".fbar .fname")) === "B2:B3", await p.inputValue(".fbar .fname"));
+  await p.click(".fbar .fname"); await p.keyboard.type("Orders"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check("a new name in the Name Box names the selection", (await lastApply()).includes(JSON.stringify({ name: "Orders", formula: ref })), await lastApply());
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Names')"); await p.waitForTimeout(150);
+  check("the Name Manager lists the names", (await p.$$(".dlg .tbl.names tbody tr")).length === 2 && (await p.textContent(".dlg .tbl.names")).includes(ref));
+  await p.click(".dlg .tbl.names tbody tr >> nth=1"); await p.click(".dlg button:has-text('Delete')"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  check("deleting in the Name Manager saves the rest", (await lastApply()).includes('"Names":{"names":[{"name":"Countries"') && !(await lastApply()).includes("Orders"), await lastApply());
+  // Data validation: a whole number between bounds, its message, stop and warn.
+  sq = await scell(1, 2); await p.mouse.click(sq.x, sq.y); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Validation')"); await p.waitForTimeout(150);
+  await p.selectOption(".dlg select.vkind", "whole"); await p.fill(".dlg input.va", "1"); await p.fill(".dlg input.vb", "=$E$1"); await p.fill(".dlg input.vprompt", "Up to the task count"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  { const v = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.valid);
+    check("Data Validation saves a whole-number rule with its bounds and message", JSON.stringify(v?.find(x => x.range === "C2")) === '{"range":"C2","list":[],"src":"","warn":false,"kind":"whole","op":"between","a":"1","b":"=$E$1","prompt":"Up to the task count"}', JSON.stringify(v)); }
+  sq = await scell(1, 2); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(150);
+  check("the message shows while the cell is selected", ((await p.textContent(".sheetgrid .vmsg").catch(() => "")) ?? "").includes("Up to the task count"));
+  await p.evaluate(() => { window.__check = ["This cell takes a whole number between 1 and $E$1.", false]; });
+  await p.keyboard.type("50"); await p.keyboard.press("Enter"); await p.waitForTimeout(250);
+  check("a value the engine refuses is not saved (Stop)", ((await p.textContent("#toast")) ?? "").includes("whole number between 1") && !(await lastApply()).includes('"50"') && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "sheet_check").pop())).includes('"cell":"C2","input":"50"'));
+  await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+  await p.evaluate(() => { window.__check = ["Check the count.", true]; });
+  await p.keyboard.type("60"); await p.keyboard.press("Enter"); await p.waitForTimeout(250);
+  check("a Warn rule asks first", ((await p.textContent(".dlg header")) ?? "").includes("Data Validation") && (await p.textContent(".dlg")).includes("Check the count."));
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  check("…and keeps the value when told to", (await lastApply()).includes('["C2","60"]'), await lastApply());
+  await p.evaluate(() => { window.__check = null; });
+  await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) .rbw:has(button.rb:has-text('Validation')) button.sarr"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Circle Invalid Data')"); await p.waitForTimeout(200);
+  check("Circle Invalid Data rings the cells that break their rules", (await p.$$(".sheetgrid .vcircle")).length === 1);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) .rbw:has(button.rb:has-text('Validation')) button.sarr"); await p.waitForTimeout(150);
+  await p.click(".menu button:has-text('Clear Validation Circles')"); await p.waitForTimeout(150);
+  check("Clear Validation Circles removes them", (await p.$$(".sheetgrid .vcircle")).length === 0);
+  for (const w of [1280]) { await p.setViewportSize({ width: w, height: 900 }); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); check(`Sheet Tools › Format with Link, Validation and Names fits at ${w}px`, o <= 1, String(o)); }
+  await p.setViewportSize({ width: 1440, height: 900 });
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);
   check("leaving Sheets goes back to the Home tab", (await p.textContent(".tabs > button.on")) === "Home");
   await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(100);

@@ -473,6 +473,8 @@ const TablePage = (p: { t: PT; pg: VPage }) => {
   const list = [...title, ...Array.from({ length: r1 - r0 }, (_, i) => r0 + i)];
   const hOf = (r: number) => t.h?.[r] ?? RH;
   const yOf = (r: number) => (t.bare ? 0 : RH) + title.reduce((a, x) => a + hOf(x), 0) + Array.from({ length: Math.max(0, r - r0) }, (_, i) => hOf(r0 + i)).reduce((a, b) => a + b, 0);
+  // Wrapped text wraps; line breaks typed with Alt+Enter print on their own lines.
+  const lines = (st?: string, v?: string): JSX.CSSProperties => (F.parse(st).w ? { "white-space": "pre-wrap" } : String(v ?? "").includes("\n") ? { "white-space": "pre" } : {});
   const vAlign = (st?: string) => { const v = F.parse(st).v; return v === "t" ? "top" : v === "b" ? "bottom" : "middle"; };
   return (
     <div class="ptwrap" classList={{ pcenter: t.center }}>
@@ -485,8 +487,8 @@ const TablePage = (p: { t: PT; pg: VPage }) => {
             const top = Math.max(m.r, lo), first = p.pg.cols!.find(x => x >= m.c && x < m.c + m.cs);
             return R0 === top && c === first ? { rs: Math.min(m.r + m.rs, hi) - top, cs: p.pg.cols!.filter(x => x >= m.c && x < m.c + m.cs).length, st: t.rows[m.r]?.st?.[m.c], v: t.rows[m.r]?.c[m.c] } : "skip"; };
           return <tr style={{ height: `${hOf(R0)}px` }} classList={{ b: r?.b }}><For each={p.pg.cols}>{c => { const sp = span(c); return sp === "skip" ? null
-            : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": vAlign(sp.st), "white-space": F.parse(sp.st).w ? "normal" : undefined }}>{sp.v}</td>
-            : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r?.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r?.st?.[c]), ...(F.parse(r?.st?.[c]).w ? { "white-space": "normal" } : {}), ...(t.font ? { "vertical-align": vAlign(r?.st?.[c]) } : {}), ...(t.bars?.has(`${R0},${c}`) ? lookCss({ bar: t.bars.get(`${R0},${c}`) }) : {}) }}>{r?.c[c] && t.flags?.has(`${R0},${c}`) ? <FlagText country={r.c[c]} /> : r?.c[c]}</td>; }}</For></tr>; }}</For></tbody>
+            : sp ? <td rowSpan={sp.rs} colSpan={sp.cs} classList={{ r: t.right[c] }} style={{ ...F.css(sp.st), "vertical-align": vAlign(sp.st), ...lines(sp.st, sp.v) }}>{sp.v}</td>
+            : <td classList={{ r: t.right[c] }} style={{ ...(c === 0 && r?.ind ? { "padding-left": `${4 + r.ind * 12}px` } : {}), ...F.css(r?.st?.[c]), ...lines(r?.st?.[c], r?.c[c]), ...(t.font ? { "vertical-align": vAlign(r?.st?.[c]) } : {}), ...(t.bars?.has(`${R0},${c}`) ? lookCss({ bar: t.bars.get(`${R0},${c}`) }) : {}) }}>{r?.c[c] && t.flags?.has(`${R0},${c}`) ? <FlagText country={r.c[c]} /> : r?.c[c]}</td>; }}</For></tr>; }}</For></tbody>
       </table>
       <For each={t.imgs?.filter(im => im.r >= r0 && im.r < r1 && p.pg.cols!.includes(im.c))}>{im => {
         const x = p.pg.cols!.slice(0, p.pg.cols!.indexOf(im.c)).reduce((a, c) => a + t.w[c], 0);

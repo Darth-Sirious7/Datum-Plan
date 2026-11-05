@@ -512,3 +512,161 @@ fn inserting_and_deleting_cells_moves_only_their_columns() {
     assert!(doc.apply(Op::SheetShift { k: 0, range: "F1:G1".into(), down: true, del: false }, "%d/%m/%Y").is_ok(), "a whole merge moves");
     assert_eq!(doc.p.sheets[0].merges, vec!["F2:G3"]);
 }
+
+// --- defined names, validation beyond lists, links, line breaks, shifting cells ----------------
+
+fn shown(doc: &Doc, k: usize, a1: &str) -> String {
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    crate::sheet::sheet_view(&c, k).unwrap().cells.iter().find(|x| x.0 == a1).map(|x| x.2.clone()).unwrap_or_default()
+}
+fn dn(name: &str, formula: &str) -> DefName { DefName { name: name.into(), formula: formula.into(), ..Default::default() } }
+
+#[test]
+fn defined_names_work_in_formulas_follow_their_sheet_and_go_to_the_workbook() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Prices", &[("B2", "100"), ("B3", "200"), ("C1", "=SUM(Rates)*(1+VAT)"), ("C2", "=Twice(4)")])) });
+    op(&mut doc, Op::Names { names: vec![dn("Rates", "Prices!$B$2:$B$3"), dn(" VAT ", "=0.05"), dn("Twice", "=LAMBDA(x,x*2)")] });
+    assert_eq!(doc.p.names.iter().map(|n| (n.name.as_str(), n.formula.as_str())).collect::<Vec<_>>(), vec![("Rates", "=Prices!$B$2:$B$3"), ("VAT", "=0.05"), ("Twice", "=LAMBDA(x,x*2)")], "trimmed, each a formula");
+    assert_eq!((shown(&doc, 0, "C1"), shown(&doc, 0, "C2")), ("315".to_string(), "8".to_string()));
+    // Refused: a cell address, a plan name, two of the same, a formula that does not read; the names stay as they were.
+    for bad in [vec![dn("A1", "=1")], vec![dn("ProjectFinish", "=1")], vec![dn("x", "=1"), dn("X", "=2")], vec![dn("y", "=SUM(")], vec![dn("z", "")]] {
+        assert!(doc.apply(Op::Names { names: bad.clone() }, "%d/%m/%Y").is_err(), "{bad:?}");
+    }
+    assert_eq!(doc.p.names.len(), 3);
+    // Renaming the sheet, and inserting a row above the range, rewrite the name.
+    let s = SheetData { name: "Price list".into(), ..doc.p.sheets[0].clone() };
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(s) });
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 1 });
+    assert_eq!(doc.p.names[0].formula, "='Price list'!$B$3:$B$4");
+    assert_eq!(shown(&doc, 0, "C2"), "315");
+    // Undo brings the old names back.
+    doc.undo();
+    doc.undo();
+    assert_eq!(doc.p.names[0].formula, "=Prices!$B$2:$B$3");
+    // To the workbook as defined names, and back from its own parts.
+    let f = export_sheets(&doc.p).unwrap();
+    let wbx = part(&f, "xl/workbook.xml");
+    assert!(wbx.contains("<definedName name=\"Rates\">Prices!$B$2:$B$3</definedName>") && wbx.contains("<definedName name=\"VAT\">0.05</definedName>"), "{wbx}");
+    let back = crate::io::sheetbook::import(&f).unwrap();
+    let got: Vec<(String, String)> = back.names.iter().map(|n| (n.name.clone(), n.formula.clone())).collect();
+    assert!(got.contains(&("Rates".into(), "=Prices!$B$2:$B$3".into())) && got.contains(&("VAT".into(), "=0.05".into())) && !got.iter().any(|n| n.0 == "ProjectFinish"), "{got:?}");
+    // An older plan file without names still reads; a damaged name goes.
+    let mut p = doc.p.clone();
+    p.names.push(dn("B2", "=1"));
+    p.normalize();
+    assert_eq!(p.names.len(), 3);
+    let old: Project = serde_json::from_str(&serde_json::to_string(&Project::new("Old", d(2026, 1, 5))).unwrap().replace(",\"names\":[]", "")).unwrap();
+    assert!(old.names.is_empty());
+}
+
+#[test]
+fn validation_takes_numbers_dates_times_and_lengths() {
+    let mut doc = base();
+    let mut s = sheet("V", &[("B1", "10"), ("A2", "5"), ("A3", "12"), ("A4", "2.5"), ("C2", "15/11/2026"), ("C3", "15/01/2027"), ("D2", "abc"), ("D3", "abcdefgh"), ("E2", "13:30")]);
+    s.valid = vec![
+        Validation { range: "A2:A9".into(), kind: "whole".into(), op: "between".into(), a: "1".into(), b: "=$B$1".into(), prompt: "1 to the limit in B1".into(), ..Default::default() },
+        Validation { range: "C2:C9".into(), kind: "date".into(), op: "le".into(), a: "31/12/2026".into(), warn: true, error: "Before year end".into(), ..Default::default() },
+        Validation { range: "D2:D9".into(), kind: "len".into(), op: "le".into(), a: "5".into(), ..Default::default() },
+        Validation { range: "E2:E9".into(), kind: "time".into(), op: "ge".into(), a: "12:00".into(), ..Default::default() },
+        Validation { range: "F1".into(), kind: "whole".into(), ..Default::default() },
+        Validation { range: "G1".into(), kind: "odd".into(), a: "1".into(), ..Default::default() },
+    ];
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    assert_eq!(doc.p.sheets[0].valid.len(), 4, "a rule with no value and an unknown kind go");
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::sheet_view(&c, 0).unwrap().invalid, vec!["A3", "A4", "C3", "D3"]);
+    let chk = |a1: &str, v: &str| crate::sheet::check_input(&c, 0, a1, v);
+    assert_eq!(chk("A5", "7"), None);
+    assert_eq!(chk("A5", "11"), Some(("This cell takes a whole number between 1 and $B$1.".into(), false)));
+    assert_eq!(chk("A5", "=B1+1"), Some(("This cell takes a whole number between 1 and $B$1.".into(), false)), "a formula's result is checked");
+    assert_eq!(chk("C4", "01/02/2027"), Some(("Before year end".into(), true)), "only a warning");
+    assert_eq!((chk("D4", "abcde"), chk("E4", "09:15").is_some(), chk("E4", "14:00"), chk("Z9", "x"), chk("A6", "")), (None, true, None, None, None));
+    // To the workbook as its own rules, and back (as from another program: no Datum Plan sheet).
+    let f = export_sheets(&doc.p).unwrap();
+    let x = part(&f, "xl/worksheets/sheet1.xml");
+    assert!(x.contains("type=\"whole\"") && x.contains("<formula2>$B$1</formula2>") && x.contains("type=\"date\"") && x.contains("operator=\"lessThanOrEqual\"") && x.contains("type=\"textLength\"") && x.contains("prompt=\"1 to the limit in B1\""), "{x}");
+    let g = patch(&f, "xl/workbook.xml", |x| x.replace("name=\"DatumPlan\"", "name=\"Other\""));
+    let b = crate::io::sheetbook::import(&g).unwrap();
+    let v = &b.sheets.iter().find(|s| s.name == "V").unwrap().valid;
+    assert_eq!(v.iter().map(|v| (v.range.as_str(), v.kind.as_str(), v.op.as_str(), v.a.as_str(), v.b.as_str(), v.warn)).collect::<Vec<_>>(),
+        vec![("A2:A9", "whole", "between", "1", "=$B$1", false), ("C2:C9", "date", "le", "46387", "", true), ("D2:D9", "len", "le", "5", "", false), ("E2:E9", "time", "ge", "0.5", "", false)]);
+    assert_eq!((v[0].prompt.as_str(), v[1].error.as_str()), ("1 to the limit in B1", "Before year end"));
+    // A workbook written here comes back exactly.
+    assert_eq!(crate::io::sheetbook::import(&f).unwrap().sheets[0].valid, doc.p.sheets[0].valid);
+}
+
+#[test]
+fn links_show_open_only_web_and_mail_and_go_to_the_workbook() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("L", &[("A1", "https://example.com/spec?x=1"), ("A2", "=HYPERLINK(\"mailto:site@example.com\",\"Mail the site\")"), ("A3", "=HYPERLINK(B9&\"/docs\",\"Docs\")"), ("B9", "https://example.org"),
+        ("A4", "javascript:alert(1)"), ("A5", "=HYPERLINK(\"file:///C:/x.exe\",\"x\")"), ("A6", "see https://example.com")])) });
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    let v = crate::sheet::sheet_view(&c, 0).unwrap();
+    assert_eq!(v.links, vec![("A1".to_string(), "https://example.com/spec?x=1".to_string()), ("A2".into(), "mailto:site@example.com".into()), ("A3".into(), "https://example.org/docs".into()), ("B9".into(), "https://example.org".into())]);
+    assert_eq!(v.cells.iter().find(|x| x.0 == "A2").map(|x| x.2.as_str()), Some("Mail the site"));
+    let f = export_sheets(&doc.p).unwrap();
+    let x = part(&f, "xl/worksheets/sheet1.xml");
+    assert!(x.contains("<hyperlink ref=\"A1\"") && x.contains("HYPERLINK(\"mailto:site@example.com\""), "{x}");
+    assert!(part(&f, "xl/worksheets/_rels/sheet1.xml.rels").contains("Target=\"https://example.com/spec?x=1\""));
+    let b = crate::io::sheetbook::import(&f).unwrap();
+    assert_eq!((b.sheets[0].cells["A1"].as_str(), b.sheets[0].cells["A2"].as_str()), ("https://example.com/spec?x=1", "=HYPERLINK(\"mailto:site@example.com\",\"Mail the site\")"));
+    // A workbook link on a cell that shows other text comes in as HYPERLINK; one to a file does not.
+    let g = patch(&f, "xl/worksheets/_rels/sheet1.xml.rels", |x| x.replace("https://example.com/spec?x=1", "https://example.com/other"));
+    let g = patch(&g, "xl/sharedStrings.xml", |x| x.replace(">https://example.com/spec?x=1<", ">Spec<"));
+    assert_eq!(crate::io::sheetbook::import(&g).unwrap().sheets[0].cells["A1"], "=HYPERLINK(\"https://example.com/other\",\"Spec\")");
+    let h = patch(&f, "xl/worksheets/_rels/sheet1.xml.rels", |x| x.replace("https://example.com/spec?x=1", "file:///C:/run.exe"));
+    assert_eq!(crate::io::sheetbook::import(&h).unwrap().sheets[0].cells["A1"], "https://example.com/spec?x=1");
+}
+
+#[test]
+fn line_breaks_stay_in_the_cell_and_wrap_in_the_workbook() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("N", &[("A1", "Line one\nLine two")])) });
+    assert_eq!(shown(&doc, 0, "A1"), "Line one\nLine two");
+    let f = export_sheets(&doc.p).unwrap();
+    assert!(part(&f, "xl/styles.xml").contains("wrapText=\"1\""));
+    assert_eq!(crate::io::sheetbook::import(&f).unwrap().sheets[0].cells["A1"], "Line one\nLine two");
+}
+
+#[test]
+fn shifting_cells_moves_formats_filters_lists_and_notes_with_them() {
+    let mut doc = base();
+    let mut s = sheet("S", &[("A1", "Item"), ("B1", "Qty"), ("A2", "a"), ("B2", "1"), ("A3", "b"), ("B3", "2"), ("D1", "x")]);
+    s.cond = vec![CondRule { range: "B2:B3".into(), op: "gt".into(), a: "1".into(), style: "b".into(), ..Default::default() }, CondRule { range: "D1:D2".into(), op: "blank".into(), style: "b".into(), ..Default::default() }, CondRule { range: "A1:D9".into(), op: "blank".into(), style: "i".into(), ..Default::default() }];
+    s.valid = vec![Validation { range: "B2:B3".into(), kind: "whole".into(), op: "ge".into(), a: "0".into(), ..Default::default() }];
+    s.filter = Some(SheetFilter { range: "A1:B3".into(), cols: vec![ColFilter { col: 1, op: "gt".into(), a: "0".into(), ..Default::default() }] });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    op(&mut doc, Op::SheetNotes { k: 0, cells: vec![("B3".into(), "checked".into())] });
+    // Two cells inserted at A1:B1, the rest moving down within columns A and B.
+    op(&mut doc, Op::SheetShift { k: 0, range: "A1:B1".into(), down: true, del: false });
+    let s = &doc.p.sheets[0];
+    assert_eq!(s.cond.iter().map(|c| c.range.as_str()).collect::<Vec<_>>(), vec!["B3:B4", "D1:D2", "A1:D9"], "in the band they move; across its edge they stay");
+    assert_eq!((s.valid[0].range.as_str(), s.filter.as_ref().map(|f| f.range.as_str()), s.notes.contains_key("B4")), ("B3:B4", Some("A2:B4"), true));
+    // Deleting column A's cells in rows 1 to 9 moves column B left: the filter's column follows its heading.
+    op(&mut doc, Op::SheetShift { k: 0, range: "A1:A9".into(), down: false, del: true });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.valid[0].range.as_str(), s.filter.as_ref().map(|f| (f.range.as_str(), f.cols.iter().map(|c| c.col).collect::<Vec<_>>()))), ("A3:A4", Some(("A2:A4", vec![0]))));
+    assert_eq!(s.cond[0].range, "A3:A4");
+    // Deleting all of a range's cells removes the rule.
+    op(&mut doc, Op::SheetShift { k: 0, range: "A3:A4".into(), down: true, del: true });
+    let s = &doc.p.sheets[0];
+    assert!(s.valid.is_empty() && s.cond.iter().all(|c| c.range != "A3:A4"), "{:?}", s.cond);
+    assert_eq!(s.filter.as_ref().map(|f| f.range.as_str()), Some("A2"));
+    doc.undo();
+    assert_eq!(doc.p.sheets[0].valid[0].range, "A3:A4", "undo puts it back");
+}
+
+#[test]
+fn remove_duplicates_shrinks_the_ranges_on_the_list() {
+    let mut doc = base();
+    let mut s = sheet("D", &[("A1", "Vendor"), ("A2", "Steel"), ("A3", "steel"), ("A4", "Pipe"), ("A5", "Pipe")]);
+    s.cond = vec![CondRule { range: "A2:A5".into(), op: "dup".into(), style: "b".into(), ..Default::default() }];
+    s.valid = vec![Validation { range: "A2:A5".into(), kind: "len".into(), op: "le".into(), a: "20".into(), ..Default::default() }];
+    s.filter = Some(SheetFilter { range: "A1:A5".into(), cols: vec![] });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    op(&mut doc, Op::SheetNotes { k: 0, cells: vec![("A4".into(), "main supplier".into())] });
+    op(&mut doc, Op::SheetDedupe { k: 0, range: "A1:A5".into(), cols: vec![], header: true });
+    let s = &doc.p.sheets[0];
+    assert_eq!((s.cond[0].range.as_str(), s.valid[0].range.as_str(), s.filter.as_ref().unwrap().range.as_str()), ("A2:A3", "A2:A3", "A1:A3"));
+    assert_eq!((s.cells.get("A3").map(String::as_str), s.notes.contains_key("A3"), s.notes.len()), (Some("Pipe"), true, 1));
+}

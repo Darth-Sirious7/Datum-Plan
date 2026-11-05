@@ -456,6 +456,8 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             let mut f = styled(Format::new(), s.style.get(a1).map(String::as_str).unwrap_or(""));
             // Without a format of its own, the look the sheet gives it: a date, 12%, $1,200, €12, a plan percentage.
             if let Some(code) = if fm.is_empty() { auto.code(Some(k), input) } else { xl_numfmt(c, fm) } { f = f.set_num_format(code); }
+            // Text with line breaks (Alt+Enter) shows on its lines, as here.
+            if input.contains('\n') { f = f.set_text_wrap(); }
             if input.starts_with('=') {
                 let input = renamed.iter().fold(crate::sheet::excel_formula(c, input), |f, (o, n)| crate::sheet::rename(&f, o, n, &[]));
                 let res = match &v { gridcraft_core::Value::Number(n) => n.to_string(), gridcraft_core::Value::Bool(b) => (if *b { "TRUE" } else { "FALSE" }).into(), x => x.display() };
@@ -463,6 +465,9 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             } else if fm == "flag" || fm == "@" {
                 if fm == "flag" { flags.push(a1.clone()); }
                 ws.write_string_with_format(r, col, input, &f).map_err(e)?;
+            } else if let Some(url) = crate::sheetx::link(input) {
+                // A typed web or mail address goes as the workbook's own hyperlink.
+                ws.write_url_with_format(r, col, rust_xlsxwriter::Url::new(url.as_str()), &f).map_err(e)?;
             } else {
                 match v {
                     gridcraft_core::Value::Number(n) => { ws.write_number_with_format(r, col, n, &f).map_err(e)?; }
@@ -533,10 +538,24 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         // Notes, drop-down lists and the AutoFilter (its hidden rows as Datum Plan worked them out).
         for (a1, t) in &s.notes { if let Some((r, k)) = a1_index(a1) { ws.insert_note(r, k, &rust_xlsxwriter::Note::new(t).add_author_prefix(false)).map_err(e)?; } }
         for v in &s.valid {
+            use rust_xlsxwriter::{DataValidationRule as DR, Formula as Fx};
             let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&v.range) else { continue };
             let dv = rust_xlsxwriter::DataValidation::new();
-            let dv = if v.src.trim().is_empty() { match dv.allow_list_strings(&v.list.iter().map(String::as_str).collect::<Vec<_>>()) { Ok(x) => x, Err(_) => continue } }
-                else { dv.allow_list_formula(rust_xlsxwriter::Formula::new(format!("={}", v.src.trim().trim_start_matches('=')))) };
+            let (a, b) = (Fx::new(crate::sheet::bound_text(c, k, &v.a)), Fx::new(crate::sheet::bound_text(c, k, &v.b)));
+            let rule = match v.op.as_str() { "notbetween" => DR::NotBetween(a, b), "eq" => DR::EqualTo(a), "ne" => DR::NotEqualTo(a), "gt" => DR::GreaterThan(a), "lt" => DR::LessThan(a), "ge" => DR::GreaterThanOrEqualTo(a), "le" => DR::LessThanOrEqualTo(a), _ => DR::Between(a, b) };
+            let dv = match v.kind.as_str() {
+                "" if v.src.trim().is_empty() => match dv.allow_list_strings(&v.list.iter().map(String::as_str).collect::<Vec<_>>()) { Ok(x) => x, Err(_) => continue },
+                "" => dv.allow_list_formula(Fx::new(format!("={}", v.src.trim().trim_start_matches('=')))),
+                "whole" => dv.allow_whole_number_formula(rule),
+                "decimal" => dv.allow_decimal_number_formula(rule),
+                "date" => dv.allow_date_formula(rule),
+                "time" => dv.allow_time_formula(rule),
+                "len" => dv.allow_text_length_formula(rule),
+                _ => dv.allow_any_value(),
+            };
+            let short = |t: &str| t.chars().take(250).collect::<String>();
+            let dv = if v.prompt.trim().is_empty() { dv } else { dv.clone().set_input_message(short(&v.prompt)).unwrap_or(dv) };
+            let dv = if v.error.trim().is_empty() { dv } else { dv.clone().set_error_message(short(&v.error)).unwrap_or(dv) };
             let dv = if v.warn { dv.set_error_style(rust_xlsxwriter::DataValidationErrorStyle::Warning) } else { dv };
             ws.add_data_validation(r0, c0 as u16, r1, c1 as u16, &dv).map_err(e)?;
         }
@@ -614,6 +633,11 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
         for (name, v, _) in crate::sheet::project_names(c) {
             let f = match v { gridcraft_core::Value::Number(n) => format!("={n}"), v => format!("=\"{}\"", v.display().replace('"', "\"\"")) };
             wb.define_name(name, &f).map_err(e)?;
+        }
+        // The plan's own defined names (one the workbook refuses is left out rather than lose the file).
+        for n in &c.p.names {
+            let f = renamed.iter().fold(crate::sheet::excel_formula(c, &n.formula), |f, (o, nw)| crate::sheet::rename(&f, o, nw, &[]));
+            let _ = wb.define_name(n.name.as_str(), &f);
         }
     }
     if !meta.is_empty() {

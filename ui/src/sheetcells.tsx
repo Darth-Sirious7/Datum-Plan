@@ -1,12 +1,12 @@
 // Spreadsheet dialogs for the Sheets: Format Cells (number, alignment, font, border, fill), Insert and
-// Delete cells, notes, the AutoFilter's column menu, Custom Sort, drop-down lists and Go To. They only
-// collect choices; sheets.tsx turns them into edits (ops), so Undo works as for any edit.
+// Delete cells, notes, the AutoFilter's column menu, Custom Sort, data validation, links, defined names
+// and Go To. They only collect choices; sheets.tsx turns them into edits (ops), so Undo works as for any edit.
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { P, openDialog, closeDialog } from "./store";
 import { Dialog, Row, Tabs } from "./ui";
 import * as F from "./fmt";
 import { colorPalette, STANDARD } from "./colors";
-import type { ColFilter, Validation } from "./api";
+import type { ColFilter, DefName, Validation } from "./api";
 
 type B4 = { r0: number; c0: number; r1: number; c1: number };
 /** One cell's style with a border kind applied, as a spreadsheet draws it on a selection (inner lines once). */
@@ -183,21 +183,87 @@ export const dedupeDialog = (cols: [number, string][], headers: boolean, run: (c
   </Dialog>;
 });
 
-/** A drop-down list on the selected cells: typed values or cells to read them from. */
+const KINDS: [string, string][] = [["", "List"], ["whole", "Whole number"], ["decimal", "Decimal"], ["date", "Date"], ["time", "Time"], ["len", "Text length"], ["any", "Any value"]];
+const VOPS: [string, string][] = [["between", "between"], ["notbetween", "not between"], ["eq", "equal to"], ["ne", "not equal to"], ["gt", "greater than"], ["lt", "less than"], ["ge", "greater than or equal to"], ["le", "less than or equal to"]];
+/** Data Validation on the selected cells: a drop-down list (typed values or cells to read them from), or
+ *  whole numbers, decimals, dates, times or a text length between bounds (values or cells), with the
+ *  message shown while a cell is selected and the one shown when a value is refused (stop or warn). */
 export const listDialog = (range: string, cur: Validation | undefined, save: (v: Validation | null) => void) => openDialog(() => {
-  const [r, setR] = createSignal(cur?.range ?? range), [fromCells, setFromCells] = createSignal(!!cur?.src), [items, setItems] = createSignal((cur?.list ?? []).join("\n")), [src, setSrc] = createSignal(cur?.src ?? ""), [warn, setWarn] = createSignal(!!cur?.warn);
-  return <Dialog title="Drop-down List" okText="OK" help="sheetdata" ok={() => {
-    const list = items().split(/\n|,/).map(x => x.trim()).filter(Boolean);
-    if (fromCells() ? !src().trim() : !list.length) return false;
-    save({ range: r().toUpperCase().replace(/\$/g, ""), list: fromCells() ? [] : list, src: fromCells() ? src().trim() : "", warn: warn() });
-  }} extra={cur ? <button class="btn" onClick={() => { closeDialog(); save(null); }}>Remove List</button> : undefined}>
+  const [r, setR] = createSignal(cur?.range ?? range), [kind, setKind] = createSignal(cur?.kind ?? ""), [fromCells, setFromCells] = createSignal(!!cur?.src), [items, setItems] = createSignal((cur?.list ?? []).join("\n")), [src, setSrc] = createSignal(cur?.src ?? ""), [warn, setWarn] = createSignal(!!cur?.warn);
+  const [op, setOp] = createSignal(cur?.op || "between"), [a, setA] = createSignal(cur?.a ?? ""), [b, setB] = createSignal(cur?.b ?? ""), [prompt, setPrompt] = createSignal(cur?.prompt ?? ""), [err, setErr] = createSignal(cur?.error ?? "");
+  const two = () => op() === "between" || op() === "notbetween", hint = () => (kind() === "date" ? "31/12/2026 or =B1" : kind() === "time" ? "13:30 or =B1" : "10 or =$B$1");
+  return <Dialog title="Data Validation" okText="OK" help="sheetdata" ok={() => {
+    const list = items().split(/\n|,/).map(x => x.trim()).filter(Boolean), k = kind();
+    if (!k && (fromCells() ? !src().trim() : !list.length)) return false;
+    if (k && k !== "any" && (!a().trim() || (two() && !b().trim()))) return false;
+    if (k === "any" && !prompt().trim()) return false;
+    const v: Validation = { range: r().toUpperCase().replace(/\$/g, ""), list: !k && !fromCells() ? list : [], src: !k && fromCells() ? src().trim() : "", warn: warn() };
+    if (k) Object.assign(v, { kind: k, ...(k !== "any" ? { op: op(), a: a().trim(), ...(two() ? { b: b().trim() } : {}) } : {}) });
+    if (prompt().trim()) v.prompt = prompt().trim();
+    if (err().trim()) v.error = err().trim();
+    save(v);
+  }} extra={cur ? <button class="btn" onClick={() => { closeDialog(); save(null); }}>Clear All</button> : undefined}>
     <div class="form">
       <Row label="Cells"><input value={r()} onInput={e => setR(e.currentTarget.value)} /></Row>
-      <Row label="Values from"><span><label class="chk"><input type="radio" name="lsrc" checked={!fromCells()} onChange={() => setFromCells(false)} />Typed here</label><label class="chk"><input type="radio" name="lsrc" checked={fromCells()} onChange={() => setFromCells(true)} />Cells</label></span></Row>
-      <Show when={!fromCells()} fallback={<Row label="Cells with the values"><input value={src()} placeholder="$A$2:$A$20 or Lists!A1:A9" onInput={e => setSrc(e.currentTarget.value)} /></Row>}>
-        <Row label="Values (one a line)"><textarea value={items()} onInput={e => setItems(e.currentTarget.value)} /></Row></Show>
-      <Row label=""><label class="chk"><input type="checkbox" checked={warn()} onChange={e => setWarn(e.currentTarget.checked)} />Allow other values (only warn)</label></Row>
+      <Row label="Allow"><select class="vkind" onChange={e => setKind(e.currentTarget.value)}><For each={KINDS}>{([v, l]) => <option value={v} selected={v === kind()}>{l}</option>}</For></select></Row>
+      <Show when={!kind()}>
+        <Row label="Values from"><span><label class="chk"><input type="radio" name="lsrc" checked={!fromCells()} onChange={() => setFromCells(false)} />Typed here</label><label class="chk"><input type="radio" name="lsrc" checked={fromCells()} onChange={() => setFromCells(true)} />Cells</label></span></Row>
+        <Show when={!fromCells()} fallback={<Row label="Cells with the values"><input value={src()} placeholder="$A$2:$A$20 or Lists!A1:A9" onInput={e => setSrc(e.currentTarget.value)} /></Row>}>
+          <Row label="Values (one a line)"><textarea class="vitems" value={items()} onInput={e => setItems(e.currentTarget.value)} /></Row></Show>
+      </Show>
+      <Show when={kind() && kind() !== "any"}>
+        <Row label={kind() === "len" ? "Length is" : "Value is"}><select class="vop" onChange={e => setOp(e.currentTarget.value)}><For each={VOPS}>{([v, l]) => <option value={v} selected={v === op()}>{l}</option>}</For></select></Row>
+        <Row label={two() ? "Minimum" : "Value"}><input class="va" value={a()} placeholder={hint()} onInput={e => setA(e.currentTarget.value)} /></Row>
+        <Show when={two()}><Row label="Maximum"><input class="vb" value={b()} placeholder={hint()} onInput={e => setB(e.currentTarget.value)} /></Row></Show>
+      </Show>
+      <Row label="Message when selected"><input class="vprompt" value={prompt()} placeholder="Optional: what to type here" onInput={e => setPrompt(e.currentTarget.value)} /></Row>
+      <Row label="Message when wrong"><input value={err()} placeholder="Optional: said when a value is refused" onInput={e => setErr(e.currentTarget.value)} /></Row>
+      <Row label="A wrong value"><select class="vstyle" onChange={e => setWarn(e.currentTarget.value === "warn")}><option value="stop" selected={!warn()}>Stop: refuse it</option><option value="warn" selected={warn()}>Warn: ask, then allow it</option></select></Row>
     </div>
+    <p class="muted">Bounds can be values or cells (=$B$1, =Lists!A1). Circle Invalid Data marks the cells that already break the rule.</p>
+  </Dialog>;
+});
+
+/** Insert or edit a link: the address (web or mail) and the text the cell shows. */
+export const linkDialog = (cur: { url: string; text: string }, save: (x: { url: string; text: string } | null) => void) => openDialog(() => {
+  const [url, setUrl] = createSignal(cur.url), [text, setText] = createSignal(cur.text);
+  const ok = () => /^(https?:\/\/|mailto:)[^\s"<>`\\^{}|]+$/i.test(url().trim());
+  return <Dialog title={cur.url ? "Edit Link" : "Insert Link"} okText="OK" help="sheetdata" ok={() => { if (!ok()) return false; save({ url: url().trim(), text: text().trim() }); }} extra={cur.url ? <button class="btn" onClick={() => { closeDialog(); save(null); }}>Remove Link</button> : undefined}>
+    <div class="form">
+      <Row label="Address"><input class="laddr" value={url()} placeholder="https://… or mailto:name@example.com" onInput={e => setUrl(e.currentTarget.value)} /></Row>
+      <Row label="Text to show"><input class="ltext" value={text()} placeholder="Optional: the address shows when empty" onInput={e => setText(e.currentTarget.value)} /></Row>
+    </div>
+    <p class="muted">{url().trim() && !ok() ? "A link starts with http://, https:// or mailto: and has no spaces or quotes." : "Ctrl+click the cell (or right-click › Open Link) to open it in the browser."}</p>
+  </Dialog>;
+});
+
+/** Before a link opens: the full address, so a link that is not what its text says is seen. */
+export const openLinkDialog = (url: string, open: () => void) => openDialog(() =>
+  <Dialog title="Open Link" okText="Open" ok={open}><p>Open this address in your browser?</p><p class="linkurl"><code>{url}</code></p><p class="muted">Only open links from people you trust.</p></Dialog>);
+
+/** Define Name: a name for a range, a value or a formula, for every sheet's formulas. */
+export const nameDialog = (cur: DefName, save: (n: DefName) => void | boolean | Promise<void | boolean>) => openDialog(() => {
+  const [n, setN] = createSignal(cur.name), [f, setF] = createSignal(cur.formula), [c, setC] = createSignal(cur.comment ?? "");
+  return <Dialog title={cur.name ? "Edit Name" : "New Name"} okText="OK" help="sheetnames" ok={() => (n().trim() && f().trim() ? save({ name: n().trim(), formula: f().trim().startsWith("=") ? f().trim() : `=${f().trim()}`, ...(c().trim() ? { comment: c().trim() } : {}) }) : false)}>
+    <div class="form">
+      <Row label="Name"><input class="nname" value={n()} placeholder="Rates" onInput={e => setN(e.currentTarget.value)} /></Row>
+      <Row label="Refers to"><input class="nref" value={f()} placeholder="=Prices!$B$2:$B$20 or =0.05" onInput={e => setF(e.currentTarget.value)} /></Row>
+      <Row label="Comment"><input value={c()} onInput={e => setC(e.currentTarget.value)} /></Row>
+    </div>
+    <p class="muted">A name starts with a letter or _, has no spaces and is not a cell address (B12) or one of the plan's names (ProjectFinish, Tasks…).</p>
+  </Dialog>;
+});
+
+/** Name Manager: every defined name, to add, edit, delete or go to. Changes are saved together with OK. */
+export const nameManager = (names: DefName[], here: string, save: (l: DefName[]) => Promise<boolean>, go: (f: string) => void) => openDialog(() => {
+  const [list, setList] = createSignal(names.map(x => ({ ...x }))), [sel, setSel] = createSignal(0);
+  const edit = (i: number) => nameDialog(i >= 0 ? list()[i] : { name: "", formula: here }, n => { if (list().some((x, j) => j !== i && x.name.toLowerCase() === n.name.toLowerCase())) return false; setList(i >= 0 ? list().map((x, j) => (j === i ? n : x)) : [...list(), n]); setSel(i >= 0 ? i : list().length - 1); });
+  return <Dialog title="Name Manager" okText="OK" wide help="sheetnames" ok={async () => { if (!(await save(list()))) return false; }}>
+    <div class="row2"><button class="btn sm" onClick={() => edit(-1)}>New…</button><button class="btn sm" disabled={!list().length} onClick={() => edit(sel())}>Edit…</button>
+      <button class="btn sm" disabled={!list().length} onClick={() => { setList(list().filter((_, j) => j !== sel())); setSel(Math.max(0, sel() - 1)); }}>Delete</button>
+      <button class="btn sm" disabled={!list()[sel()]} onClick={() => { const x = list()[sel()]; if (x) { closeDialog(); go(x.formula); } }}>Go To</button></div>
+    <table class="tbl names"><thead><tr><th>Name</th><th>Refers to</th><th>Comment</th></tr></thead>
+      <tbody><For each={list()} fallback={<tr><td colSpan={3} class="muted">No names yet. New… names a range, a value or a formula.</td></tr>}>{(x, i) => <tr classList={{ on: sel() === i(), click: true }} onClick={() => setSel(i())} onDblClick={() => edit(i())}><td><b>{x.name}</b></td><td><code>{x.formula}</code></td><td>{x.comment}</td></tr>}</For></tbody></table>
   </Dialog>;
 });
 

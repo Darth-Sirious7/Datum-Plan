@@ -32,7 +32,7 @@ export interface Project {
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
   subplans?: SubPlan[]; master?: string;
-  titles: Record<string, string>; sheets: SheetData[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
+  titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {
   name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; measured_at: string; dur: string; pct: number; work: string; cost: string;
@@ -102,7 +102,10 @@ export interface SheetData { name: string; cells: Record<string, string>; fmt: R
 export interface SheetFilter { range: string; cols: ColFilter[] }
 export interface ColFilter { col: number; values?: string[] | null; op: string; a: string; b: string }
 /** A drop-down list on a range: typed values or cells (src). */
-export interface Validation { range: string; list: string[]; src: string; warn?: boolean }
+/** Data validation: kind "" is a drop-down list (list or src); "whole", "decimal", "date", "time", "len" compare with a and b by op; "any" only shows the prompt. */
+export interface Validation { range: string; list: string[]; src: string; warn?: boolean; kind?: string; op?: string; a?: string; b?: string; prompt?: string; error?: string }
+/** A defined name: what every sheet formula can call it by, and what it refers to (=Prices!$B$2:$B$20, =0.05). */
+export interface DefName { name: string; formula: string; comment?: string }
 /** A conditional formatting rule (see condfmt.tsx). */
 export interface CondRule { range: string; op: string; a: string; b: string; style: string }
 /** A sheet's own page setup (empty text and missing values follow the plan's). */
@@ -113,7 +116,7 @@ export interface Picture { id: number; name: string; role: string; data: string 
 export interface SheetImage { pic: number; cell: string; w: number; h: number; fit?: boolean }
 export interface Photo { data: string; caption: string }
 export interface PeriodNote { kind: string; end: string | null; summary: string; progress: string; issues: string; actions: string; look_ahead: string; photos: Photo[] }
-export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][] }
+export interface SheetOut { name: string; rows: number; cols: number; cells: [string, string, string, boolean, number | null][]; filtered?: number[]; lists?: string[][]; links?: [string, string][]; invalid?: string[] }
 export interface SCurve { days: number[]; planned: number[]; actual: (number | null)[]; forecast: number[]; total: number; status_day: number; name: string; weight: string }
 export interface PRow { uid: number; code: string; name: string; start: string; finish: string; pct: number; note: string }
 export interface PeriodReport {
