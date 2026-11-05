@@ -9,7 +9,7 @@ fn main() {
         let lvl = if i % 50 == 0 { 0 } else { 1 };
         let mut t = p.new_task(&format!("Task {i}"), lvl, if lvl == 0 { 0 } else { 480 * (1 + i as i64 % 5) });
         if lvl == 1 && i % 50 > 1 {
-            t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false });
+            t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false, elapsed: false });
         }
         p.tasks.push(t);
     }

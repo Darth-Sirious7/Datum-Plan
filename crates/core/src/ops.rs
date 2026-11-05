@@ -21,7 +21,7 @@ pub fn catalog() -> Vec<OpInfo> {
         o("Outdent", "Outdent tasks.", json!({"Outdent": {"uids": [3]}})),
         o("Move", "Move tasks up or down.", json!({"Move": {"uids": [3], "up": true}})),
         o("Link", "Link the tasks in order, finish to start.", json!({"Link": {"uids": [2, 3]}})),
-        o("LinkSet", "Add or change one link (kind FS, SS, FF or SF; lag like 2d, 4h or 50%), or remove it with kind null.", json!({"LinkSet": {"pred": 2, "succ": 3, "kind": "SS", "lag": "2d"}})),
+        o("LinkSet", "Add or change one link (kind FS, SS, FF or SF; lag like 2d, 4h, 7ed (elapsed, round the clock) or 50%), or remove it with kind null.", json!({"LinkSet": {"pred": 2, "succ": 3, "kind": "SS", "lag": "2d"}})),
         o("Unlink", "Remove all links of tasks.", json!({"Unlink": {"uids": [3]}})),
         o("Split", "Pause a task: after this many working minutes of work, a gap of this many.", json!({"Split": {"uid": 2, "after": 480, "gap": 960}})),
         o("Level", "Level resources (all tasks with uids [], or some), or clear levelling.", json!({"Level": {"uids": [], "clear": false}})),

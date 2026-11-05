@@ -70,13 +70,16 @@ pub fn fmt_dur(min: i64, u: Unit, day: i64) -> String {
 }
 
 /// Short form for lags: "+2d", "-4h".
-pub fn fmt_lag(min: i64, day: i64) -> String {
+pub fn fmt_lag(min: i64, day: i64) -> String { fmt_lag_el(min, day, false) }
+
+/// Short form for a lag that may be elapsed (clock minutes): "+7ed", "-12eh", "+30em".
+pub fn fmt_lag_el(min: i64, day: i64, elapsed: bool) -> String {
     if min == 0 {
         return String::new();
     }
-    let day = day.max(1);
+    let (day, e) = if elapsed { (crate::cal::DAY, "e") } else { (day.max(1), "") };
     let (v, u) = if min % day == 0 { (min / day, "d") } else if min % 60 == 0 { (min / 60, "h") } else { (min, "m") };
-    format!("{}{v}{u}", if min > 0 { "+" } else { "" })
+    format!("{}{v}{e}{u}", if min > 0 { "+" } else { "" })
 }
 
 const DATE_FORMATS: [&str; 9] = ["%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y", "%d/%m/%Y", "%d/%m/%y", "%d %b %Y", "%d %b %y", "%a %d-%b-%y", "%Y-%m-%dT%H:%M:%S"];
@@ -121,32 +124,33 @@ pub fn preds(s: &str, ids: &[u32], day: i64) -> Result<Vec<Link>, String> {
         if matches!(rest.get(..2), Some("FS" | "SS" | "FF" | "SF")) {
             rest = &rest[2..];
         }
-        let (lag, pct) = match rest.chars().next() {
-            None => (0, false),
+        let (lag, pct, elapsed) = match rest.chars().next() {
+            None => (0, false, false),
             Some('+' | '-') => lag(rest, day).map_err(|e| format!("\"{tok}\": {e}"))?,
-            _ => return Err(format!("Write the lag in \"{tok}\" as +2d, -4h or +50%.")),
+            _ => return Err(format!("Write the lag in \"{tok}\" as +2d, -4h, +7ed or +50%.")),
         };
-        out.push(Link { pred: uid, kind, lag, pct });
+        out.push(Link { pred: uid, kind, lag, pct, elapsed });
     }
     Ok(out)
 }
 
-/// A lag as typed: "+2d" or "2d" waits, "-4h" overlaps, "50%" or "-20%" is a share of the
-/// predecessor's duration. Empty is no lag. Gives working minutes (or the percent) and whether it is a percent.
-pub fn lag(s: &str, day: i64) -> Result<(i64, bool), String> {
+/// A lag as typed: "+2d" or "2d" waits, "-4h" overlaps, "+7ed" or "-12eh" is elapsed (clock time,
+/// round the clock), "50%" or "-20%" is a share of the predecessor's duration. Empty is no lag.
+/// Gives working minutes (clock minutes if elapsed, or the percent), whether it is a percent and whether elapsed.
+pub fn lag(s: &str, day: i64) -> Result<(i64, bool, bool), String> {
     let t: String = s.replace('\u{2212}', "-").chars().filter(|c| !c.is_whitespace()).collect();
     let (neg, x) = match t.strip_prefix('-') { Some(x) => (true, x), None => (false, t.strip_prefix('+').unwrap_or(&t)) };
-    if x.is_empty() { return Ok((0, false)) }
-    let pct = x.ends_with('%');
+    if x.is_empty() { return Ok((0, false, false)) }
+    let (pct, mut el) = (x.ends_with('%'), false);
     let v = if pct {
         x.trim_end_matches('%').parse::<f64>().ok().filter(|v| v.is_finite()).map(|v| v.clamp(-10_000.0, 10_000.0).round() as i64).ok_or("write a percent lag as +50%.")?
-    } else { dur(x, day)?.0 };
-    Ok((if neg { -v } else { v }, pct))
+    } else { let (m, _, e) = dur_any(x, day)?; el = e; m };
+    Ok((if neg { -v } else { v }, pct, el))
 }
 
 pub fn fmt_link(id: usize, l: &Link, day: i64) -> String {
     let k = if l.kind == LinkType::FS && l.lag == 0 { String::new() } else { format!("{:?}", l.kind) };
-    let lag = if l.pct && l.lag != 0 { format!("{:+}%", l.lag) } else { fmt_lag(l.lag, day) };
+    let lag = if l.pct && l.lag != 0 { format!("{:+}%", l.lag) } else { fmt_lag_el(l.lag, day, l.elapsed) };
     format!("{id}{k}{lag}")
 }
 

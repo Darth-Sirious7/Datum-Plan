@@ -200,7 +200,7 @@ pub fn write(p: &Project, s: &Sched, today: NaiveDate) -> String {
     for (i, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
             let Some(&k) = idx.get(&l.pred) else { continue };
-            let lag = if l.pct { p.tasks[k].dur * l.lag / 100 } else { l.lag };
+            let lag = super::work_lag(p, l, p.tasks[k].dur);
             for b in under(i) { for a in under(k) { links.push(format!("{}\t{}\t{}\t1\t1\tPR_{:?}\t{}", links.len() + 1, p.tasks[b].uid, p.tasks[a].uid, l.kind, lag as f64 / 60.0)) } }
         }
     }
@@ -371,7 +371,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         let kind = match g(l, "pred_type").as_str() { "PR_SS" => LinkType::SS, "PR_FF" => LinkType::FF, "PR_SF" => LinkType::SF, _ => LinkType::FS };
         let lag = (g(l, "lag_hr_cnt").parse::<f64>().unwrap_or(0.0) * 60.0).round() as i64;
         match idx.get(&q).and(idx.get(&s)) {
-            Some(&i) => p.tasks[i].preds.push(Link { pred: q, kind, lag, pct: false }),
+            Some(&i) => p.tasks[i].preds.push(Link { pred: q, kind, lag, pct: false, elapsed: false }),
             None => dropped += 1,
         }
     }

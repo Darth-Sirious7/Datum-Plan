@@ -100,6 +100,9 @@ pub struct Link {
     /// The lag is a percentage of the predecessor's duration (`lag` holds the percent).
     #[serde(default, skip_serializing_if = "is_false")]
     pub pct: bool,
+    /// Elapsed lag: `lag` is clock minutes, counted round the clock (weekends and nights too).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub elapsed: bool,
 }
 
 /// Work resources: units 1.0 = 100%. Material: quantity. Cost: amount.
@@ -864,7 +867,7 @@ impl Project {
             t.splits.dedup_by_key(|x| x.0);
             t.splits.iter_mut().for_each(|x| *x = (span(x.0), span(x.1)));
             t.splits.truncate(100);
-            t.preds.iter_mut().for_each(|l| l.lag = if l.pct { l.lag.clamp(-10_000, 10_000) } else { span(l.lag) });
+            t.preds.iter_mut().for_each(|l| { l.lag = if l.pct { l.lag.clamp(-10_000, 10_000) } else { span(l.lag) }; l.elapsed &= !l.pct });
             (t.qty, t.qty_done, t.fixed_cost) = (fin(t.qty).max(0.0), fin(t.qty_done).max(0.0), fin(t.fixed_cost));
             t.res.iter_mut().for_each(|a| a.units = fin(a.units).clamp(0.0, if work.contains(&a.res) { 1000.0 } else { 1e12 }));
             // Sums of huge amounts overflow; a NaN or infinity would be saved as null and the file could not be opened.

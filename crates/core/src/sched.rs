@@ -15,6 +15,8 @@ pub struct Sched {
     pub lf: Vec<i64>,
     pub tf: Vec<i64>,
     pub ff: Vec<i64>,
+    /// Where each task's remaining work starts: after the status date for a task under way, else its start.
+    pub rs: Vec<i64>,
     pub summary: Vec<bool>,
     /// Inactive, or under an inactive summary.
     pub off: Vec<bool>,
@@ -40,7 +42,7 @@ pub struct Sched {
 }
 
 #[derive(Clone, Copy)]
-pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64 }
+pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64, /** Elapsed lag: clock time, round the clock. */ pub el: bool }
 
 /// The other plan's task a task mirrors (SS and FF to it, no lag), as its last known start and finish.
 pub fn mirrored(t: &crate::model::Task) -> Option<(i64, i64)> {
@@ -143,7 +145,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                     let lag = if l.pct { dur[a] * l.lag / 100 } else { l.lag };
                     inc[b].push(edges.len());
                     out[a].push(edges.len());
-                    edges.push(Edge { p: a, s: b, kind: l.kind, lag });
+                    edges.push(Edge { p: a, s: b, kind: l.kind, lag, el: l.elapsed && !l.pct });
                 }
             }
         }
@@ -168,8 +170,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         return Err(format!("Circular link: task {} \"{}\" ends up depending on itself.", i + 1, p.tasks[i].name));
     }
 
-    // The calendar a lag is counted on.
-    let lag_cal = |e: &Edge| match o.lag_cal { LagCal::Successor => ci[e.s].get(), LagCal::Predecessor => ci[e.p].get(), LagCal::H24 => h24, LagCal::Project => def };
+    // The calendar a lag is counted on (an elapsed lag on the clock).
+    let lag_cal = |e: &Edge| if e.el { h24 } else { match o.lag_cal { LagCal::Successor => ci[e.s].get(), LagCal::Predecessor => ci[e.p].get(), LagCal::H24 => h24, LagCal::Project => def } };
     let pc = &cals[def];
     // Predecessors in other plans hold a task like links, from their last known dates (0 = never
     // read); links on a summary hold every task under it. Lags count on the lag calendar (the other
@@ -183,6 +185,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     let data = p.status.map(|d| at(d) + DAY);
     let (mut es, mut ef) = (vec![start; n], vec![start; n]);
     let mut fixed = vec![false; n];
+    let mut rs = vec![i64::MIN; n];
     // The earliest start (or finish, for FF/SF) a link allows.
     let need = |e: &Edge, es: &[i64], ef: &[i64]| -> i64 {
         let lc = &cals[lag_cal(e)];
@@ -219,7 +222,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                         }
                         from = from.max(ext_need(i, c, rem).unwrap_or(from));
                     }
-                    c.add(c.next_start(from), rem)
+                    rs[i] = c.next_start(from);
+                    c.add(rs[i], rem)
                 }
                 _ => c.add(es[i], sp),
             };
@@ -423,7 +427,9 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
     }
     let ci = ci.iter().map(std::cell::Cell::get).collect();
-    Ok(Sched { es, ef, ls, lf, tf, ff, summary, off, loe, mirror, lp, fpath, ci, rcal, cals, edges, drive, start, finish })
+    // Remaining work starts at the start, except for work under way at the status date.
+    for i in 0..n { if rs[i] == i64::MIN || summary[i] { rs[i] = es[i] } }
+    Ok(Sched { es, ef, ls, lf, tf, ff, rs, summary, off, loe, mirror, lp, fpath, ci, rcal, cals, edges, drive, start, finish })
 }
 
 impl Sched {

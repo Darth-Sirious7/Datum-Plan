@@ -42,6 +42,17 @@ fn spread(c: &crate::cal::WorkCal, es: i64, ef: i64, mut f: impl FnMut(i64, f64)
     }
 }
 
+/// Spreads a task's amounts like `spread`, split at the status date when work is under way (`cut`
+/// = the status date and where the remaining work starts): the share `done` over the actual start
+/// up to the status date, the rest from the resume point to the finish.
+fn phased(c: &crate::cal::WorkCal, es: i64, ef: i64, cut: Option<(i64, i64)>, done: f64, mut f: impl FnMut(i64, f64)) {
+    let Some((dd, rs)) = cut else { return spread(c, es, ef, f) };
+    if done > 0.0 {
+        spread(c, es, dd.clamp(es, ef), |d, x| f(d, x * done));
+    }
+    spread(c, rs, ef, |d, x| f(d, x * (1.0 - done)));
+}
+
 pub fn compute(p: &Project, s: &Sched) -> Loads {
     let (n, m) = (p.tasks.len(), p.resources.len());
     let mut l = Loads { work: vec![0.0; n], cost: vec![0.0; n], awork: vec![0.0; n], acost: vec![0.0; n], res_work: vec![0.0; m], res_cost: vec![0.0; m], over: vec![false; m], ..Default::default() };
@@ -49,6 +60,9 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
         let (c, es, ef) = (&s.cals[s.ci[i]], s.es[i], s.ef[i]);
         let done = t.pct as f64 / 100.0;
         let first = date_of(es);
+        // Under way at the status date: work done before it, the rest after it.
+        let dd = p.status.map(|d| crate::cal::at(d) + DAY);
+        let cut = dd.filter(|_| t.act_start.is_some() && t.act_finish.is_none() && t.pct < 100).map(|dd| (dd, s.rs[i]));
         for a in &t.res {
             let Some(k) = p.res_idx(a.res) else { continue };
             let r = &p.resources[k];
@@ -59,7 +73,7 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
                 ResKind::Cost => (0.0, a.units),
             };
             let mut wcost = 0.0;
-            spread(c, es, ef, |d, share| {
+            phased(c, es, ef, cut, done, |d, share| {
                 let mins = w * share;
                 let day_cost = if r.kind == ResKind::Work { mins / 60.0 * r.rate_on(a.table, date_of(d * DAY)).0 } else { cost * share };
                 wcost += day_cost;
@@ -88,7 +102,7 @@ pub fn compute(p: &Project, s: &Sched) -> Loads {
             match accrual {
                 Accrual::Start => l.task_daily.entry((i, es.div_euclid(DAY))).or_default().1 += amount,
                 Accrual::End => l.task_daily.entry((i, (ef - 1).max(es).div_euclid(DAY))).or_default().1 += amount,
-                Accrual::Prorated => spread(c, es, ef, |d, share| l.task_daily.entry((i, d)).or_default().1 += amount * share),
+                Accrual::Prorated => phased(c, es, ef, cut, done, |d, share| l.task_daily.entry((i, d)).or_default().1 += amount * share),
             }
             l.cost[i] += amount;
             l.acost[i] += actual;

@@ -147,7 +147,7 @@ fn xer_keeps_links_to_summaries() {
     let mut p = plan(&[(3, ""), (0, ""), (2, "")]);
     p.tasks[2].level = 1;
     let su = p.tasks[1].uid;
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }];
     let _ = su;
     let a = schedule(&p).unwrap();
     let q = round_trip(&p, "xer");
@@ -199,7 +199,7 @@ fn exports_keep_dates_held_by_other_plans() {
 #[test]
 fn xer_keeps_percent_lags() {
     let mut p = plan(&[(10, ""), (2, "")]);
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true, elapsed: false }];
     let a = schedule(&p).unwrap();
     let q = round_trip(&p, "xer");
     let b = schedule(&q).unwrap();
@@ -245,8 +245,8 @@ fn xer_keeps_physical_percent() {
 fn pmxml_keeps_links_to_summaries_and_percent_lags() {
     let mut p = plan(&[(10, ""), (0, ""), (2, ""), (2, "")]);
     p.tasks[2].level = 1;
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false }];
-    p.tasks[3].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }];
+    p.tasks[3].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true, elapsed: false }];
     let x = crate::io::formats::pmxml(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)));
     let rel = |a: usize, b: usize| format!("<PredecessorActivityObjectId>{}</PredecessorActivityObjectId><SuccessorActivityObjectId>{}</SuccessorActivityObjectId>", p.tasks[a].uid, p.tasks[b].uid);
     assert!(x.contains(&rel(0, 2)), "link to the summary dropped");
@@ -256,8 +256,8 @@ fn pmxml_keeps_links_to_summaries_and_percent_lags() {
 #[test]
 fn mpx_writes_lags_and_assignments_by_resource_id() {
     let mut p = plan(&[(10, ""), (2, ""), (2, "")]);
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2 * D, pct: false }];
-    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 2 * D, pct: false, elapsed: false }];
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 50, pct: true, elapsed: false }];
     p.resources.push(Resource { uid: 7, name: "Fitter".into(), rate: 50.0, ..Default::default() });
     p.tasks[1].res = vec![Assign { res: 7, units: 1.0, table: 0 }];
     let x = crate::io::formats::mpx(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 1)));
@@ -527,7 +527,7 @@ fn exchange_time_grows_with_the_plan() {
         p.resource("Crew");
         for i in 0..n {
             let mut t = p.new_task(&format!("T{i}"), (i % 50 != 0) as u8, if i % 50 == 0 { 0 } else { 480 });
-            if i % 50 > 1 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false }) }
+            if i % 50 > 1 { t.preds.push(Link { pred: t.uid - 1, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }) }
             t.res = vec![Assign { res: 1, units: 1.0, table: 0 }];
             p.tasks.push(t);
         }
@@ -542,4 +542,34 @@ fn exchange_time_grows_with_the_plan() {
     };
     let (a, b) = (time(2000), time(16_000));
     assert!(b < a * 16.0, "8x the tasks took {:.1}x the time", b / a);
+}
+
+// Elapsed lags go through Project XML (LagFormat edays) and CSV as they are; XER has no elapsed
+// lags, so they become working time of the same share of a week, and the export says so.
+#[test]
+fn elapsed_lags_in_files() {
+    let p = plan(&[(5, ""), (2, "1FS+7ed"), (1, "2SS-2ed")]);
+    let lags = |q: &Project| q.tasks.iter().flat_map(|t| t.preds.iter().map(|l| (l.lag, l.elapsed))).collect::<Vec<_>>();
+    assert_eq!(lags(&p), [(7 * DAY, true), (-2 * DAY, true)]);
+    let x = round_trip(&p, "xml");
+    assert_eq!(lags(&x), lags(&p));
+    let (s, sx) = (schedule(&p).unwrap(), schedule(&x).unwrap());
+    assert_eq!((&s.es, &s.ef), (&sx.es, &sx.ef));
+    // XER: 7 elapsed days are 5 working days (40 h); −2 elapsed days are −685 working minutes (−2 × 2400 / 7).
+    assert_eq!(lags(&round_trip(&p, "xer")), [(5 * D, false), (-685, false)]);
+    let note = crate::io::export_notes(&p, std::path::Path::new("plan.xer"));
+    assert!(note.len() == 1 && note[0].starts_with("2 elapsed lags"), "{note:?}");
+    assert!(crate::io::export_notes(&p, std::path::Path::new("plan.xml")).is_empty());
+    // MPX writes them in elapsed days.
+    let mpx = crate::io::formats::mpx(&Calc::new(&p, "%d-%b-%y", d(2026, 11, 2)));
+    assert!(mpx.contains("1FS+7ed") && mpx.contains("2SS-2ed"), "{mpx}");
+    // CSV: the Predecessors text carries them.
+    let dir = std::env::temp_dir().join(format!("datum-elag-csv-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("plan.csv");
+    crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let crate::io::Imported::Table(t) = crate::io::import(&f).unwrap() else { panic!() };
+    std::fs::remove_dir_all(dir).ok();
+    let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
+    assert_eq!((bad, lags(&q)), (0, lags(&p)));
 }

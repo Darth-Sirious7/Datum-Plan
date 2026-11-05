@@ -564,7 +564,7 @@ export const gettingStarted = () => openDialog(() => (
 export const GLOSSARY: [string, [string, string][]][] = [
   ["Links (dependencies)", [["FS: Finish-to-Start", "The task starts after its predecessor finishes. The usual link (e.g. pour, then cure)."], ["SS: Start-to-Start", "The task starts when (or after) its predecessor starts. Both can run together."],
     ["FF: Finish-to-Finish", "The task finishes when (or after) its predecessor finishes."], ["SF: Start-to-Finish", "The task finishes when its predecessor starts. Rare: used for hand-overs."],
-    ["Lag (+2d) and lead (−2d)", "A wait after the link (+2 days), or an overlap (−2 days or −20%). Written after the type: 4FS+2d."], ["Driving link", "The link that actually sets the task's date. Shown bold."]]],
+    ["Lag (+2d) and lead (−2d)", "A wait after the link (+2 days), or an overlap (−2 days or −20%). Written after the type: 4FS+2d. An elapsed lag counts round the clock, weekends included: 4FS+7ed (also eh, ew)."], ["Driving link", "The link that actually sets the task's date. Shown bold."]]],
   ["Float and the critical path", [["Total float (slack)", "How long a task can slip before it delays the project finish."], ["Free float", "How long a task can slip before it delays its next task."],
     ["Critical task", "A task with no float: if it slips, the finish slips. Shown in red."], ["Critical path", "The chain of critical tasks from start to finish."], ["Longest path", "The chain that drives the finish date, counting calendars and constraints."]]],
   ["Tasks", [["Summary task", "A parent row that rolls up its subtasks' dates, work and cost (the WBS)."], ["Milestone", "A moment with no duration, such as an approval. Shown as a diamond."],

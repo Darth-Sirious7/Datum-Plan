@@ -100,7 +100,7 @@ fn task_calendars_summary_links_and_inactive() {
     assert_eq!(when(s.ef[2]), "04 09:00"); // 16 working hours on a 24-hour calendar
     assert_eq!(when(s.es[3]), "04 09:00"); // the link from the summary waits for all its tasks
     assert_eq!(s.finish, s.ef[3]); // the inactive task does not extend the project
-    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false }];
+    p.tasks[1].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::FS, lag: 0, pct: false, elapsed: false }];
     assert!(schedule(&p).err().unwrap().contains("own summary"));
 }
 
@@ -336,7 +336,7 @@ fn level_of_effort_progress_logic_and_longest_path() {
     let mut p = plan(&[(5, ""), (3, "1"), (0, "1SS"), (2, "")]);
     p.tasks[3].preds = parse::preds("2FF", &p.tasks.iter().map(|t| t.uid).collect::<Vec<_>>(), D).unwrap();
     p.tasks[2].act_type = ActType::Loe;
-    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 0, pct: false }];
+    p.tasks[2].preds = vec![Link { pred: p.tasks[0].uid, kind: LinkType::SS, lag: 0, pct: false, elapsed: false }];
     p.tasks[3].preds.clear();
     let ids: Vec<u32> = p.tasks.iter().map(|t| t.uid).collect();
     p.tasks[2].dur = 0;
