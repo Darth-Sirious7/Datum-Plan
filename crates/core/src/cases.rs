@@ -387,7 +387,7 @@ fn a_link_to_another_plan_on_a_summary_holds_the_tasks_under_it() {
     let mut p = build(&["0d", "2d"], |_| {});
     p.tasks[1].level = 1;
     let fin = crate::cal::at(d(2026, 11, 13)) + 17 * 60;
-    p.tasks[0].ext.push(ExtLink { file: "X.dplan".into(), uid: 5, kind: LinkType::FS, lag: 0, plan: "X".into(), code: String::new(), name: "x".into(), start: fin - 5 * crate::cal::DAY, finish: fin });
+    p.tasks[0].ext.push(ExtLink { file: "X.dplan".into(), uid: 5, kind: LinkType::FS, lag: 0, elapsed: false, plan: "X".into(), code: String::new(), name: "x".into(), start: fin - 5 * crate::cal::DAY, finish: fin });
     let s = schedule(&p).unwrap();
     assert_eq!(at(s.es[1]), "Nov16 08:00");
 }
@@ -398,7 +398,7 @@ fn a_row_that_mirrors_a_task_in_another_plan_takes_its_length() {
     let mut p = build(&["3d"], |_| {});
     let (a, b) = (crate::cal::at(d(2026, 11, 2)) + 8 * 60, crate::cal::at(d(2026, 11, 13)) + 17 * 60);
     for kind in [LinkType::SS, LinkType::FF] {
-        p.tasks[0].ext.push(ExtLink { file: "Eng.dplan".into(), uid: 7, kind, lag: 0, plan: "Eng".into(), code: String::new(), name: "Engineering".into(), start: a, finish: b });
+        p.tasks[0].ext.push(ExtLink { file: "Eng.dplan".into(), uid: 7, kind, lag: 0, elapsed: false, plan: "Eng".into(), code: String::new(), name: "Engineering".into(), start: a, finish: b });
     }
     let s = schedule(&p).unwrap();
     assert_eq!((at(s.es[0]), at(s.ef[0])), ("Nov02 08:00".into(), "Nov13 17:00".into()));

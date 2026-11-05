@@ -35,7 +35,7 @@ fn dates(p: &Project) -> Vec<String> {
 }
 
 fn ext(kind: LinkType, lag: i64, start: i64, finish: i64) -> ExtLink {
-    ExtLink { file: "Other.dplan".into(), uid: 7, kind, lag, plan: "Other".into(), code: String::new(), name: "X".into(), start, finish }
+    ExtLink { file: "Other.dplan".into(), uid: 7, kind, lag, elapsed: false, plan: "Other".into(), code: String::new(), name: "X".into(), start, finish }
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn update_all_reports_links_it_cannot_follow() {
     // pass and the link keeps its stale finish: nothing tells the caller the link is broken.
     let other = one("Other", 5);
     let mut main = one("Main", 1);
-    main.tasks[0].ext.push(ExtLink { file: "Other.dplan".into(), uid: 99, kind: LinkType::FS, lag: 0, plan: "Other".into(), code: String::new(), name: "Gone".into(), start: 1, finish: 2 });
+    main.tasks[0].ext.push(ExtLink { file: "Other.dplan".into(), uid: 99, kind: LinkType::FS, lag: 0, elapsed: false, plan: "Other".into(), code: String::new(), name: "Gone".into(), start: 1, finish: 2 });
     let mut plans = vec![("Main.dplan".to_string(), main), ("Other.dplan".to_string(), other)];
     let r = crate::links::update_all(&mut plans);
     assert!(r.as_ref().map_or(true, |x| !x.1.is_empty()), "update_all hides the broken link: {r:?}, finish still {}", plans[0].1.tasks[0].ext[0].finish);
@@ -171,7 +171,7 @@ fn update_all_tells_same_named_files_apart() {
     let (a, b) = (one("Plan in A", 2), one("Plan in B", 10));
     let mut main = one("Main", 1);
     let uid = b.tasks[0].uid;
-    main.tasks[0].ext.push(ExtLink { file: "C:/B/Plan.dplan".into(), uid, kind: LinkType::FS, lag: 0, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+    main.tasks[0].ext.push(ExtLink { file: "C:/B/Plan.dplan".into(), uid, kind: LinkType::FS, lag: 0, elapsed: false, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
     let mut plans = vec![("C:/A/Plan.dplan".to_string(), a), ("C:/B/Plan.dplan".to_string(), b), ("C:/Main.dplan".to_string(), main)];
     crate::links::update_all(&mut plans).unwrap();
     assert_eq!(plans[2].1.tasks[0].ext[0].plan, "Plan in B");
@@ -235,4 +235,51 @@ fn an_elapsed_lag_set_in_the_details_pane() {
     assert!(!dc.p.tasks[1].preds[0].elapsed);
     // 7 working days from Fri 6 17:00 end Tue 17 17:00.
     assert_eq!(dates(&dc.p)[1], "Nov18 08:00 Nov19 17:00 0");
+}
+
+// A link to a task in another plan can be elapsed too, counted round the clock like one inside the plan.
+#[test]
+fn elapsed_lag_on_a_link_to_another_plan() {
+    // The other plan's task finishes Fri 6 Nov 17:00. FS +7ed: Fri 13 17:00, so the 2d task runs
+    // Mon 16 – Tue 17. FS +7d: 7 working days end Tue 17 17:00, so Wed 18 – Thu 19.
+    let fri = crate::cal::at(d(2026, 11, 6)) + 17 * 60;
+    let with = |lag: i64, elapsed: bool, tweak: fn(&mut Project)| { let mut p = build(&["2d||"], tweak); p.tasks[0].ext.push(ExtLink { elapsed, ..ext(LinkType::FS, lag, fri - 5 * 480, fri) }); dates(&p)[0].clone() };
+    assert_eq!(with(7 * 1440, true, |_| {}), "Nov16 08:00 Nov17 17:00 0");
+    assert_eq!(with(7 * 480, false, |_| {}), "Nov18 08:00 Nov19 17:00 0");
+    // The same as the link inside a plan, whatever the lag calendar option; −2ed from Fri 6 17:00 is Wed 4 17:00.
+    assert_eq!(with(7 * 1440, true, |p| p.opts.lag_cal = LagCal::Project), dates(&build(&["5d||", "2d|1FS+7ed|"], |_| {}))[1]);
+    assert_eq!(with(-2 * 1440, true, |_| {}), "Nov05 08:00 Nov06 17:00 0");
+    // Shown as the task sheet writes it, in the External Predecessors column.
+    let mut p = build(&["2d||"], |_| {});
+    p.tasks[0].ext.push(ExtLink { elapsed: true, ..ext(LinkType::FS, 7 * 1440, fri - 5 * 480, fri) });
+    p.tasks[0].ext.push(ext(LinkType::SS, 720, fri - 5 * 480, fri));
+    assert_eq!(crate::fields::Calc::new(&p, "%d-%b-%y", d(2026, 11, 2)).text(0, "ext"), "Other › X (FS+7ed); Other › X (SS+12h)");
+    // Files from before elapsed lags on these links open unchanged; the flag is saved when set.
+    let x: ExtLink = serde_json::from_str(r#"{"file":"Other.dplan","uid":7,"kind":"FS","lag":960}"#).unwrap();
+    assert!(!x.elapsed && !serde_json::to_string(&x).unwrap().contains("elapsed"));
+    let back = Project::from_json(&serde_json::to_string(&p).unwrap()).unwrap();
+    assert!(back.tasks[0].ext[0].elapsed && !back.tasks[0].ext[1].elapsed);
+}
+
+// Update Links brings in the other plan's new dates and keeps the elapsed lag.
+#[test]
+fn update_links_keeps_an_elapsed_lag() {
+    // Other: one 5d task, Mon 2 – Fri 6 17:00. Main waits for it FS +7ed: Mon 16 – Tue 17.
+    let other = one("Other", 5);
+    let mut main = one("Main", 2);
+    main.tasks[0].ext.push(ExtLink { file: "Other.dplan".into(), uid: other.tasks[0].uid, kind: LinkType::FS, lag: 7 * 1440, elapsed: true, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+    let mut plans = vec![("Main.dplan".to_string(), main), ("Other.dplan".to_string(), other)];
+    crate::links::update_all(&mut plans).unwrap();
+    let x = &plans[0].1.tasks[0].ext[0];
+    assert!(x.elapsed && x.lag == 7 * 1440 && x.finish == crate::cal::at(d(2026, 11, 6)) + 17 * 60, "{x:?}");
+    assert_eq!(dates(&plans[0].1)[0], "Nov16 08:00 Nov17 17:00 0");
+    // The other task grows to 6d (finish Mon 9): the link shows it moved; 7 × 24 h after Mon 9 17:00 is
+    // Mon 16 17:00, so after Update Links the task runs Tue 17 – Wed 18, still elapsed.
+    plans[1].1.tasks[0].dur = 6 * 480;
+    let f = crate::sched::schedule(&plans[1].1).unwrap().ef[0];
+    let st = crate::links::states(&plans[0].1, &mut |_| Ok(crate::links::Found { plan: "Other".into(), code: String::new(), name: "A".into(), start: crate::cal::at(d(2026, 11, 2)) + 480, finish: f }));
+    assert_eq!(st[0].state, "changed");
+    crate::links::update_all(&mut plans).unwrap();
+    assert!(plans[0].1.tasks[0].ext[0].elapsed);
+    assert_eq!(dates(&plans[0].1)[0], "Nov17 08:00 Nov18 17:00 0");
 }

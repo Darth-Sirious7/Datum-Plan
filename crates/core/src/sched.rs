@@ -175,9 +175,10 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     let pc = &cals[def];
     // Predecessors in other plans hold a task like links, from their last known dates (0 = never
     // read); links on a summary hold every task under it. Lags count on the lag calendar (the other
-    // plan's calendars are not known here: the project calendar stands in for the predecessor's).
+    // plan's calendars are not known here: the project calendar stands in for the predecessor's);
+    // an elapsed lag on the clock.
     let ext_need = |i: usize, c: &WorkCal, sp: i64| std::iter::successors(Some(i), |&j| parent[j]).flat_map(|j| p.tasks[j].ext.iter()).filter(|x| x.finish != 0).map(|x| {
-        let lc = &cals[match o.lag_cal { LagCal::Successor => ci[i].get(), LagCal::H24 => h24, LagCal::Predecessor | LagCal::Project => def }];
+        let lc = &cals[if x.elapsed { h24 } else { match o.lag_cal { LagCal::Successor => ci[i].get(), LagCal::H24 => h24, LagCal::Predecessor | LagCal::Project => def } }];
         let y = match x.kind { LinkType::FS | LinkType::FF => lc.add(x.finish, x.lag), LinkType::SS | LinkType::SF => lc.add(x.start, x.lag) };
         match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) }
     }).max();

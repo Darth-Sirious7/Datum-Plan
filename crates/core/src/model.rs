@@ -77,6 +77,9 @@ pub struct ExtLink {
     pub kind: LinkType,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub lag: i64,
+    /// Elapsed lag: `lag` is clock minutes, counted round the clock (weekends and nights too).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub elapsed: bool,
     /// Last known: the other plan's name, the task's ID and name, and its start and finish (minutes).
     #[serde(default)]
     pub plan: String,

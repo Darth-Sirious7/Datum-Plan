@@ -57,11 +57,13 @@ pub fn refresh(p: &mut Project, find: &mut impl FnMut(&ExtLink) -> Result<Found,
     (changed, missing)
 }
 
-/// A link as people read it: "Engineering › E1180 Final documentation issued (FS+5d)".
+/// A link as people read it: "Engineering › E1180 Final documentation issued (FS+5d)", or (FS+7ed) elapsed.
 pub fn label(x: &ExtLink, day_min: i64) -> String {
-    let lag = if x.lag != 0 { format!("{}{}", if x.lag > 0 { "+" } else { "" }, crate::parse::fmt_dur(x.lag, crate::model::Unit::D, day_min)) } else { String::new() };
-    format!("{} › {}{} ({:?}{lag})", x.plan, if x.code.is_empty() { String::new() } else { format!("{} ", x.code) }, x.name, x.kind)
+    format!("{} › {}{} ({})", x.plan, if x.code.is_empty() { String::new() } else { format!("{} ", x.code) }, x.name, kind_lag(x, day_min))
 }
+
+/// The type and lag as the task sheet writes them: "FS", "SS+2d", "FS+7ed".
+pub fn kind_lag(x: &ExtLink, day_min: i64) -> String { format!("{:?}{}", x.kind, crate::parse::fmt_lag_el(x.lag, day_min, x.elapsed)) }
 
 /// The file name a link points at (for finding it next to this plan when the folder moved).
 pub fn file_name(file: &str) -> &str {

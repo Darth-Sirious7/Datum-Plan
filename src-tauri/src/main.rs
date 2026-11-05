@@ -653,7 +653,7 @@ fn waited_on(a: &App) -> HashMap<u32, Vec<(usize, String, u32)>> {
         for t in &d.p.tasks {
             for x in t.ext.iter().filter(|x| links::file_name(&x.file).to_lowercase() == me) {
                 let code = if t.code.is_empty() { String::new() } else { format!("{} ", t.code) };
-                by.entry(x.uid).or_default().push((k, format!("{} › {code}{} ({:?})", d.p.name, t.name, x.kind), t.uid));
+                by.entry(x.uid).or_default().push((k, format!("{} › {code}{} ({})", d.p.name, t.name, links::kind_lag(x, d.p.day_min)), t.uid));
             }
         }
     }

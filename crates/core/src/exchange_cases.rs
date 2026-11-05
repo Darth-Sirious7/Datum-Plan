@@ -179,7 +179,7 @@ fn exports_keep_dates_held_by_other_plans() {
     let mut p = plan(&[(0, ""), (3, ""), (2, "2"), (1, ""), (0, "")]);
     (p.tasks[1].level, p.tasks[2].level) = (1, 1);
     let f = at(d(2027, 2, 10)) + 17 * 60;
-    let x = |kind, start, finish| ExtLink { file: "other.dplan".into(), uid: 7, kind, lag: 0, plan: "Other".into(), code: String::new(), name: "X".into(), start, finish };
+    let x = |kind, start, finish| ExtLink { file: "other.dplan".into(), uid: 7, kind, lag: 0, elapsed: false, plan: "Other".into(), code: String::new(), name: "X".into(), start, finish };
     p.tasks[0].ext = vec![x(LinkType::FS, f - 5 * DAY, f)];
     p.tasks[3].ext = vec![x(LinkType::SS, at(d(2027, 4, 5)) + 480, at(d(2027, 4, 16)) + 1020), x(LinkType::FF, at(d(2027, 4, 5)) + 480, at(d(2027, 4, 16)) + 1020)];
     p.tasks[4].ext = vec![x(LinkType::FS, f - 5 * DAY, f)];

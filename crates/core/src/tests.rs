@@ -670,7 +670,7 @@ fn plans_linked_to_each_other_move_together() {
     // A loop between plans is refused.
     let uid = plans[1].1.tasks[1].uid;
     let back = plans[0].1.tasks[1].ext.len();
-    plans[0].1.tasks[1].ext.push(crate::model::ExtLink { file: "Engineering.dplan".into(), uid, kind: LinkType::FS, lag: 0, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+    plans[0].1.tasks[1].ext.push(crate::model::ExtLink { file: "Engineering.dplan".into(), uid, kind: LinkType::FS, lag: 0, elapsed: false, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
     assert!(crate::links::update_all(&mut plans).is_err(), "contract award ← engineering kick-off ← contract award");
     plans[0].1.tasks[1].ext.truncate(back);
     // The links survive saving and opening a plan.
@@ -1001,7 +1001,7 @@ fn a_long_hand_back_chain_between_two_plans_settles() {
         let t = a.new_task(&format!("a{k}"), 0, 480); a.tasks.push(t);
         let t = b.new_task(&format!("b{k}"), 0, 480); b.tasks.push(t);
     }
-    let x = |file: &str, uid: u32| crate::model::ExtLink { file: file.into(), uid, kind: LinkType::FS, lag: 0, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 };
+    let x = |file: &str, uid: u32| crate::model::ExtLink { file: file.into(), uid, kind: LinkType::FS, lag: 0, elapsed: false, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 };
     for k in 0..8 {
         let (ua, ub) = (a.tasks[k].uid, b.tasks[k].uid);
         b.tasks[k].ext.push(x("A.dplan", ua));

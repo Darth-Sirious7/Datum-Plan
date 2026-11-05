@@ -8,7 +8,7 @@ import { selectUid } from "./cmds";
 import { Dialog, Row } from "./ui";
 import { C } from "./cmds";
 
-type ExtLink = { file: string; uid: number; kind: string; lag: number; plan: string; code: string; name: string; start: number; finish: number };
+type ExtLink = { file: string; uid: number; kind: string; lag: number; elapsed?: boolean; plan: string; code: string; name: string; start: number; finish: number };
 type LinkGo = { dir: "in" | "out"; label: string; file: string; uid: number; moved: boolean };
 type Target = { tab: number; name: string; path: string | null; tasks: [number, string, string, number, boolean, number, number][] };
 type LinkState = { uid: number; task: string; k: number; link: ExtLink; now_start: number | null; now_finish: number | null; state: string };
@@ -240,7 +240,21 @@ export const PlanTabs = () => (
 );
 
 const KINDS = ["FS", "SS", "FF", "SF"];
-const lagText = (m: number) => (m ? `${m > 0 ? "+" : ""}${Math.round((m / P().day_min) * 10) / 10}d` : "");
+/** A lag as the task sheet writes it: "+5d", "-4h", "+7ed" (elapsed: clock minutes, round the clock). */
+export const lagText = (m: number, el?: boolean, day = P().day_min) => {
+  if (!m) return "";
+  const d = el ? 1440 : Math.max(1, day), [v, u] = m % d === 0 ? [m / d, "d"] : m % 60 === 0 ? [m / 60, "h"] : [m, "m"];
+  return `${m > 0 ? "+" : ""}${v}${el ? "e" : ""}${u}`;
+};
+/** A lag as typed, like in the task sheet: "5" or "5d", "-4h", "+7ed", "-2ed", "12eh", "1ew" (elapsed counts round the clock). */
+export const parseLag = (s: string, day = P().day_min): { lag: number; elapsed: boolean } | null => {
+  const m = /^([+-]?)(\d+(?:\.\d+)?|\.\d+)(e?)(mo|mons?|months?|m|mins?|minutes?|h|hrs?|hours?|d|days?|dys?|w|wks?|weeks?)?$/.exec(s.toLowerCase().replace(/\u2212/g, "-").replace(/\s+/g, ""));
+  if (!m) return s.trim() ? null : { lag: 0, elapsed: false };
+  if (m[3] && !m[4]) return null;
+  const el = !!m[3], u = (m[4] ?? "d").startsWith("mo") ? "o" : (m[4] ?? "d")[0];
+  const per = el ? { m: 1, h: 60, d: 1440, w: 10080, o: 43200 }[u]! : { m: 1, h: 60, d: day, w: 5 * day, o: 20 * day }[u]!;
+  return { lag: Math.round(+m[2] * per) * (m[1] === "-" ? -1 : 1), elapsed: el };
+};
 const linkText = (x: ExtLink) => `${x.plan} › ${x.code ? `${x.code} ` : ""}${x.name}`;
 
 /** Link the task `uid` to tasks in other open plans: pick a plan, a task, the type and the lag. */
@@ -252,21 +266,22 @@ export const linkDialog = (uid: number) => openDialog(() => {
   const [info] = createResource(() => [tick(), uid], () => call<{ task: { name: string; ext?: ExtLink[] } }>("task_info", { uid }));
   const [links, setLinks] = createSignal<ExtLink[] | null>(null);
   const cur = () => links() ?? info()?.task.ext ?? [];
-  const [tab, setTab] = createSignal(-1), [pick, setPick] = createSignal(0), [kind, setKind] = createSignal("FS"), [lag, setLag] = createSignal("0"), [q, setQ] = createSignal("");
+  const [tab, setTab] = createSignal(-1), [pick, setPick] = createSignal(0), [kind, setKind] = createSignal("FS"), [lag, setLag] = createSignal(""), [q, setQ] = createSignal("");
   const target = () => targets().find(t => t.tab === tab()) ?? targets()[0];
   const rows = createMemo(() => (target()?.tasks ?? []).filter(t => !q() || `${t[1]} ${t[2]}`.toLowerCase().includes(q().toLowerCase())));
   const add = () => {
     const t = target(), x = t?.tasks.find(r => r[0] === pick());
     if (!t || !x) return toast("Choose a task in the other plan.");
     if (!t.path) return toast(`Save “${t.name}” first, so the link knows its file.`);
-    const lagMin = Math.round((parseFloat(lag()) || 0) * P().day_min);
-    setLinks([...cur().filter(l => !(l.file === t.path && l.uid === x[0])), { file: t.path, uid: x[0], kind: kind(), lag: lagMin, plan: t.name, code: x[1], name: x[2], start: x[5], finish: x[6] }]);
+    const l = parseLag(lag());
+    if (!l) return toast(`Write the lag as 5d, -4h, +7ed (elapsed, weekends included), 12eh or 1ew.`);
+    setLinks([...cur().filter(l => !(l.file === t.path && l.uid === x[0])), { file: t.path, uid: x[0], kind: kind(), lag: l.lag, elapsed: l.elapsed, plan: t.name, code: x[1], name: x[2], start: x[5], finish: x[6] }]);
   };
   return (
     <Dialog title="Link to Plan" wide help="linkedplans" okText="OK" ok={() => (links() ? act({ ExtSet: { uid, links: links() } }) : undefined)}>
       <p>Predecessors of <b>{info()?.task.name}</b> in other plans. The task waits for them like for a normal link; <b>Update Links</b> keeps their dates current.</p>
       <table class="tbl"><thead><tr><th>Plan › task</th><th>Type</th><th>Last known finish</th><th /></tr></thead><tbody>
-        <For each={cur()} fallback={<tr><td colspan="4" class="muted">No links to other plans yet.</td></tr>}>{(x, k) => <tr><td>{linkText(x)}</td><td>{x.kind}{lagText(x.lag)}</td><td>{x.finish ? fmtAt(x.finish - 1) : "—"}</td>
+        <For each={cur()} fallback={<tr><td colspan="4" class="muted">No links to other plans yet.</td></tr>}>{(x, k) => <tr><td>{linkText(x)}</td><td>{x.kind}{lagText(x.lag, x.elapsed)}</td><td>{x.finish ? fmtAt(x.finish - 1) : "—"}</td>
           <td><button class="x" title="Remove this link" onClick={() => setLinks(cur().filter((_, j) => j !== k()))}>×</button></td></tr>}</For>
       </tbody></table>
       <Show when={targets().length} fallback={<p class="muted">Open the other plan in a tab (File › Open, or ＋ beside the tabs), or <a class="link" onClick={browse}>browse for its file</a>.</p>}>
@@ -280,7 +295,7 @@ export const linkDialog = (uid: number) => openDialog(() => {
           <span class="mono">{t[1]}</span><span>{t[2]}</span><span class="muted">{fmtAt(t[6] - 1)}</span></button>}</For></div>
         <div class="form">
           <Row label="Type and lag"><span class="linklag"><select onChange={e => setKind(e.currentTarget.value)}><For each={KINDS}>{k => <option selected={k === kind()}>{k}</option>}</For></select>
-            <input type="number" step="0.5" style={{ width: "90px" }} value={lag()} onInput={e => setLag(e.currentTarget.value)} /><span class="muted">days (negative for a lead)</span>
+            <input class="extlag" style={{ width: "90px" }} value={lag()} placeholder="+5d" title="Like in the task sheet: 5d, -2d for a lead, 4h; e for elapsed (round the clock, weekends included): +7ed, 12eh, 1ew" onInput={e => setLag(e.currentTarget.value)} onKeyDown={e => e.key === "Enter" && add()} /><span class="muted">5d, −2d lead, +7ed elapsed</span>
             <button class="btn sm pri" onClick={add}>Add Link</button></span></Row>
         </div>
       </Show>
@@ -309,7 +324,7 @@ export const linkedPlans = () => openDialog(() => {
       <p class="muted">Tasks of “{P().name}” that wait for tasks in other plans. When another plan moves, its link shows <b>Moved</b> until you update. Plans that are not open are read from their files.</p>
       <table class="tbl linkstates"><thead><tr><th>Task here</th><th>Waits for</th><th>Type</th><th>Last known finish</th><th>Finish now</th><th>State</th><th /></tr></thead><tbody>
         <For each={states() ?? []} fallback={<tr><td colspan="7" class="muted">No links to other plans. Select a task and use Project › Link to Plan.</td></tr>}>{s => <tr classList={{ warn: s.state !== "ok" }}>
-          <td>{s.task}</td><td>{linkText(s.link)}</td><td>{s.link.kind}{lagText(s.link.lag)}</td><td>{s.link.finish ? fmtAt(s.link.finish - 1) : "—"}</td>
+          <td>{s.task}</td><td>{linkText(s.link)}</td><td>{s.link.kind}{lagText(s.link.lag, s.link.elapsed)}</td><td>{s.link.finish ? fmtAt(s.link.finish - 1) : "—"}</td>
           <td>{s.now_finish ? fmtAt(s.now_finish - 1) : "—"}</td><td><span class="pill" classList={{ good: s.state === "ok", bad: s.state !== "ok" }}>{label(s.state)}</span></td>
           <td><button class="btn sm" onClick={() => { closeDialog(); linkDialog(s.uid); }}>Edit…</button></td></tr>}</For>
       </tbody></table>

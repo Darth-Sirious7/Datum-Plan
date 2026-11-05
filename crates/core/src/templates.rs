@@ -149,7 +149,7 @@ pub fn linked_example(start: NaiveDate) -> Vec<(String, Project)> {
     for &(to, row, from, frow, kind, lag) in &LINKS {
         let uid = plans[from].1.tasks[frow - 1].uid;
         let file = LINKED[from].0.to_string();
-        plans[to].1.tasks[row - 1].ext.push(ExtLink { file, uid, kind, lag: lag * 480, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
+        plans[to].1.tasks[row - 1].ext.push(ExtLink { file, uid, kind, lag: lag * 480, elapsed: false, plan: String::new(), code: String::new(), name: String::new(), start: 0, finish: 0 });
     }
     let day = |n: u64| start.checked_add_days(chrono::Days::new(n)).unwrap_or(start);
     let countries: [&[&str]; 4] = [&["GB", "AE"], &["DE", "DE", "IN", "IN", "GB"], &["AE", "AE", "CN"], &["GB", "IN", "PH", "PK", "DE"]];
