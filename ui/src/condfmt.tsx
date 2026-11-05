@@ -29,10 +29,12 @@ const dateHit = (day: number, kind: string) => {
   }
   return false;
 };
-/** What every rule does to the cells it covers: a1 → look. */
-export const condLooks = (sh: SheetData | undefined, cells: Map<string, Cell>): Map<string, Look> => {
+/** What every rule does to the cells it covers: a1 → look. `vals`: each rule's values as the engine worked
+ *  them out (a value =$B$1 reads that cell). */
+export const condLooks = (sh: SheetData | undefined, cells: Map<string, Cell>, vals?: [string, string][]): Map<string, Look> => {
   const out = new Map<string, Look>();
-  for (const rule of sh?.cond ?? []) {
+  for (const [ri, given] of (sh?.cond ?? []).entries()) {
+    const v = vals?.[ri], rule = v && given.op !== "bar" && given.op !== "scale" ? { ...given, a: v[0], b: v[1] } : given;
     const b = bounds(rule.range); if (!b) continue;
     const ids: string[] = [];
     for (let r = b.r0; r <= Math.min(b.r1, b.r0 + 5000); r++) for (let c = b.c0; c <= Math.min(b.c1, b.c0 + 200); c++) ids.push(`${name(c)}${r + 1}`);

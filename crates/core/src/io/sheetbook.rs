@@ -134,7 +134,8 @@ pub fn import(path: &Path) -> Result<Imported, String> {
     }
     if out.sheets.is_empty() { return Err("That workbook has no sheets to bring in.".into()) }
     // Its defined names (not the plan's own, which an export writes too).
-    out.names = parts.map(|p| p.names).unwrap_or_default().into_iter().filter(|n| crate::sheetx::name_problem(&n.name).is_none()).collect();
+    // A sheet's own names come only with a sheet brought in.
+    out.names = parts.map(|p| p.names).unwrap_or_default().into_iter().filter(|n| crate::sheetx::name_problem(&n.name).is_none() && (n.sheet.is_empty() || out.sheets.iter().any(|s| s.name == n.sheet))).collect();
     Ok(out)
 }
 
@@ -236,17 +237,19 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
     // Print areas and title rows are defined names local to a sheet.
     let mut names: HashMap<(usize, String), String> = HashMap::new();
     let mut global = vec![];
+    let tabs: Vec<String> = tags(&book, "sheet").map(|t| attr(t, "name").unwrap_or_default()).collect();
     let unxml = |t: &str| t.replace("&apos;", "'").replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
     for (i, _) in book.match_indices("<definedName ").take(5_000) {
         let Some(end) = book[i..].find("</definedName>") else { continue };
         let el = &book[i..i + end];
         let (Some(n), Some(gt)) = (attr(el, "name"), el.find('>')) else { continue };
-        match attr(el, "localSheetId").and_then(|x| x.parse().ok()) {
-            Some(id) => { names.insert((id, n), unxml(&el[gt + 1..])); }
-            // A workbook name (Excel's own, _xlnm., are print settings; hidden ones are its machinery).
-            None if !n.starts_with("_xlnm.") && attr(el, "hidden").as_deref() != Some("1") => global.push(DefName { name: n, formula: format!("={}", unxml(&el[gt + 1..]).trim_start_matches('=')), comment: attr(el, "comment").unwrap_or_default() }),
-            None => {}
+        let local: Option<usize> = attr(el, "localSheetId").and_then(|x| x.parse().ok());
+        // A workbook's or a sheet's name (Excel's own, _xlnm., are print settings; hidden ones are its machinery).
+        if !n.starts_with("_xlnm.") && attr(el, "hidden").as_deref() != Some("1") {
+            let sheet = match local { Some(id) => match tabs.get(id) { Some(t) => t.clone(), None => continue }, None => String::new() };
+            global.push(DefName { name: n.clone(), formula: format!("={}", unxml(&el[gt + 1..]).trim_start_matches('=')), comment: attr(el, "comment").unwrap_or_default(), sheet });
         }
+        if let Some(id) = local { names.insert((id, n), unxml(&el[gt + 1..])); }
     }
     let mut out = Parts { sheets: HashMap::new(), names: global };
     for (idx, t) in tags(&book, "sheet").enumerate() {
@@ -321,7 +324,7 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
             let body = &dv[..dv.find("</dataValidation>").unwrap_or(dv.len())];
             let formula = |k: &str| { let (o, c) = (format!("<{k}>"), format!("</{k}>")); body.find(&o).and_then(|i| body[i + o.len()..].find(&c).map(|j| unxml(&body[i + o.len()..i + o.len() + j]))) };
             let warn = attr(&head, "errorStyle").is_some_and(|x| x != "stop");
-            let kind = match attr(&head, "type").as_deref() { Some("list") => "", Some("whole") => "whole", Some("decimal") => "decimal", Some("date") => "date", Some("time") => "time", Some("textLength") => "len", None | Some("none") if attr(&head, "promptTitle").is_some() || attr(&head, "prompt").is_some() => "any", _ => continue };
+            let kind = match attr(&head, "type").as_deref() { Some("list") => "", Some("whole") => "whole", Some("decimal") => "decimal", Some("date") => "date", Some("time") => "time", Some("textLength") => "len", Some("custom") => "custom", None | Some("none") if attr(&head, "promptTitle").is_some() || attr(&head, "prompt").is_some() => "any", _ => continue };
             let op = match attr(&head, "operator").as_deref() { Some("notBetween") => "notbetween", Some("equal") => "eq", Some("notEqual") => "ne", Some("greaterThan") => "gt", Some("lessThan") => "lt", Some("greaterThanOrEqual") => "ge", Some("lessThanOrEqual") => "le", _ => "between" };
             // A bound: a number as it is, anything else (a reference or formula) as a formula.
             let bound = |f: Option<String>| f.map(|f| if f.trim().parse::<f64>().is_ok() { f.trim().to_string() } else { format!("={}", f.trim().trim_start_matches('=')) }).unwrap_or_default();
@@ -329,6 +332,8 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
             if kind.is_empty() {
                 let Some(f1) = formula("formula1") else { continue };
                 (v.list, v.src) = match f1.strip_prefix('"').and_then(|x| x.strip_suffix('"')) { Some(t) => (t.split(',').map(|x| x.trim().to_string()).collect::<Vec<_>>(), String::new()), None => (vec![], f1.clone()) };
+            } else if kind == "custom" {
+                v.a = format!("={}", formula("formula1").unwrap_or_default().trim().trim_start_matches('='));
             } else if kind != "any" {
                 (v.op, v.a, v.b) = (op.into(), bound(formula("formula1")), bound(formula("formula2")));
             }

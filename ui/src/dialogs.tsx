@@ -639,7 +639,7 @@ export const formulaColumn = (key?: string, insertAt?: number) => openDialog(() 
             <textarea class="formula" ref={box} value={f()} onInput={e => { setF(e.currentTarget.value); setErr(""); }} placeholder="=[% Complete]-[Baseline % Complete]" />
             <div class="ptools"><For each={["+", "-", "*", "/", "&", "=", "<>", ">", "<", "(", ")"]}>{o => <button class="btn sm" onClick={() => insert(o)}>{o}</button>}</For></div>
             <Show when={err()}><div class="late">{err()}</div></Show>
-            <p class="muted">Spreadsheet formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. Dates are spreadsheet dates; durations are in days.</p>
+            <p class="muted">Spreadsheet formulas, one per column: it is worked out for every task. Refer to other columns by name in square brackets, e.g. <code>=[Cost]-[Baseline Cost]</code>, <code>=IF([Finish]&gt;[Baseline Finish],"Late","On time")</code>. The plan's defined names work too: <code>=[Cost]*(1+VAT)</code>. Dates are spreadsheet dates; durations are in days.</p>
           </div></Row>
           <Row label="Functions"><select onChange={e => { insert(e.currentTarget.value); e.currentTarget.value = ""; }}><option value="">Insert function…</option><For each={FUNCS}>{x => <option value={x[1]}>{x[0]}</option>}</For></select></Row>
         </div>

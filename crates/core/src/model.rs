@@ -499,7 +499,8 @@ pub struct ColFilter { pub col: u32, #[serde(skip_serializing_if = "Option::is_n
 /// Data validation on a range. `kind` "" is a drop-down list: its values typed (`list`) or read from
 /// cells (`src`, "Lists!A1:A9"). Otherwise the cells take a whole number, decimal, date, time or text
 /// length ("whole", "decimal", "date", "time", "len") compared by `op` (see `sheetx::VALID_OPS`; empty:
-/// between) with `a` and `b` (values, or references and formulas: "=B1", "$B$1"), or "any" value (only
+/// between) with `a` and `b` (values, or references and formulas: "=B1", "$B$1"), "custom" (the formula
+/// in `a`, "=AND(A2>0,A2<=B2)" written for the range's first cell, must be TRUE), or "any" value (only
 /// the message). `prompt` shows while a cell is selected; `error` when a value is refused. Other values
 /// are refused unless `warn` (then the user may keep them).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -513,9 +514,12 @@ pub struct Validation { pub range: String, pub list: Vec<String>, pub src: Strin
     #[serde(skip_serializing_if = "String::is_empty")] pub error: String }
 
 /// A workbook name every sheet formula can use: `Rates` for `=Prices!$B$2:$B$20`, `VAT` for `=0.05`.
+/// `sheet` empty: the whole plan; otherwise the name holds on that sheet only, where it wins over a
+/// plan-wide name spelt the same.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct DefName { pub name: String, pub formula: String, #[serde(skip_serializing_if = "String::is_empty")] pub comment: String }
+pub struct DefName { pub name: String, pub formula: String, #[serde(skip_serializing_if = "String::is_empty")] pub comment: String,
+    #[serde(skip_serializing_if = "String::is_empty")] pub sheet: String }
 
 /// Cuts a text to at most `n` characters.
 fn cut(s: &mut String, n: usize) { if s.len() > n { *s = s.chars().take(n).collect() } }
@@ -864,10 +868,15 @@ impl Project {
             }
             if !(s.color.len() == 7 && s.color.starts_with('#') && s.color[1..].chars().all(|c| c.is_ascii_hexdigit())) { s.color.clear() }
         }
-        // Defined names: valid, unique, at most 1,000, each a formula ("=0.05", "=Prices!$B$2:$B$9").
+        // Defined names: valid, unique in their scope (the plan, or a sheet it has: spelt as the tab is),
+        // at most 1,000, each a formula ("=0.05", "=Prices!$B$2:$B$9").
         let mut seen = std::collections::HashSet::new();
-        for n in &mut self.names { n.name = n.name.trim().to_string(); n.formula = n.formula.trim().to_string(); if !n.formula.starts_with('=') { n.formula.insert(0, '=') } cut(&mut n.comment, 255); }
-        self.names.retain(|n| crate::sheetx::name_problem(&n.name).is_none() && n.formula.len() > 1 && n.formula.len() <= 8_000 && seen.insert(n.name.to_lowercase()));
+        for n in &mut self.names {
+            n.name = n.name.trim().to_string(); n.formula = n.formula.trim().to_string(); if !n.formula.starts_with('=') { n.formula.insert(0, '=') } cut(&mut n.comment, 255);
+            if let Some(s) = self.sheets.iter().find(|s| !n.sheet.is_empty() && s.name.eq_ignore_ascii_case(n.sheet.trim())) { n.sheet = s.name.clone() }
+        }
+        let tabs: Vec<&str> = self.sheets.iter().map(|s| s.name.as_str()).collect();
+        self.names.retain(|n| crate::sheetx::name_problem(&n.name).is_none() && n.formula.len() > 1 && n.formula.len() <= 8_000 && (n.sheet.is_empty() || tabs.contains(&n.sheet.as_str())) && seen.insert((n.name.to_lowercase(), n.sheet.to_lowercase())));
         self.names.truncate(1_000);
         // At least one tab stays visible.
         if !self.sheets.is_empty() && self.sheets.iter().all(|s| s.hidden) { self.sheets[0].hidden = false }

@@ -485,9 +485,11 @@ async fn import_workbook(app: AppHandle, st: State<'_, St>) -> R<Option<(Out, Ve
     let names: Vec<String> = got.sheets.iter().map(|s| s.name.clone()).collect();
     let mut a = st.lock();
     let fmt = a.opts.date_fmt.clone();
+    // A sheet's own names come with it while it keeps its name (one that has to change name leaves them).
+    let kept: Vec<String> = names.iter().filter(|n| !a.doc.p.sheets.iter().any(|s| s.name.eq_ignore_ascii_case(n))).cloned().collect();
     let add = Op::AddSheets { sheets: got.sheets, pictures: got.pictures, freeze: got.freeze };
     // The workbook's defined names join the plan's (a name the plan has keeps its own meaning).
-    let op = if got.names.is_empty() { add } else { Op::Batch(vec![add, Op::Names { names: datum_core::sheetx::merge_names(&a.doc.p.names, got.names) }]) };
+    let op = if got.names.is_empty() { add } else { Op::Batch(vec![add, Op::Names { names: datum_core::sheetx::merge_names(&a.doc.p.names, got.names, &kept) }]) };
     a.doc.apply(op, &fmt)?;
     regroup(&mut a);
     Ok(Some((out(&a), names)))
@@ -866,7 +868,7 @@ fn sheet_catalog(st: State<St>) -> SheetCatalog {
     SheetCatalog {
         functions: datum_core::sheet::functions(),
         names: datum_core::sheet::project_names(&c).into_iter().map(|(n, _, d)| (n.to_string(), d.to_string()))
-            .chain(a.doc.p.names.iter().map(|n| (n.name.clone(), if n.comment.is_empty() { n.formula.clone() } else { format!("{} ({})", n.comment, n.formula) }))).collect(),
+            .chain(a.doc.p.names.iter().map(|n| (n.name.clone(), format!("{}{}", if n.comment.is_empty() { n.formula.clone() } else { format!("{} ({})", n.comment, n.formula) }, if n.sheet.is_empty() { String::new() } else { format!(" · {} only", n.sheet) })))).collect(),
         tasks: datum_core::sheet::task_columns(&c).into_iter().map(|x| x.1).collect(),
         resources: datum_core::sheet::RES_COLS.iter().map(|x| x.1).collect(),
     }

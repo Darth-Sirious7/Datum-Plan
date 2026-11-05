@@ -183,22 +183,25 @@ export const dedupeDialog = (cols: [number, string][], headers: boolean, run: (c
   </Dialog>;
 });
 
-const KINDS: [string, string][] = [["", "List"], ["whole", "Whole number"], ["decimal", "Decimal"], ["date", "Date"], ["time", "Time"], ["len", "Text length"], ["any", "Any value"]];
+const KINDS: [string, string][] = [["", "List"], ["whole", "Whole number"], ["decimal", "Decimal"], ["date", "Date"], ["time", "Time"], ["len", "Text length"], ["custom", "Custom"], ["any", "Any value"]];
 const VOPS: [string, string][] = [["between", "between"], ["notbetween", "not between"], ["eq", "equal to"], ["ne", "not equal to"], ["gt", "greater than"], ["lt", "less than"], ["ge", "greater than or equal to"], ["le", "less than or equal to"]];
-/** Data Validation on the selected cells: a drop-down list (typed values or cells to read them from), or
- *  whole numbers, decimals, dates, times or a text length between bounds (values or cells), with the
- *  message shown while a cell is selected and the one shown when a value is refused (stop or warn). */
+/** Data Validation on the selected cells: a drop-down list (typed values or cells to read them from),
+ *  whole numbers, decimals, dates, times or a text length between bounds (values or cells), or a custom
+ *  formula that must be TRUE (written for the first cell), with the message shown while a cell is
+ *  selected and the one shown when a value is refused (stop or warn). */
 export const listDialog = (range: string, cur: Validation | undefined, save: (v: Validation | null) => void) => openDialog(() => {
   const [r, setR] = createSignal(cur?.range ?? range), [kind, setKind] = createSignal(cur?.kind ?? ""), [fromCells, setFromCells] = createSignal(!!cur?.src), [items, setItems] = createSignal((cur?.list ?? []).join("\n")), [src, setSrc] = createSignal(cur?.src ?? ""), [warn, setWarn] = createSignal(!!cur?.warn);
   const [op, setOp] = createSignal(cur?.op || "between"), [a, setA] = createSignal(cur?.a ?? ""), [b, setB] = createSignal(cur?.b ?? ""), [prompt, setPrompt] = createSignal(cur?.prompt ?? ""), [err, setErr] = createSignal(cur?.error ?? "");
-  const two = () => op() === "between" || op() === "notbetween", hint = () => (kind() === "date" ? "31/12/2026 or =B1" : kind() === "time" ? "13:30 or =B1" : "10 or =$B$1");
+  const first = () => r().toUpperCase().replace(/\$/g, "").split(":")[0].trim() || "A1";
+  const two = () => op() === "between" || op() === "notbetween", hint =() => (kind() === "date" ? "31/12/2026 or =B1" : kind() === "time" ? "13:30 or =B1" : "10 or =$B$1");
   return <Dialog title="Data Validation" okText="OK" help="sheetdata" ok={() => {
     const list = items().split(/\n|,/).map(x => x.trim()).filter(Boolean), k = kind();
     if (!k && (fromCells() ? !src().trim() : !list.length)) return false;
-    if (k && k !== "any" && (!a().trim() || (two() && !b().trim()))) return false;
+    if (k && k !== "any" && (!a().trim() || (k !== "custom" && two() && !b().trim()))) return false;
     if (k === "any" && !prompt().trim()) return false;
     const v: Validation = { range: r().toUpperCase().replace(/\$/g, ""), list: !k && !fromCells() ? list : [], src: !k && fromCells() ? src().trim() : "", warn: warn() };
-    if (k) Object.assign(v, { kind: k, ...(k !== "any" ? { op: op(), a: a().trim(), ...(two() ? { b: b().trim() } : {}) } : {}) });
+    if (k === "custom") Object.assign(v, { kind: k, a: `=${a().trim().replace(/^=/, "")}` });
+    else if (k) Object.assign(v, { kind: k, ...(k !== "any" ? { op: op(), a: a().trim(), ...(two() ? { b: b().trim() } : {}) } : {}) });
     if (prompt().trim()) v.prompt = prompt().trim();
     if (err().trim()) v.error = err().trim();
     save(v);
@@ -211,7 +214,8 @@ export const listDialog = (range: string, cur: Validation | undefined, save: (v:
         <Show when={!fromCells()} fallback={<Row label="Cells with the values"><input value={src()} placeholder="$A$2:$A$20 or Lists!A1:A9" onInput={e => setSrc(e.currentTarget.value)} /></Row>}>
           <Row label="Values (one a line)"><textarea class="vitems" value={items()} onInput={e => setItems(e.currentTarget.value)} /></Row></Show>
       </Show>
-      <Show when={kind() && kind() !== "any"}>
+      <Show when={kind() === "custom"}><Row label="Formula"><input class="vf" value={a()} placeholder={`=AND(${first()}>0,${first()}<=100)`} onInput={e => setA(e.currentTarget.value)} /></Row></Show>
+      <Show when={kind() && kind() !== "any" && kind() !== "custom"}>
         <Row label={kind() === "len" ? "Length is" : "Value is"}><select class="vop" onChange={e => setOp(e.currentTarget.value)}><For each={VOPS}>{([v, l]) => <option value={v} selected={v === op()}>{l}</option>}</For></select></Row>
         <Row label={two() ? "Minimum" : "Value"}><input class="va" value={a()} placeholder={hint()} onInput={e => setA(e.currentTarget.value)} /></Row>
         <Show when={two()}><Row label="Maximum"><input class="vb" value={b()} placeholder={hint()} onInput={e => setB(e.currentTarget.value)} /></Row></Show>
@@ -220,7 +224,7 @@ export const listDialog = (range: string, cur: Validation | undefined, save: (v:
       <Row label="Message when wrong"><input value={err()} placeholder="Optional: said when a value is refused" onInput={e => setErr(e.currentTarget.value)} /></Row>
       <Row label="A wrong value"><select class="vstyle" onChange={e => setWarn(e.currentTarget.value === "warn")}><option value="stop" selected={!warn()}>Stop: refuse it</option><option value="warn" selected={warn()}>Warn: ask, then allow it</option></select></Row>
     </div>
-    <p class="muted">Bounds can be values or cells (=$B$1, =Lists!A1). Circle Invalid Data marks the cells that already break the rule.</p>
+    <p class="muted">{kind() === "custom" ? `A value goes in when the formula is TRUE. Write it for ${first()}, the first cell: its references move for each cell, as when filling (use $ to keep one fixed).` : "Bounds can be values or cells (=$B$1, =Lists!A1)."} Circle Invalid Data marks the cells that already break the rule.</p>
   </Dialog>;
 });
 
@@ -241,29 +245,34 @@ export const linkDialog = (cur: { url: string; text: string }, save: (x: { url: 
 export const openLinkDialog = (url: string, open: () => void) => openDialog(() =>
   <Dialog title="Open Link" okText="Open" ok={open}><p>Open this address in your browser?</p><p class="linkurl"><code>{url}</code></p><p class="muted">Only open links from people you trust.</p></Dialog>);
 
-/** Define Name: a name for a range, a value or a formula, for every sheet's formulas. */
+/** The scope a name is shown with: the whole plan, or its sheet. */
+export const scopeOf = (n: DefName) => n.sheet || "Whole plan";
+/** Whether two names clash: the same spelling in the same scope. */
+export const sameName = (a: DefName, b: DefName) => a.name.toLowerCase() === b.name.toLowerCase() && (a.sheet ?? "").toLowerCase() === (b.sheet ?? "").toLowerCase();
+/** Define Name: a name for a range, a value or a formula, for every sheet's formulas (Scope: the whole plan) or one sheet's. */
 export const nameDialog = (cur: DefName, save: (n: DefName) => void | boolean | Promise<void | boolean>) => openDialog(() => {
-  const [n, setN] = createSignal(cur.name), [f, setF] = createSignal(cur.formula), [c, setC] = createSignal(cur.comment ?? "");
-  return <Dialog title={cur.name ? "Edit Name" : "New Name"} okText="OK" help="sheetnames" ok={() => (n().trim() && f().trim() ? save({ name: n().trim(), formula: f().trim().startsWith("=") ? f().trim() : `=${f().trim()}`, ...(c().trim() ? { comment: c().trim() } : {}) }) : false)}>
+  const [n, setN] = createSignal(cur.name), [f, setF] = createSignal(cur.formula), [c, setC] = createSignal(cur.comment ?? ""), [sc, setSc] = createSignal(cur.sheet ?? "");
+  return <Dialog title={cur.name ? "Edit Name" : "New Name"} okText="OK" help="sheetnames" ok={() => (n().trim() && f().trim() ? save({ name: n().trim(), formula: f().trim().startsWith("=") ? f().trim() : `=${f().trim()}`, ...(c().trim() ? { comment: c().trim() } : {}), ...(sc() ? { sheet: sc() } : {}) }) : false)}>
     <div class="form">
       <Row label="Name"><input class="nname" value={n()} placeholder="Rates" onInput={e => setN(e.currentTarget.value)} /></Row>
+      <Row label="Scope"><select class="nscope" onChange={e => setSc(e.currentTarget.value)}><option value="" selected={!sc()}>Whole plan</option><For each={P().sheets}>{s => <option value={s.name} selected={s.name === sc()}>{s.name}</option>}</For></select></Row>
       <Row label="Refers to"><input class="nref" value={f()} placeholder="=Prices!$B$2:$B$20 or =0.05" onInput={e => setF(e.currentTarget.value)} /></Row>
       <Row label="Comment"><input value={c()} onInput={e => setC(e.currentTarget.value)} /></Row>
     </div>
-    <p class="muted">A name starts with a letter or _, has no spaces and is not a cell address (B12) or one of the plan's names (ProjectFinish, Tasks…).</p>
+    <p class="muted">A name starts with a letter or _, has no spaces and is not a cell address (B12) or one of the plan's names (ProjectFinish, Tasks…). A name of one sheet holds on that sheet only, and wins there over a plan-wide name spelt the same; formula columns on the task sheet use the plan-wide names.</p>
   </Dialog>;
 });
 
 /** Name Manager: every defined name, to add, edit, delete or go to. Changes are saved together with OK. */
 export const nameManager = (names: DefName[], here: string, save: (l: DefName[]) => Promise<boolean>, go: (f: string) => void) => openDialog(() => {
   const [list, setList] = createSignal(names.map(x => ({ ...x }))), [sel, setSel] = createSignal(0);
-  const edit = (i: number) => nameDialog(i >= 0 ? list()[i] : { name: "", formula: here }, n => { if (list().some((x, j) => j !== i && x.name.toLowerCase() === n.name.toLowerCase())) return false; setList(i >= 0 ? list().map((x, j) => (j === i ? n : x)) : [...list(), n]); setSel(i >= 0 ? i : list().length - 1); });
+  const edit = (i: number) => nameDialog(i >= 0 ? list()[i] : { name: "", formula: here }, n => { if (list().some((x, j) => j !== i && sameName(x, n))) return false; setList(i >= 0 ? list().map((x, j) => (j === i ? n : x)) : [...list(), n]); setSel(i >= 0 ? i : list().length - 1); });
   return <Dialog title="Name Manager" okText="OK" wide help="sheetnames" ok={async () => { if (!(await save(list()))) return false; }}>
     <div class="row2"><button class="btn sm" onClick={() => edit(-1)}>New…</button><button class="btn sm" disabled={!list().length} onClick={() => edit(sel())}>Edit…</button>
       <button class="btn sm" disabled={!list().length} onClick={() => { setList(list().filter((_, j) => j !== sel())); setSel(Math.max(0, sel() - 1)); }}>Delete</button>
       <button class="btn sm" disabled={!list()[sel()]} onClick={() => { const x = list()[sel()]; if (x) { closeDialog(); go(x.formula); } }}>Go To</button></div>
-    <table class="tbl names"><thead><tr><th>Name</th><th>Refers to</th><th>Comment</th></tr></thead>
-      <tbody><For each={list()} fallback={<tr><td colSpan={3} class="muted">No names yet. New… names a range, a value or a formula.</td></tr>}>{(x, i) => <tr classList={{ on: sel() === i(), click: true }} onClick={() => setSel(i())} onDblClick={() => edit(i())}><td><b>{x.name}</b></td><td><code>{x.formula}</code></td><td>{x.comment}</td></tr>}</For></tbody></table>
+    <table class="tbl names"><thead><tr><th>Name</th><th>Refers to</th><th>Scope</th><th>Comment</th></tr></thead>
+      <tbody><For each={list()} fallback={<tr><td colSpan={4} class="muted">No names yet. New… names a range, a value or a formula.</td></tr>}>{(x, i) => <tr classList={{ on: sel() === i(), click: true }} onClick={() => setSel(i())} onDblClick={() => edit(i())}><td><b>{x.name}</b></td><td><code>{x.formula}</code></td><td class="nsc">{scopeOf(x)}</td><td>{x.comment}</td></tr>}</For></tbody></table>
   </Dialog>;
 });
 

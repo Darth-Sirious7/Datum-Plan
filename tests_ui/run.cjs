@@ -853,8 +853,8 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
       if (c === "open_link") { window.__calls.push([c, a]); return null; }
       let r = await inv(c, a);
       if (c === "apply" && a.op && a.op.Names) window.__names = a.op.Names.names;
-      if (r && r.project) r = { ...r, project: { ...r.project, names: window.__names } };
-      if (c === "sheet_view" && r) r = { ...r, cells: [...r.cells.filter(x => x[0] !== "A9" && x[0] !== "A2"), ["A9", "Line one\nLine two", "Line one\nLine two", false, null], ["A2", "https://example.com/spec", "https://example.com/spec", false, null]], links: [["A2", "https://example.com/spec"]], invalid: ["C2"] };
+      if (r && r.project) r = { ...r, project: { ...r.project, names: window.__names, sheets: window.__cf ? r.project.sheets.map((s, i) => (i ? s : { ...s, cond: window.__cf.rules })) : r.project.sheets } };
+      if (c === "sheet_view" && r) r = { ...r, cells: [...r.cells.filter(x => x[0] !== "A9" && x[0] !== "A2" && x[0] !== "E3"), ["A9", "Line one\nLine two", "Line one\nLine two", false, null], ["A2", "https://example.com/spec", "https://example.com/spec", false, null], ...(window.__cf ? [["E3", "5", "5", true, 5]] : [])], links: [["A2", "https://example.com/spec"]], invalid: ["C2"], ...(window.__cf ? { cond: window.__cf.vals } : {}) };
       return r;
     };
   });
@@ -905,6 +905,16 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("the Name Manager lists the names", (await p.$$(".dlg .tbl.names tbody tr")).length === 2 && (await p.textContent(".dlg .tbl.names")).includes(ref));
   await p.click(".dlg .tbl.names tbody tr >> nth=1"); await p.click(".dlg button:has-text('Delete')"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
   check("deleting in the Name Manager saves the rest", (await lastApply()).includes('"Names":{"names":[{"name":"Countries"') && !(await lastApply()).includes("Orders"), await lastApply());
+  // Scope: a name of one sheet only, shown and saved with its sheet.
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Names')"); await p.waitForTimeout(150);
+  check("the Name Manager shows each name's scope", (await p.textContent(".dlg .tbl.names thead")).includes("Scope") && (await p.textContent(".dlg .tbl.names td.nsc")) === "Whole plan");
+  await p.click(".dlg button:has-text('New…')"); await p.waitForTimeout(150);
+  { const top = p.locator(".dlg").last(); await top.locator("input.nname").fill("Countries"); await top.locator("select.nscope").selectOption(tab); await top.locator(".btn.pri").click(); await p.waitForTimeout(150); }
+  check("the same name may be local to a sheet", (await p.$$(".dlg .tbl.names tbody tr")).length === 2 && (await p.textContent(".dlg .tbl.names tbody tr >> nth=1")).includes(tab));
+  await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
+  check("…and is saved with its sheet", (await lastApply()).includes(`"sheet":${JSON.stringify(tab)}`) && (await lastApply()).split('"name":"Countries"').length === 3, await lastApply());
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Names')"); await p.waitForTimeout(150);
+  await p.click(".dlg .tbl.names tbody tr >> nth=1"); await p.click(".dlg button:has-text('Delete')"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(200);
   // Data validation: a whole number between bounds, its message, stop and warn.
   sq = await scell(1, 2); await p.mouse.click(sq.x, sq.y); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
   await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Validation')"); await p.waitForTimeout(150);
@@ -930,6 +940,25 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon .grp:has(.cap:text('Data')) .rbw:has(button.rb:has-text('Validation')) button.sarr"); await p.waitForTimeout(150);
   await p.click(".menu button:has-text('Clear Validation Circles')"); await p.waitForTimeout(150);
   check("Clear Validation Circles removes them", (await p.$$(".sheetgrid .vcircle")).length === 0);
+  // Custom validation: a formula that must be TRUE, written for the first cell.
+  sq = await scell(1, 3); await p.mouse.click(sq.x, sq.y); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
+  await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Validation')"); await p.waitForTimeout(150);
+  await p.selectOption(".dlg select.vkind", "custom");
+  check("Custom asks for a formula written for the first cell", !!(await p.$(".dlg input.vf")) && !(await p.$(".dlg select.vop")) && (await p.getAttribute(".dlg input.vf", "placeholder")).includes("D2") && (await p.textContent(".dlg")).includes("Write it for D2"));
+  await p.fill(".dlg input.vf", "AND(D2>0,D2<=$E$1)"); await p.click(".dlg .btn.pri"); await p.waitForTimeout(250);
+  { const v = await p.evaluate(() => window.__calls.filter(c => c[0] === "apply" && c[1].op.Sheet && c[1].op.Sheet.sheet).pop()?.[1].op.Sheet.sheet.valid);
+    check("…and saves it as a custom rule", JSON.stringify(v?.find(x => x.range === "D2")) === '{"range":"D2","list":[],"src":"","warn":false,"kind":"custom","a":"=AND(D2>0,D2<=$E$1)"}', JSON.stringify(v)); }
+  // Conditional formatting values that are cells (=$E$1) use what the engine worked out.
+  await p.evaluate(() => { window.__cf = { rules: [{ range: "E3", op: "gt", a: "=$E$1", b: "", style: "b" }], vals: [["2", ""]] }; });
+  const resave = async () => { await p.click(".ribbon .grp:has(.cap:text('Data')) button.rb:has-text('Validation')"); await p.waitForTimeout(150); await p.click(".dlg .btn.pri"); await p.waitForTimeout(300); };
+  await resave();
+  const bold = () => p.$$eval(".sheetgrid .gbody .row", rows => { const row = rows.find(x => x.style.top === "44px") ?? rows[2]; const c = row.children[5]; return [c, ...c.querySelectorAll("*")].some(e => +getComputedStyle(e).fontWeight >= 600); });
+  const until = async (want) => { for (let i = 0; i < 30 && (await bold()) !== want; i++) await p.waitForTimeout(100); return (await bold()) === want; };
+  check("a rule's value =$E$1 is read as the engine worked it out (5 > 2: bold)", await until(true));
+  await p.evaluate(() => { window.__cf.vals = [["9", ""]]; });
+  await resave();
+  check("…and follows it when it changes (5 > 9: plain)", await until(false));
+  await p.evaluate(() => { window.__cf = null; });
   for (const w of [1280]) { await p.setViewportSize({ width: w, height: 900 }); await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150); const o = await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth); check(`Sheet Tools › Format with Link, Validation and Names fits at ${w}px`, o <= 1, String(o)); }
   await p.setViewportSize({ width: 1440, height: 900 });
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(150);

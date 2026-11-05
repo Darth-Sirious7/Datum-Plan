@@ -73,10 +73,10 @@ export { sheetK, setSheetK };
 export const Sheets = () => {
   const k = sheetK, setK = setSheetK;
   const [data] = createResource(() => [tick(), k(), P().sheets.length], () => (P().sheets.length ? call<SheetOut>("sheet_view", { k: Math.min(k(), P().sheets.length - 1) }) : undefined));
-  const [cat] = createResource(() => `${P().fields.length}|${(P().names ?? []).map(n => `${n.name} ${n.formula} ${n.comment ?? ""}`).join("|")}`, () => call<Catalog>("sheet_catalog"));
+  const [cat] = createResource(() => `${P().fields.length}|${(P().names ?? []).map(n => `${n.name} ${n.formula} ${n.comment ?? ""} ${n.sheet ?? ""}`).join("|")}`, () => call<Catalog>("sheet_catalog"));
   const cells = createMemo(() => new Map((data()?.cells ?? []).map(c => [c[0], c])));
   const sheet = () => P().sheets[k()];
-  const looks = createMemo(() => condLooks(sheet(), cells()));
+  const looks = createMemo(() => condLooks(sheet(), cells(), data()?.cond));
   const input = (kk: number, r: number, c: number) => P().sheets[kk]?.cells[a1(r, c)] ?? "";
   const fmtOf = (r: number, c: number) => sheet()?.fmt?.[a1(r, c)] ?? "";
   // Editing: the text, the cell it goes to (which may be on another tab while pointing), the caret,
@@ -728,7 +728,7 @@ export const Sheets = () => {
   const here = () => `=${sheetRef(sheet().name)}!${abs(selA1())}`;
   const saveNames = (l: DefName[]) => { refocus(); return act({ Names: { names: l } }); };
   /** Define Name: the selection (or a value or formula) under a name every sheet's formulas can use. */
-  const defineName = () => X.nameDialog({ name: "", formula: here() }, n => (names().some(x => x.name.toLowerCase() === n.name.toLowerCase()) ? (toast(`There is already a name ${n.name}; change it in the Name Manager.`), false) : saveNames([...names(), n])));
+  const defineName = () => X.nameDialog({ name: "", formula: here() }, n => (names().some(x => X.sameName(x, n)) ? (toast(`There is already a name ${n.name} (${X.scopeOf(n)}); change it in the Name Manager.`), false) : saveNames([...names(), n])));
   const nameManager = () => X.nameManager(names(), here(), saveNames, f => { goTo(f.replace(/^=/, "")); });
   /** Insert… / Delete…: whole rows or columns when they are selected; otherwise ask how the other cells move. */
   const shiftDlg = (del: boolean) => {
@@ -753,7 +753,8 @@ export const Sheets = () => {
   });
   /** Go To and the Name Box: A1, A1:C9, Sheet2!B4, or a defined name (a new name in the Name Box names the selection). */
   const goTo = (ref: string): boolean => {
-    const dn = names().find(x => x.name.toLowerCase() === ref.trim().toLowerCase());
+    // This sheet's own name first, then the plan's.
+    const named = names().filter(x => x.name.toLowerCase() === ref.trim().toLowerCase() && (!x.sheet || x.sheet === sheet()?.name)), dn = named.find(x => x.sheet) ?? named[0];
     if (dn) { if (!/^=?('(?:[^']|'')+'|[^!=(]+)?!?\$?[A-Z]+\$?\d+(:\$?[A-Z]+\$?\d+)?$/i.test(dn.formula)) { toast(`${dn.name} is ${dn.formula}: a value, not cells to go to.`); return false; } return goTo(dn.formula.replace(/^=/, "")); }
     if (/^[A-Za-z_\\][\w.\\]*$/.test(ref.trim()) && !cfBounds(ref.trim().toUpperCase()) && ref.trim().length > 1 && !/^R\d*C\d*$/i.test(ref.trim())) { const n = { name: ref.trim(), formula: here() }; saveNames([...names(), n]).then(ok => { if (ok) toast(`${n.name} now names ${n.formula.slice(1)}.`, true); }); return true; }
     const t = ref.trim().replace(/\$/g, ""), bang = t.lastIndexOf("!"), name = bang > 0 ? t.slice(0, bang).replace(/^'|'$/g, "").replace(/''/g, "'") : "", g = cfBounds((bang > 0 ? t.slice(bang + 1) : t).toUpperCase());

@@ -670,3 +670,139 @@ fn remove_duplicates_shrinks_the_ranges_on_the_list() {
     assert_eq!((s.cond[0].range.as_str(), s.valid[0].range.as_str(), s.filter.as_ref().unwrap().range.as_str()), ("A2:A3", "A2:A3", "A1:A3"));
     assert_eq!((s.cells.get("A3").map(String::as_str), s.notes.contains_key("A3"), s.notes.len()), (Some("Pipe"), true, 1));
 }
+
+// --- rules follow their cells, custom validation, sheet names, names in formula columns -----------
+
+#[test]
+fn references_inside_rules_follow_inserted_and_deleted_cells_and_renamed_sheets() {
+    let mut doc = base();
+    let mut s = sheet("R", &[("B1", "9"), ("C1", "1"), ("F1", "x"), ("F2", "y"), ("G1", "5")]);
+    s.valid = vec![
+        Validation { range: "A2:A9".into(), kind: "whole".into(), op: "between".into(), a: "$C$1".into(), b: "=$B$1".into(), ..Default::default() },
+        Validation { range: "D2:D9".into(), src: "$F$1:$F$3".into(), ..Default::default() },
+        Validation { range: "E2".into(), src: "=Lists!A1:A3".into(), ..Default::default() },
+    ];
+    s.cond = vec![CondRule { range: "B2:B9".into(), op: "gt".into(), a: "=$G$1".into(), style: "b".into(), ..Default::default() }, CondRule { range: "C2:C9".into(), op: "contains".into(), a: "A1".into(), style: "b".into(), ..Default::default() }];
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Lists", &[("A1", "Open"), ("A2", "Shut")])) });
+    let rules = |doc: &Doc| { let s = &doc.p.sheets[0]; (s.valid.iter().map(|v| format!("{} {} {} {}", v.range, v.a, v.b, v.src)).collect::<Vec<_>>(), s.cond.iter().map(|c| format!("{} {}", c.range, c.a)).collect::<Vec<_>>()) };
+    // A row above: bounds, sources and values move with their cells (a bound typed without = stays so;
+    // text that only looks like a cell stays as typed).
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 1 });
+    assert_eq!(rules(&doc), (vec!["A3:A10 $C$2 =$B$2 ".into(), "D3:D10   $F$2:$F$4".into(), "E3:E3   =Lists!A1:A3".into()], vec!["B3:B10 =$G$2".into(), "C3:C10 A1".into()]));
+    // On the sheet a list reads from, and when that sheet is renamed.
+    op(&mut doc, Op::SheetInsert { k: 1, cols: false, at: 0, count: 1 });
+    let s = SheetData { name: "My lists".into(), ..doc.p.sheets[1].clone() };
+    op(&mut doc, Op::Sheet { k: Some(1), sheet: Some(s) });
+    assert_eq!(doc.p.sheets[0].valid[2].src, "='My lists'!A2:A4");
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::sheet_view(&c, 0).unwrap().lists[2], vec!["Open".to_string(), "Shut".into()], "the list still reads its cells");
+    // Cells inserted in column C push $C$2 down; deleting column G leaves #REF!.
+    op(&mut doc, Op::SheetShift { k: 0, range: "C1".into(), down: true, del: false });
+    op(&mut doc, Op::SheetInsert { k: 0, cols: true, at: 6, count: -1 });
+    assert_eq!((doc.p.sheets[0].valid[0].a.as_str(), doc.p.sheets[0].cond[0].a.as_str()), ("$C$3", "=#REF!"));
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::sheet_view(&c, 0).unwrap().cond[0], ["#REF!".to_string(), String::new()], "the rule's value is worked out (and shows the reference is gone)");
+    // Deleting the sheet a list reads from: its source becomes #REF! and the list is empty.
+    op(&mut doc, Op::Sheet { k: Some(1), sheet: None });
+    assert_eq!(doc.p.sheets[0].valid[2].src, "=#REF!");
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert!(crate::sheet::sheet_view(&c, 0).unwrap().lists[2].is_empty());
+    doc.undo();
+    assert_eq!(doc.p.sheets[0].valid[2].src, "='My lists'!A2:A4", "undo brings it back");
+    // Remove Duplicates deletes rows above a rule: its references move up too.
+    let mut doc = base();
+    let mut s = sheet("D", &[("A1", "Vendor"), ("A2", "Steel"), ("A3", "Steel"), ("B9", "3")]);
+    s.valid = vec![Validation { range: "C5:C9".into(), kind: "decimal".into(), op: "le".into(), a: "=$B$9".into(), ..Default::default() }];
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s) });
+    op(&mut doc, Op::SheetDedupe { k: 0, range: "A1:C3".into(), cols: vec![0], header: true });
+    assert_eq!((doc.p.sheets[0].valid[0].range.as_str(), doc.p.sheets[0].valid[0].a.as_str()), ("C4:C8", "=$B$8"), "the cells below the list's columns move up");
+}
+
+#[test]
+fn custom_validation_formulas_are_true_for_each_cell_and_go_to_the_workbook() {
+    let mut doc = base();
+    let mut s = sheet("C", &[("A1", "Qty"), ("B1", "Max"), ("A2", "5"), ("B2", "10"), ("A3", "-1"), ("B3", "4"), ("A4", "7"), ("B4", "3"), ("B5", "10")]);
+    s.valid = vec![Validation { range: "A2:A9".into(), kind: "custom".into(), a: "=AND(A2>0,A2<=B2)".into(), prompt: "Up to the row's Max".into(), ..Default::default() }];
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(s.clone()) });
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::sheet_view(&c, 0).unwrap().invalid, vec!["A3", "A4"], "each cell's own row");
+    let chk = |a1: &str, v: &str| crate::sheet::check_input(&c, 0, a1, v);
+    let no = Some(("This cell takes a value for which AND(A2>0,A2<=B2) is TRUE.".to_string(), false));
+    assert_eq!((chk("A5", "3"), chk("A5", "20"), chk("A5", "=B5+1"), chk("A6", "1"), chk("A5", "")), (None, no.clone(), no.clone(), no, None), "the typed value is what the formula reads");
+    // Warn, and a formula that does not read.
+    let w = SheetData { valid: vec![Validation { warn: true, error: "Over the max".into(), ..s.valid[0].clone() }], ..s.clone() };
+    op(&mut doc, Op::Sheet { k: Some(0), sheet: Some(w) });
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::check_input(&c, 0, "A5", "20"), Some(("Over the max".into(), true)));
+    let bad = SheetData { valid: vec![Validation { a: "=AND(A2>0".into(), ..s.valid[0].clone() }], ..s.clone() };
+    assert!(doc.apply(Op::Sheet { k: Some(0), sheet: Some(bad) }, "%d/%m/%Y").unwrap_err().contains("does not read as a formula"));
+    // Rows deleted from the top of the range: the cell that becomes first keeps its own formula.
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 1, count: -1 });
+    assert_eq!((doc.p.sheets[0].valid[0].range.as_str(), doc.p.sheets[0].valid[0].a.as_str()), ("A2:A8", "=AND(A2>0,A2<=B2)"));
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    assert_eq!(crate::sheet::sheet_view(&c, 0).unwrap().invalid, vec!["A2", "A3"]);
+    op(&mut doc, Op::SheetInsert { k: 0, cols: false, at: 0, count: 1 });
+    assert_eq!((doc.p.sheets[0].valid[0].range.as_str(), doc.p.sheets[0].valid[0].a.as_str()), ("A3:A9", "=AND(A3>0,A3<=B3)"));
+    // To the workbook as a custom rule, and back (also from another program).
+    let f = export_sheets(&doc.p).unwrap();
+    let x = part(&f, "xl/worksheets/sheet1.xml");
+    assert!(x.contains("type=\"custom\"") && x.contains("<formula1>AND(A3&gt;0,A3&lt;=B3)</formula1>"), "{x}");
+    let g = patch(&f, "xl/workbook.xml", |x| x.replace("name=\"DatumPlan\"", "name=\"Other\""));
+    let v = &crate::io::sheetbook::import(&g).unwrap().sheets[0].valid[0];
+    assert_eq!((v.range.as_str(), v.kind.as_str(), v.a.as_str(), v.warn, v.error.as_str()), ("A3:A9", "custom", "=AND(A3>0,A3<=B3)", true, "Over the max"));
+}
+
+#[test]
+fn names_can_be_local_to_a_sheet() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("P1", &[("A1", "=VAT*100")])) });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("P2", &[("A1", "=VAT*100"), ("A2", "=Rate"), ("B1", "3")])) });
+    let local = |name: &str, f: &str, s: &str| DefName { sheet: s.into(), ..dn(name, f) };
+    op(&mut doc, Op::Names { names: vec![dn("VAT", "=0.05"), local("vat", "=0.2", "p2"), local("Rate", "=$B$1", "P2")] });
+    assert_eq!(doc.p.names[1].sheet, "P2", "spelt as the tab is");
+    assert_eq!((shown(&doc, 0, "A1"), shown(&doc, 1, "A1"), shown(&doc, 1, "A2")), ("5".to_string(), "20".to_string(), "3".to_string()), "the sheet's own name wins there; its cells without a sheet are its own");
+    // Twice in one scope, or on a sheet that is not there, is refused.
+    for bad in [vec![local("X", "=1", "P1"), local("x", "=2", "P1")], vec![local("X", "=1", "Gone")]] { assert!(doc.apply(Op::Names { names: bad.clone() }, "%d/%m/%Y").is_err(), "{bad:?}"); }
+    // Renaming the sheet takes its names along; a row inserted moves the cells they read.
+    let s = SheetData { name: "Prices 2".into(), ..doc.p.sheets[1].clone() };
+    op(&mut doc, Op::Sheet { k: Some(1), sheet: Some(s) });
+    op(&mut doc, Op::SheetInsert { k: 1, cols: false, at: 0, count: 1 });
+    assert_eq!(doc.p.names.iter().map(|n| (n.name.as_str(), n.formula.as_str(), n.sheet.as_str())).collect::<Vec<_>>(), vec![("VAT", "=0.05", ""), ("vat", "=0.2", "Prices 2"), ("Rate", "=$B$2", "Prices 2")]);
+    assert_eq!(shown(&doc, 1, "A3"), "3");
+    // To the workbook as names local to their tab, and back.
+    let f = export_sheets(&doc.p).unwrap();
+    let wbx = part(&f, "xl/workbook.xml");
+    assert!(wbx.contains("<definedName name=\"vat\" localSheetId=\"1\">0.2</definedName>") && wbx.contains("<definedName name=\"VAT\">0.05</definedName>"), "{wbx}");
+    let back = crate::io::sheetbook::import(&f).unwrap();
+    let got: Vec<(String, String, String)> = back.names.iter().map(|n| (n.name.clone(), n.formula.clone(), n.sheet.clone())).collect();
+    assert!(got.contains(&("vat".into(), "=0.2".into(), "Prices 2".into())) && got.contains(&("VAT".into(), "=0.05".into(), String::new())), "{got:?}");
+    // Deleting the sheet deletes its names; undo brings them back; a name of a missing sheet goes on load.
+    op(&mut doc, Op::Sheet { k: Some(1), sheet: None });
+    assert_eq!(doc.p.names.len(), 1);
+    doc.undo();
+    assert_eq!(doc.p.names.len(), 3);
+    let mut p = doc.p.clone();
+    p.names.push(local("Lost", "=1", "Nowhere"));
+    p.normalize();
+    assert_eq!(p.names.len(), 3);
+}
+
+#[test]
+fn formula_columns_use_the_plans_names() {
+    let mut doc = base();
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Prices", &[("A2", "T1"), ("B2", "100"), ("A3", "T2"), ("B3", "=B2*2")])) });
+    op(&mut doc, Op::Sheet { k: None, sheet: Some(sheet("Sheet1", &[("A1", "7")])) });
+    op(&mut doc, Op::Names { names: vec![dn("VAT", "=0.05"), dn("Rate", "=Prices!$B$2"), dn("Rates", "=Prices!$A$2:$B$3"), dn("Twice", "=LAMBDA(x,x*2)"), dn("Gross", "=Rate*(1+VAT)"), dn("Seven", "=Sheet1!$A$1"),
+        dn("AllCost", "=SUM(Tasks[Cost])"), dn("Loose", "=$B$2"), DefName { sheet: "Prices".into(), ..dn("Fx", "=1.1") }] });
+    let col = |k: &str, f: &str| Op::FieldDef { def: CustomDef { key: k.into(), alias: k.into(), formula: f.into(), ..Default::default() } };
+    for (k, f) in [("number1", "=Rate*(1+VAT)"), ("number2", "=VLOOKUP([Name],Rates,2,FALSE)"), ("number3", "=Twice([Duration])"), ("number4", "=Gross+Seven"), ("number5", "=TaskCount*10")] { op(&mut doc, col(k, f)); }
+    let c = Calc::new(&doc.p, "%d/%m/%Y", d(2026, 11, 2));
+    let n = |k: &str| c.val(0, k).num();
+    assert_eq!((n("c:number1"), n("c:number2"), n("c:number3"), n("c:number4"), n("c:number5")), (105.0, 100.0, 4.0, 112.0, 10.0), "values, sheet cells, a range, a LAMBDA, names of names, the plan's numbers");
+    // Names a formula column cannot use say why.
+    for (f, why) in [("=AllCost*2", "Tasks or Resources tables"), ("=Loose", "without their sheet"), ("=[Cost]*Fx", "of the sheet Prices only")] {
+        let e = doc.apply(col("number6", f), "%d/%m/%Y").unwrap_err();
+        assert!(e.contains(why), "{f}: {e}");
+    }
+}

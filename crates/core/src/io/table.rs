@@ -486,8 +486,12 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&cf.range) else { continue };
             let (c0, c1) = (c0 as u16, c1 as u16);
             let fm = styled(Format::new(), &cf.style);
-            // Numbers as numbers; anything else as text (the workbook quotes it).
-            let v = |x: &str| -> rust_xlsxwriter::ConditionalFormatValue { match x.trim().parse::<f64>() { Ok(n) => n.into(), Err(_) => x.trim().into() } };
+            // Numbers as numbers, references and formulas (=$B$1) as formulas; anything else as text (the workbook quotes it).
+            let v = |x: &str| -> rust_xlsxwriter::ConditionalFormatValue {
+                let x = x.trim();
+                if x.starts_with('=') && x.len() > 1 { return rust_xlsxwriter::Formula::new(renamed.iter().fold(crate::sheet::excel_formula(c, x), |f, (o, n)| crate::sheet::rename(&f, o, n, &[]))).into() }
+                match x.parse::<f64>() { Ok(n) => n.into(), Err(_) => x.into() }
+            };
             let col = |x: &str| u32::from_str_radix(x.trim_start_matches('#'), 16).unwrap_or(0x63BE7B);
             // A value rule with no value is no rule (the file would need repair).
             let cell_rule = matches!(cf.op.as_str(), "gt" | "ge" | "lt" | "le" | "eq" | "ne" | "between" | "notbetween");
@@ -541,11 +545,14 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
             use rust_xlsxwriter::{DataValidationRule as DR, Formula as Fx};
             let Some((r0, c0, r1, c1)) = crate::model::sheet_range(&v.range) else { continue };
             let dv = rust_xlsxwriter::DataValidation::new();
-            let (a, b) = (Fx::new(crate::sheet::bound_text(c, k, &v.a)), Fx::new(crate::sheet::bound_text(c, k, &v.b)));
+            // Bounds, custom formulas and list sources name the tabs as the workbook does.
+            let xl = |f: String| renamed.iter().fold(f, |f, (o, n)| crate::sheet::rename(&format!("={}", f.trim_start_matches('=')), o, n, &[]).trim_start_matches('=').to_string());
+            let (a, b) = (Fx::new(xl(crate::sheet::bound_text(c, k, &v.a))), Fx::new(xl(crate::sheet::bound_text(c, k, &v.b))));
             let rule = match v.op.as_str() { "notbetween" => DR::NotBetween(a, b), "eq" => DR::EqualTo(a), "ne" => DR::NotEqualTo(a), "gt" => DR::GreaterThan(a), "lt" => DR::LessThan(a), "ge" => DR::GreaterThanOrEqualTo(a), "le" => DR::LessThanOrEqualTo(a), _ => DR::Between(a, b) };
             let dv = match v.kind.as_str() {
                 "" if v.src.trim().is_empty() => match dv.allow_list_strings(&v.list.iter().map(String::as_str).collect::<Vec<_>>()) { Ok(x) => x, Err(_) => continue },
-                "" => dv.allow_list_formula(Fx::new(format!("={}", v.src.trim().trim_start_matches('=')))),
+                "" => dv.allow_list_formula(Fx::new(format!("={}", xl(v.src.trim().to_string())))),
+                "custom" => dv.allow_custom(Fx::new(xl(crate::sheet::bound_text(c, k, &format!("={}", v.a.trim().trim_start_matches('=')))))),
                 "whole" => dv.allow_whole_number_formula(rule),
                 "decimal" => dv.allow_decimal_number_formula(rule),
                 "date" => dv.allow_date_formula(rule),
@@ -612,8 +619,8 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
                 put(ws, i as u32 + 1, k as u16, i, key, false, "")?;
             }
         }
-        let names: Vec<String> = cols.iter().map(|x| x.1.clone()).collect();
-        ws.add_table(0, 0, c.p.tasks.len().max(1) as u32, names.len() as u16 - 1, &table(&names).set_name("Tasks")).map_err(e)?;
+        let heads: Vec<String> = cols.iter().map(|x| x.1.clone()).collect();
+        ws.add_table(0, 0, c.p.tasks.len().max(1) as u32, heads.len() as u16 - 1, &table(&heads).set_name("Tasks")).map_err(e)?;
         let ws = wb.add_worksheet();
         ws.set_name("Resources").map_err(e)?;
         if sheets_only { ws.set_hidden(true); }
@@ -628,16 +635,18 @@ fn write_book(c: &Calc, cols: &[String], path: &Path, sheets_only: bool) -> Resu
                 }
             }
         }
-        let names: Vec<String> = crate::sheet::RES_COLS.iter().map(|x| x.1.to_string()).collect();
-        ws.add_table(0, 0, c.p.resources.len().max(1) as u32, names.len() as u16 - 1, &table(&names).set_name("Resources")).map_err(e)?;
+        let heads: Vec<String> = crate::sheet::RES_COLS.iter().map(|x| x.1.to_string()).collect();
+        ws.add_table(0, 0, c.p.resources.len().max(1) as u32, heads.len() as u16 - 1, &table(&heads).set_name("Resources")).map_err(e)?;
         for (name, v, _) in crate::sheet::project_names(c) {
             let f = match v { gridcraft_core::Value::Number(n) => format!("={n}"), v => format!("=\"{}\"", v.display().replace('"', "\"\"")) };
             wb.define_name(name, &f).map_err(e)?;
         }
         // The plan's own defined names (one the workbook refuses is left out rather than lose the file).
+        // A sheet's own names are local to its tab (localSheetId).
         for n in &c.p.names {
             let f = renamed.iter().fold(crate::sheet::excel_formula(c, &n.formula), |f, (o, nw)| crate::sheet::rename(&f, o, nw, &[]));
-            let _ = wb.define_name(n.name.as_str(), &f);
+            let tab = c.p.sheets.iter().position(|s| s.name.eq_ignore_ascii_case(&n.sheet)).map(|i| names[i].clone());
+            let _ = match tab { Some(t) => wb.define_name(format!("'{}'!{}", t.replace('\'', "''"), n.name), &f), None if n.sheet.is_empty() => wb.define_name(n.name.as_str(), &f), None => continue };
         }
     }
     if !meta.is_empty() {
