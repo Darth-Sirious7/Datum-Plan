@@ -19,7 +19,7 @@ export const [opts, setOpts] = createSignal<Options>({ dateFmt: "%d-%b-%y", auto
 // Fill series read 03/04/2026 the way the plan writes dates (day first unless the format starts with the month).
 createRoot(() => createEffect(() => { fillOrder.dayFirst = !opts().dateFmt.startsWith("%m"); }));
 
-export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "simrisk" | "checks" | "lookahead" | "manpower" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder";
+export type View = "setup" | "gantt" | "tracking" | "network" | "calendar" | "taskusage" | "ressheet" | "resusage" | "resgraph" | "team" | "dashboard" | "reports" | "portfolio" | "risks" | "simrisk" | "checks" | "lookahead" | "manpower" | "timeline" | "progress" | "scurve" | "sheets" | "update" | "relations" | "builder" | "contract";
 export const [view, setView] = createSignal<View>("gantt");
 export const [backstage, setBackstage] = createSignal<string | null>("home");
 export const [tab, setTab] = createSignal("task");

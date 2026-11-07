@@ -39,7 +39,8 @@
     "Your own dashboards: numbers, progress rings, charts, tables and country flags from the plan and your sheets, laid out as you like, several per plan.",
     "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
     "Logos and pictures kept in the plan file, by party (client, your company, vendors, sub-vendors), for print headers, dashboards and sheets.",
-    "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step."
+    "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step.",
+    "Modules a plan takes on only when it needs them: Contract Dates & Payments tracks contract dates against the forecast with their trend, delay damages at risk, payment milestones and the cash-in curve."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -50,28 +51,28 @@
   ],
   "roadmap": [
     {
-      "v": "0.5",
-      "title": "Schedule quality and scenarios",
-      "when": "Next",
-      "items": [
-        "A schedule health score with its trend; baseline compare with ghost bars; a log of logic changes; a milestone trend chart.",
-        "What-if scenarios: branch a plan, change it, compare side by side, keep or discard.",
-        "Delay analysis: as-planned against as-built, time impact, windows.",
-        "Line of balance and takt planning for repetitive work."
-      ]
-    },
-    {
       "v": "0.6",
-      "title": "Portfolio and hardening",
-      "when": "Later",
+      "title": "Registers as modules",
+      "when": "Now",
       "items": [
-        "One resource pool shared by several plans, a portfolio dashboard.",
-        "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports.",
-        "Exchange files checked against real files from other tools; custom fields and codes in exported files."
+        "Contract dates against the forecast, delay damages and payments (0.6.0).",
+        "A document register: classes, issue purposes, return codes, review cycles in working days, a transmittal log, weighted progress and its S-curve.",
+        "A procurement register: sub-orders from enquiry to delivery, required against promised dates, an expediting log, linked to the vendor documents."
       ]
     },
     {
       "v": "0.7",
+      "title": "Portfolio, quality and hardening",
+      "when": "Later",
+      "items": [
+        "One resource pool shared by several plans, a portfolio dashboard.",
+        "A schedule health score with its trend, ghost bars and a log of logic changes.",
+        "What-if scenarios and delay analysis: as-planned against as-built, time impact, windows.",
+        "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports."
+      ]
+    },
+    {
+      "v": "0.8",
       "title": "Working together",
       "when": "Later",
       "items": [

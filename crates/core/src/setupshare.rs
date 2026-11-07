@@ -4,7 +4,7 @@ use crate::model::{Project, MAX_PICTURES, MAX_PICTURE_LEN};
 use std::collections::HashMap;
 
 /// The parts of a setup that can be shared: key, label, what it holds.
-pub const PARTS: [(&str, &str, &str); 7] = [
+pub const PARTS: [(&str, &str, &str); 8] = [
     ("details", "Project details", "Client, manager, company, location and the company logo"),
     ("logos", "Logos and pictures", "The master's picture library; the plan's own pictures stay"),
     ("print", "Print header, footer & page setup", "Pictures, paper, margins, footer; the plan keeps its own title and subtitle"),
@@ -12,6 +12,7 @@ pub const PARTS: [(&str, &str, &str); 7] = [
     ("currency", "Currency", "Symbol, code and decimals"),
     ("periods", "Reporting periods", "Week end, month end and how progress is weighted"),
     ("codes", "Activity codes & custom fields", "Their definitions and values lists (same names are replaced)"),
+    ("modules", "Modules", "The modules switched on (Project › Modules) and their settings; each plan keeps its own registers"),
 ];
 
 /// Copies the ticked parts of `from` into `p`.
@@ -56,6 +57,11 @@ pub fn adopt(p: &mut Project, from: &Project, parts: &[String]) -> Result<(), St
     if has("codes") {
         for c in &from.codes { match p.codes.iter_mut().find(|x| x.name == c.name) { Some(x) => *x = c.clone(), None => p.codes.push(c.clone()) } }
         for f in &from.fields { match p.fields.iter_mut().find(|x| x.key == f.key) { Some(x) => *x = f.clone(), None => p.fields.push(f.clone()) } }
+    }
+    if has("modules") {
+        for m in &from.modules { if !p.modules.contains(m) { p.modules.push(m.clone()) } }
+        p.modules.sort_by_key(|m| crate::contract::MODULES.iter().position(|x| x.0 == m.as_str()));
+        p.contract.warn_days = from.contract.warn_days;
     }
     Ok(())
 }

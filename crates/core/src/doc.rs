@@ -31,6 +31,10 @@ pub enum Op {
     ProjectSet { field: String, value: serde_json::Value },
     /// Takes the ticked parts of another plan's setup (a master's, for its subplans): details, logos, print, calendars, currency, periods, codes.
     AdoptSetup { from: Box<Project>, parts: Vec<String> },
+    /// Sets the modules switched on (Project › Modules).
+    Modules { on: Vec<String> },
+    /// Replaces the contract (Contract Dates & Payments).
+    Contract { c: Box<Contract> },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
     FieldDef { def: CustomDef },
     /// Deletes a custom field: its definition and every task's value.
@@ -757,6 +761,11 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             p.snapshots.push(Snapshot { date: Some(p.status.unwrap_or_else(|| date_of(s.start))), label, comment, finish: s.finish, pct, cost: total, rows });
         }
         Op::AdoptSetup { from, parts } => crate::setupshare::adopt(p, &from, &parts)?,
+        Op::Modules { on } => {
+            if let Some(x) = on.iter().find(|x| !crate::contract::MODULES.iter().any(|m| m.0 == x.as_str())) { return Err(format!("Unknown module: {x}.")) }
+            p.modules = crate::contract::MODULES.iter().map(|m| m.0.to_string()).filter(|k| on.contains(k)).collect();
+        }
+        Op::Contract { c } => { let mut c = *c; crate::contract::clean(&mut c); p.contract = c; }
         Op::ProjectSet { field, value } => {
             let mut v = serde_json::to_value(&*p).map_err(|e| e.to_string())?;
             if v.get(&field).is_none() || matches!(field.as_str(), "tasks" | "resources" | "format" | "next_uid") {

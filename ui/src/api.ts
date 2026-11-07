@@ -26,12 +26,21 @@ export interface SchedOpts {
   retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
   level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null; res_cals?: boolean;
 }
+export interface ContractDate { id: number; name: string; task: number; date: string | null; value: number; ld_rate: number; ld_cap: number; grace: number; note: string }
+export interface Payment { id: number; name: string; pct: number; amount: number; task: number; terms: number; invoiced: string | null; paid: string | null }
+export interface Contract { number: string; value: number; warn_days: number; dates: ContractDate[]; payments: Payment[] }
+export interface ContractOut {
+  value: number; status_day: string | null; late: number; at_risk: number; ld: number; ld_max: number; pay_pct: number; received: number;
+  milestones: { id: number; name: string; task: number; task_name: string; date: string | null; forecast: string | null; baseline: string | null; done: boolean; var: number | null; status: string; ld: number; ld_max: number; trend: [string, string][] }[];
+  payments: { id: number; name: string; amount: number; task_name: string; planned: string | null; due: string | null; invoiced: string | null; paid: string | null; status: string }[];
+  cash: [string, number, number, number | null][];
+}
 export interface Project {
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
-  subplans?: SubPlan[]; master?: string;
+  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {

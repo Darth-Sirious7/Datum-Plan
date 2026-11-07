@@ -549,6 +549,22 @@ If two plans wait for each other in a loop, the update stops and says so.
 
 Below, **Other open plans wait for** lists the tasks of this plan that tasks in other open plans wait for; **Show plan** opens that plan's tab.
 
+## Modules: registers when you need them
+
+A plan can take on extra registers, called **modules**. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
+
+### Contract Dates & Payments
+
+**Contract** (sidebar) shows the dates the contract fixes against the forecast, the delay damages at risk, and the payments.
+
+1. Type the contract number and value at the top.
+2. Select the task that meets a contract date, for example a delivery milestone, and click **+ Contract date**. Type the date the contract fixes.
+3. The row shows the task's forecast (its actual finish once done), the baseline, the days late or early, and a status: **On track**, **At risk** (less float than the days set at the top), **Late**, **Met** or **Met late**. **Trend** draws the forecast at each period close, so a slipping date shows as a rising red line.
+4. **Delay damages:** a % per week or part week late, after the **grace** days, up to the **cap** %, of **Of value** (the unit's price; empty means the contract value). **At risk** shows the damages at today's forecast.
+5. **Payment milestones:** **+ Payment**, then the task whose finish triggers it, the share (%) or an amount, and the **terms** (days to payment). Type the invoiced and paid dates as they happen. The chart shows planned, forecast and received cash.
+
+On a master, a table at the bottom adds up the contract dates, damages and payments of its open subplans, with a button to open each one.
+
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.

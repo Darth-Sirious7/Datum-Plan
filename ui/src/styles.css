@@ -1071,3 +1071,22 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .sharesetup .chk { align-items: flex-start; gap: 6px; }
 .sharesetup small { display: block; font-size: 11.5px; }
 .sharesetup .btn { margin-top: 4px; }
+
+/* Modules and Contract Dates & Payments */
+.modrow { align-items: flex-start; gap: 8px; margin: 8px 0; }
+.modrow small { display: block; }
+.panel.ctr { margin-top: 14px; overflow-x: auto; }
+.panel.ctr .phead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.panel.ctr .phead h2 { margin: 0; }
+.panel.ctr td input:not([type=number]):not([type=date]) { min-width: 140px; }
+.panel.ctr td.bad, .panel.ctr td .bad { color: var(--crit); font-weight: 600; }
+.panel.ctr tr.tot td { border-top: 1.5px solid var(--line); }
+.tpick { display: inline-flex; gap: 2px; align-items: center; }
+.tpick select { max-width: 220px; }
+.st { font-size: 11.5px; padding: 1px 6px; border-radius: 3px; background: var(--bg2); white-space: nowrap; }
+.st.good { background: #DDF2E5; color: #1E6B3C; }
+.st.warn { background: #FDF0D2; color: #8A5A00; }
+.st.bad { background: #F8D4D4; color: #9B1C1C; }
+.spark { vertical-align: middle; }
+.modoff { background: #FDF0D2; border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.panel.ctr td { white-space: nowrap; }

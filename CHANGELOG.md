@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 — 2026-11-07
+
+Modules: registers a plan takes on only when it needs them. The first is Contract Dates & Payments.
+
+- **Project › Modules** ticks the modules a plan uses. A plan without modules looks and saves exactly as before. Switching one off hides it and asks whether to keep its data (kept by default) or delete it.
+- **Contract Dates & Payments** (sidebar › Contract, or Project › Contract):
+  - **Contract dates**, each met by a task: the task's forecast (or actual) finish against the contract date, days late or early, the baseline, and a status (On track, At risk, Late, Met, Met late). "At risk" is less float than the days set at the top (14 by default).
+  - **Trend:** the forecast at every period close, so a slipping date shows as a rising line.
+  - **Delay damages:** a % of the value (the unit's price, or the contract value) per week or part week late, after grace days, up to a cap. The page adds up the damages at today's forecast and their cap.
+  - **Payment milestones:** a share of the contract value or an amount, due some days after a task finishes, with invoiced and paid dates. A chart shows planned, forecast and received cash.
+  - **On a master,** a table adds up the contract dates, damages and payments of its open subplans.
+- **Apply Setup to Subplans** can give the subplans the master's modules (each keeps its own registers).
+
 ## 0.5.29 — 2026-11-05
 
 Bigger, clearer text on printed Gantt charts.

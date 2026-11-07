@@ -672,6 +672,58 @@ pub struct Project {
     /// A subplan: its master's file (empty for a plan on its own or a master).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub master: String,
+    /// Modules switched on (Project › Modules), such as "contract".
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub modules: Vec<String>,
+    /// Contract Dates & Payments (kept when the module is switched off, until deleted).
+    #[serde(skip_serializing_if = "Contract::is_empty")]
+    pub contract: Contract,
+}
+
+/// The contract: its value, contract dates (with delay damages) and payment milestones.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Contract {
+    pub number: String,
+    pub value: f64,
+    /// A contract date with less float than this (calendar days) is "at risk".
+    pub warn_days: i64,
+    pub dates: Vec<ContractDate>,
+    pub payments: Vec<Payment>,
+}
+impl Contract {
+    pub fn is_empty(&self) -> bool { *self == Self::default() }
+}
+
+/// A date the contract fixes, met by a task's finish; late, it costs delay damages.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ContractDate {
+    pub id: u32,
+    pub name: String,
+    pub task: u32,
+    pub date: Option<NaiveDate>,
+    /// The value the damages are a share of (the unit's price); 0 = the contract value.
+    pub value: f64,
+    /// Damages in % of that value per week or part week late, after `grace` days, up to `ld_cap` %.
+    pub ld_rate: f64,
+    pub ld_cap: f64,
+    pub grace: i64,
+    pub note: String,
+}
+
+/// A payment milestone: a share of the contract value (or an amount), due `terms` days after its task finishes.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Payment {
+    pub id: u32,
+    pub name: String,
+    pub pct: f64,
+    pub amount: f64,
+    pub task: u32,
+    pub terms: i64,
+    pub invoiced: Option<NaiveDate>,
+    pub paid: Option<NaiveDate>,
 }
 
 /// One subplan of a master plan.
@@ -716,7 +768,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(),
         }
     }
 

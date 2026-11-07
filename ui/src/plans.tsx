@@ -116,6 +116,7 @@ const SETUP_PARTS: [string, string, string][] = [
   ["currency", "Currency", "Symbol, code and decimals"],
   ["periods", "Reporting periods", "Week end, month end and how progress is weighted"],
   ["codes", "Activity codes & custom fields", "Their definitions and values lists (same names are replaced)"],
+  ["modules", "Modules", "The modules switched on and their settings; each plan keeps its own registers"],
 ];
 const SETUP_KEY = "datum.shareSetup";
 /** Project › Apply Setup to Subplans: tick what the master gives, tick the subplans, OK. Name, code and description stay each plan's own. */

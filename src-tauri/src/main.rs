@@ -791,6 +791,20 @@ fn level_preview(st: State<St>, uids: Vec<u32>) -> R<datum_core::level::Preview>
     guard(|| datum_core::level::preview(&st.lock().doc.p, &uids))
 }
 
+/// Contract Dates & Payments of the plan shown, and (on a master) of its open subplans.
+#[derive(serde::Serialize)]
+struct PlanContract { tab: usize, name: String, on: bool, out: datum_core::contract::Out }
+
+#[tauri::command]
+fn contract(st: State<St>) -> Vec<PlanContract> {
+    let a = st.lock();
+    let (ds, tabs, cur) = (docs(&a), tab_list(&a), a.cur);
+    tabs.iter().enumerate().filter(|(k, t)| *k == cur || (t.role == "sub" && t.group == cur as i64)).map(|(k, _)| {
+        let d = ds[k];
+        PlanContract { tab: k, name: d.p.name.clone(), on: d.p.modules.iter().any(|m| m == "contract"), out: datum_core::contract::status(&Calc::new(&d.p, &a.opts.date_fmt, today())) }
+    }).collect()
+}
+
 #[tauri::command]
 fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
     check::run(&calc(&st.lock()), &limits)
@@ -1563,7 +1577,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, contract, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

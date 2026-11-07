@@ -1,4 +1,5 @@
 // Title bar, quick access toolbar, Tell Me and the ribbon.
+import { modules, openContract } from "./contract";
 import { linkSelected, linkedPlans, updateLinks, subplans, shareSetup } from "./plans";
 import { For, Show, JSX, createSignal, createMemo, createEffect, onMount, onCleanup } from "solid-js";
 import { setOut, call, out, tab, setTab, setBackstage, view, openMenu, Item, toast, fields, filter, setFilter, ALL, setGroup, group, setSort, sort, useTable, tables, table, setProjSum, projSum, showSubs, setShowSubs, setHideSum, hideSum, baseline, setBaseline, details, timeline, P, act, openDialog, closeDialog, setLevel, setZoom, saveCols, cols, theme, setTheme } from "./store";
@@ -284,6 +285,7 @@ export const Ribbon = () => (
       <G l="Schedule" h="baselines"><B big i="base" l="Set Baseline" run={C.baseline} /><S><B i="track" l="Update Project" run={C.update} /><B i="calendar2" l="Reporting Periods" run={() => D.periodSettings()} /><B i="check" l="Check Schedule" run={() => C.view("checks")} /></S></G>
       <G l="Linked Plans" h="linkedplans"><B big i="link" l="Link to Plan" title="Link the selected task to a task in another plan" run={() => linkSelected()} /><S><B i="list" l="Linked Plans" run={linkedPlans} /><B i="update" l="Update Links" run={() => updateLinks(true)} /><B i="proj" l="Subplans" title="The plans that make up this project: the master and its subplans" run={subplans} /></S><S><B i="copy" l="Apply Setup to Subplans" title="Give the subplans this master's details, logos, print header and footer, calendars, currency, periods or codes; each keeps its own name and code" run={shareSetup} /></S></G>
       <G l="Proofing" h="portfolio"><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
+      <G l="Modules" h="modules"><B big i="list" l="Modules" title="Add registers to this plan: Contract Dates & Payments" run={modules} /><S><B i="money" l="Contract" title="Contract dates, delay damages and payments (a module)" run={openContract} on={view() === "contract"} /></S></G>
     </Show>
     <Show when={tab() === "view"}>
       <G l="Task Views" h="taskviews"><B big i="gantt" l="Gantt Chart" run={() => C.view("gantt")} dd={e => openMenu(e, viewMenu())} /><S><B i="base" l="Tracking Gantt" run={() => C.view("tracking")} /><B i="net" l="Network Diagram" run={() => C.view("network")} /><B i="cal" l="Calendar" run={() => C.view("calendar")} /></S><S><B i="link" l="Relationship Diagram" run={() => C.view("relations")} /><B i="table" l="Sheets" run={() => C.view("sheets")} /></S><S><B i="table" l="Task Usage" run={() => C.view("taskusage")} /><B i="tl" l="Timeline" run={C.timelineBar} on={timeline()} /></S></G>
