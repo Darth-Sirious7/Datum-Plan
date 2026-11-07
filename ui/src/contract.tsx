@@ -14,12 +14,14 @@ import { showTab } from "./plans";
 export const MODULES: [string, string, string, string][] = [
   ["contract", "Contract Dates & Payments", "Contract dates against their forecast, delay damages at risk, payment milestones and the cash-in curve.", "contract"],
   ["documents", "Document Register", "Vendor documents and every submission: review cycles in working days, return codes, status, client delay, weighted progress and S-curves.", "documents"],
+  ["procurement", "Procurement Register", "Sub-orders from enquiry to delivery: planned against actual and promised dates, the date each is needed, an expediting log, weighted progress and S-curves.", "procurement"],
 ];
 export const hasModule = (k: string) => (out()?.project.modules ?? []).includes(k);
 /** Whether a module holds data in this plan, and the op that empties it. */
 const DATA: Record<string, [() => boolean, object]> = {
   contract: [() => { const c = P().contract; return !!c && !!(c.dates.length || c.payments.length || c.value); }, { Contract: { c: {} } }],
   documents: [() => { const r = P().documents; return !!r && !!(r.docs.length || r.log.length); }, { Documents: { r: {} } }],
+  procurement: [() => !!P().procurement?.items.length, { Procurement: { r: {} } }],
 };
 
 /** Project › Modules: tick the modules this plan uses. Switching one off keeps its data unless the user deletes it. */
@@ -39,7 +41,6 @@ export const modules = () => openDialog(() => {
       <For each={off()}>{k => <div class="modoff"><b>{MODULES.find(m => m[0] === k)?.[1]} is being switched off.</b>
         <label class="chk"><input type="radio" checked={!drop().includes(k)} onChange={() => setDrop(drop().filter(x => x !== k))} /> Keep its data in the plan, hidden, for later</label>
         <label class="chk"><input type="radio" checked={drop().includes(k)} onChange={() => setDrop([...drop(), k])} /> Delete its data</label></div>}</For>
-      <p class="muted">A procurement register comes next.</p>
     </Dialog>
   );
 });
@@ -157,4 +158,5 @@ export const ContractView = () => {
 
 /** Opens the view, or offers to switch the module on. */
 export const openContract = () => (hasModule("contract") ? setView("contract") : (toast("Contract Dates & Payments is a module: tick it in Project › Modules."), modules()));
+export const openProcurement = () => (hasModule("procurement") ? setView("procurement") : (toast("The Procurement Register is a module: tick it in Project › Modules."), modules()));
 export const openDocuments = () => (hasModule("documents") ? setView("documents") : (toast("The Document Register is a module: tick it in Project › Modules."), modules()));

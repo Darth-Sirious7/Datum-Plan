@@ -40,7 +40,7 @@
     "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
     "Logos and pictures kept in the plan file, by party (client, your company, vendors, sub-vendors), for print headers, dashboards and sheets.",
     "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step.",
-    "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in) and a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress and S-curves, Excel in and out)."
+    "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents)."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -57,7 +57,7 @@
       "items": [
         "Contract dates against the forecast, delay damages and payments (0.6.0).",
         "A document register: classes, issue purposes, return codes, review cycles in working days, a transmittal log, weighted progress and its S-curve (0.6.1).",
-        "A procurement register: sub-orders from enquiry to delivery, required against promised dates, an expediting log, linked to the vendor documents."
+        "A procurement register: sub-orders from enquiry to delivery, required against promised dates, an expediting log, linked to the vendor documents when you choose (0.6.2)."
       ]
     },
     {

@@ -551,7 +551,7 @@ Below, **Other open plans wait for** lists the tasks of this plan that tasks in 
 
 ## Modules: registers when you need them
 
-A plan can take on extra registers, called **modules**: Contract Dates & Payments and the Document Register. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
+A plan can take on extra registers, called **modules**: Contract Dates & Payments, the Document Register and the Procurement Register. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
 
 ### Contract Dates & Payments
 
@@ -576,6 +576,18 @@ On a master, a table at the bottom adds up the contract dates, damages and payme
 5. **Progress** draws the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export to Excel** writes the register and the log.
 
 Classes 1 and 2 go first issue → approval issue → construction issue → final issue; class 3 goes construction issue → final issue. A recurring submission, such as a monthly report, is never counted in progress.
+
+### Procurement Register
+
+**Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery.
+
+1. **Settings…**: the milestone weights (balanced, more credit at the order, more credit at delivery, or your own), how orders weigh against each other (PO value, equally, or a typed weight), how many days before delivery the inspection release is planned, the days of float under which an order turns amber, and whether **orders link to the Document Register**.
+2. **Import…** a procurement status register from Excel (the heading row and the planned and actual columns are found by themselves), or add orders with **+ Order**. In each order (**✎**), choose the task for its manufacture and delivery (its planned manufacturing start and delivery come from it) and the task that needs it (the required date), or type dates of their own.
+3. Keep it up to date in the register: the **manufacturing %**, the vendor's **promised** delivery, and **Done on** for the next milestone. **Float** is the required date less the forecast delivery: red when late for the plan.
+4. **Expediting log**: dated notes per order (**✉** on a row opens it for that order).
+5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export to Excel** writes the register and the log.
+
+With the link to the Document Register on, an order lists the vendor documents it waits for; the register shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own.
 
 ## Files: save, import and export
 

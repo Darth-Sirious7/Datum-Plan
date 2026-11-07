@@ -31,6 +31,7 @@ import { TourCard } from "./tour";
 import { PlanTabs } from "./plans";
 import { ContractView, hasModule } from "./contract";
 import { DocumentsView } from "./docreg";
+import { ProcurementView } from "./procure";
 
 const SIDE: ([View, string, string] | "-")[] = [
   ["setup", "setup", "Setup"], "-", ["gantt", "gantt", "Gantt"], ["tracking", "base", "Tracking"], ["network", "net", "Network"], ["calendar", "cal", "Calendar"], ["taskusage", "table", "Task Usage"], "-",
@@ -41,7 +42,7 @@ const SIDE: ([View, string, string] | "-")[] = [
 
 /** The sidebar, with a module's view when the plan has the module switched on. */
 const side = () => {
-  const mods: [View, string, string][] = [...(hasModule("contract") ? [["contract", "money", "Contract"] as [View, string, string]] : []), ...(hasModule("documents") ? [["documents", "docs", "Documents"] as [View, string, string]] : [])];
+  const mods: [View, string, string][] = [...(hasModule("contract") ? [["contract", "money", "Contract"] as [View, string, string]] : []), ...(hasModule("documents") ? [["documents", "docs", "Documents"] as [View, string, string]] : []), ...(hasModule("procurement") ? [["procurement", "proc", "Procurement"] as [View, string, string]] : [])];
   return [...SIDE, ...(mods.length ? ["-" as const, ...mods] : [])];
 };
 
@@ -167,6 +168,7 @@ const App = () => {
               <Match when={view() === "portfolio"}><Portfolio /></Match>
               <Match when={view() === "contract"}><ContractView /></Match>
               <Match when={view() === "documents"}><DocumentsView /></Match>
+              <Match when={view() === "procurement"}><ProcurementView /></Match>
             </Switch>
           </Show>
           <TourCard views={side().filter(x => x !== "-").map(x => [(x as [View, string, string])[0], (x as [View, string, string])[2]] as [View, string])} />

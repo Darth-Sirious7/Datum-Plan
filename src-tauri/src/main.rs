@@ -844,6 +844,31 @@ async fn docs_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
     Ok(Some(path.display().to_string()))
 }
 
+/// The Procurement Register of the plan shown, and (on a master) of its open subplans.
+#[derive(serde::Serialize)]
+struct PlanProc { tab: usize, name: String, on: bool, out: datum_core::procure::ProcOut }
+
+#[tauri::command]
+fn procurement(st: State<St>) -> Vec<PlanProc> {
+    let a = st.lock();
+    let (ds, tabs, cur) = (docs(&a), tab_list(&a), a.cur);
+    tabs.iter().enumerate().filter(|(k, t)| *k == cur || (t.role == "sub" && t.group == cur as i64)).map(|(k, _)| {
+        let d = ds[k];
+        PlanProc { tab: k, name: d.p.name.clone(), on: d.p.modules.iter().any(|m| m == "procurement"), out: datum_core::procure::status(&Calc::new(&d.p, &a.opts.date_fmt, today())) }
+    }).collect()
+}
+
+/// Writes the Procurement Register and its expediting log to an Excel workbook.
+#[tauri::command]
+async fn proc_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
+    let name = st.lock().doc.p.name.clone();
+    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - Procurement Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let a = st.lock();
+    let o = datum_core::procure::status(&calc(&a));
+    datum_core::procure::write_xlsx(&a.doc.p, &o, &path)?;
+    Ok(Some(path.display().to_string()))
+}
+
 #[tauri::command]
 fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
     check::run(&calc(&st.lock()), &limits)
@@ -1616,7 +1641,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

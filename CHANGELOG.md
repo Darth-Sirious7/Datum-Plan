@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.2 — 2026-11-07
+
+The Procurement Register: a module for sub-orders from enquiry to delivery.
+
+- **Project › Modules › Procurement Register** adds it to a plan (sidebar › Procurement).
+- **Orders:** item number, order or equipment, sub-vendor, country of origin, PO number and value, long-lead flag, remarks.
+- **Five milestones**, planned against actual: RFQ issued, PO placed, manufacturing start, inspection release (IRN) and delivered. Planned dates can be typed, or come from **the task for the order's manufacture and delivery** (its start and finish), with the inspection release a set number of days before delivery.
+- **The vendor's promised delivery** against **the date the plan needs the item** (the start of the task that needs it, or a date typed). The float shows red when the order is late for the plan and amber under the days set in Settings.
+- **Status, next milestone and days late** for every order; **Done on** marks the next milestone in the register itself, and the manufacturing % is typed in the row.
+- **Weighted progress:** milestone weights from a preset (balanced, more credit at the order, more credit at delivery) or your own; manufacturing counted pro rata to its %; orders weighed by PO value, equally or by a typed weight. Weekly and monthly S-curves, and orders by sub-vendor and country.
+- **Expediting log:** dated notes per order.
+- **Linking to the Document Register is your choice** (Settings): linked, each order lists the vendor documents it waits for, shows how many are accepted and is flagged when its drawings hold up manufacturing; unlinked, orders stand on their own.
+- **Import** a procurement status register from Excel or CSV (the heading row and the planned and actual columns are found by themselves; check and change any of them). **Export to Excel** writes the register and the expediting log.
+- On a master, a table adds up the registers of its open subplans; **Apply Setup to Subplans › Modules** gives the subplans the register's settings.
+
 ## 0.6.1 — 2026-11-07
 
 The Document Register: a module for vendor documents and their review cycle.

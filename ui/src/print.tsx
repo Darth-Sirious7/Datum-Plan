@@ -598,7 +598,7 @@ const FLOWS: Record<string, () => Promise<{ default: () => JSX.Element }>> = {
   reports: () => import("./reports").then(m => ({ default: m.Reports })), builder: () => import("./tools").then(m => ({ default: m.ReportBuilder })), update: () => import("./tools").then(m => ({ default: m.UpdateProgress })),
   relations: () => import("./tools").then(m => ({ default: m.Relationships })), checks: () => import("./views").then(m => ({ default: m.Checks })), risks: () => import("./views").then(m => ({ default: m.Risks })),
   portfolio: () => import("./views").then(m => ({ default: m.Portfolio })), resgraph: () => import("./views").then(m => ({ default: m.ResourceGraph })), setup: () => import("./setup").then(m => ({ default: m.Setup })),
-  contract: () => import("./contract").then(m => ({ default: m.ContractView })), documents: () => import("./docreg").then(m => ({ default: m.DocumentsView })), simrisk: () => import("./risk").then(m => ({ default: m.ScheduleRisk })), lookahead: () => import("./progress").then(m => ({ default: m.Lookahead })), manpower: () => import("./progress").then(m => ({ default: m.Manpower })),
+  contract: () => import("./contract").then(m => ({ default: m.ContractView })), documents: () => import("./docreg").then(m => ({ default: m.DocumentsView })), procurement: () => import("./procure").then(m => ({ default: m.ProcurementView })), simrisk: () => import("./risk").then(m => ({ default: m.ScheduleRisk })), lookahead: () => import("./progress").then(m => ({ default: m.Lookahead })), manpower: () => import("./progress").then(m => ({ default: m.Manpower })),
 };
 const Flow = () => { const C2 = lazy(FLOWS[view()] ?? FLOWS.dashboard); return <C2 />; };
 const FlowDoc = (p: { preview?: boolean }) => {

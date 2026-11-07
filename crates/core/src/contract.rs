@@ -6,9 +6,10 @@ use chrono::{Datelike, Days, NaiveDate};
 use serde::Serialize;
 
 /// The modules: key, name, what it adds. A plan has only the ones it switched on.
-pub const MODULES: [(&str, &str, &str); 2] = [
+pub const MODULES: [(&str, &str, &str); 3] = [
     ("contract", "Contract Dates & Payments", "Contract dates against their forecast, delay damages at risk, payment milestones and the cash-in curve."),
     ("documents", "Document Register", "Vendor documents and every submission: review cycles in working days, return codes, status, client delay, weighted progress and S-curves."),
+    ("procurement", "Procurement Register", "Sub-orders from enquiry to delivery: planned against actual and promised dates, the date each is needed, an expediting log, weighted progress and S-curves."),
 ];
 
 /// What a contract date shows.

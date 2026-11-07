@@ -1114,3 +1114,9 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .small { font-size: 11px; }
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 .dwarn { color: var(--crit); }
+/* Procurement Register */
+.pdocs { max-height: 200px; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.tbl.preg td:nth-child(2) input { width: 200px; }
+.tbl.preg td:nth-child(1) input { width: 60px; }
+.tbl.preg td:nth-child(3) input, .tbl.preg td:nth-child(4) input { width: 90px; }
+.tbl td.wrap { white-space: normal; }

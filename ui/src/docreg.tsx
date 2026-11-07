@@ -138,8 +138,8 @@ const DOC_FIELDS: Field[] = [["number", "Document number", /doc.*(no|num)|docume
   ["key", "Key document (Yes)", /key/i], ["weight", "Weight", /weight/i], ["remarks", "Remarks", /remark|comment/i], ...FLAGS.map(f => ["flag:" + f, `${f} (Yes)`, f === "Eng. review" ? /eng.*review|review.*eng/i : f === "QA review" ? /\bqa\b.*review|review.*(qual|\bqa\b)/i : new RegExp(`\\b${f}\\b`, "i")] as Field)];
 const LOG_FIELDS: Field[] = [["number", "Document number", /doc.*(no|num)|document no/i], ["rev", "Revision", /^rev/i], ["purpose", "Issue purpose", /purpose/i], ["transmittal", "Transmittal no.", /^transmittal|transmittal no/i],
   ["sent", "Date sent", /submission date|sent|submitted/i], ["ret_transmittal", "Return transmittal no.", /return transmittal/i], ["returned", "Date returned", /return date|returned/i], ["code", "Return code", /code/i], ["crs", "Comments ref.", /crs|remark/i]];
-const yes = (v: string) => /^(y|yes|true|x|✓|1)$/i.test(v.trim());
-const asDate = (v: string) => { const t = v.trim(); if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10); const n = Date.parse(t); return isNaN(n) ? null : new Date(n - new Date(n).getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+export const yes = (v: string) => /^(y|yes|true|x|✓|1)$/i.test(v.trim());
+export const asDate = (v: string) => { const t = v.trim(); if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10); const n = Date.parse(t); return isNaN(n) ? null : new Date(n - new Date(n).getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
 
 export const docImport = async () => {
   const first = await call<{ path: string; names: string[]; rows: string[][] } | null>("docs_read", {});

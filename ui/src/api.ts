@@ -46,12 +46,17 @@ export type D6 = (string | null)[];
 export interface DocRow { id: number; planned: D6; actual: D6; forecast: D6; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
 export interface RegPoint { end: string; planned: number; actual: number | null; first_planned: number; first_done: number }
 export interface RegOut { data_date: string | null; docs: DocRow[]; subs: { id: number; due: string | null; accepted: boolean; days: number; late: number; state: string }[]; earned: number; planned: number; client_late: number; weekly: RegPoint[]; monthly: RegPoint[]; weights_ok: boolean[] }
+export type D5 = (string | null)[];
+export interface PItem { id: number; tag: string; name: string; vendor: string; origin: string; po_no: string; value: number; manual_w: number; long_lead: boolean; task: number; need: number; required: string | null; planned: D5; actual: D5; mfg_pct: number; promised: string | null; log: { date: string | null; note: string; by: string }[]; docs: number[]; remarks: string }
+export interface ProcRegister { preset: string; weights: number[]; weighting: string; irn_days: number; warn_days: number; link_docs: boolean; items: PItem[] }
+export interface ItemOut { id: number; planned: D5; actual: D5; forecast: string | null; var: number | null; required: string | null; float: number | null; rag: string; status: string; next: string; next_date: string | null; days_late: number; weight: number; earned: number; planned_pct: number; task_name: string; need_name: string; docs: number; docs_ok: number; docs_late: boolean }
+export interface ProcOut { data_date: string | null; items: ItemOut[]; earned: number; planned: number; weights: number[]; weights_ok: boolean; weekly: { end: string; planned: number; actual: number | null }[]; monthly: { end: string; planned: number; actual: number | null }[] }
 export interface Project {
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
-  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract; documents?: DocRegister;
+  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract; documents?: DocRegister; procurement?: ProcRegister;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {

@@ -681,7 +681,69 @@ pub struct Project {
     /// The Document Register (kept when the module is switched off, until deleted).
     #[serde(skip_serializing_if = "DocRegister::is_empty")]
     pub documents: DocRegister,
+    /// The Procurement Register (kept when the module is switched off, until deleted).
+    #[serde(skip_serializing_if = "ProcRegister::is_empty")]
+    pub procurement: ProcRegister,
 }
+
+/// Sub-orders from enquiry to delivery, and how their progress is weighted.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProcRegister {
+    /// "balanced", "order", "delivery", or "own" (then `weights`, % of RFQ, PO, manufacturing, IRN, delivery).
+    pub preset: String,
+    pub weights: Vec<f64>,
+    /// How orders weigh against each other: "value" (PO value), "equal" or "manual".
+    pub weighting: String,
+    /// Planned inspection release this many days before delivery, when not typed.
+    pub irn_days: i64,
+    /// Float under which an order shows amber.
+    pub warn_days: i64,
+    /// Orders list the vendor documents they wait for (the Document Register), when the user wants it.
+    pub link_docs: bool,
+    pub items: Vec<PItem>,
+}
+impl ProcRegister {
+    pub fn is_empty(&self) -> bool { *self == Self::default() }
+}
+impl Default for ProcRegister {
+    fn default() -> Self { Self { preset: "balanced".into(), weights: vec![5.0, 15.0, 60.0, 10.0, 10.0], weighting: "value".into(), irn_days: 14, warn_days: 14, link_docs: false, items: vec![] } }
+}
+
+/// A sub-order or equipment item.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PItem {
+    pub id: u32,
+    pub tag: String,
+    pub name: String,
+    pub vendor: String,
+    pub origin: String,
+    pub po_no: String,
+    pub value: f64,
+    pub manual_w: f64,
+    pub long_lead: bool,
+    /// The task that stands for its manufacture and delivery, and the task that needs it.
+    pub task: u32,
+    pub need: u32,
+    /// A required date of its own (else the needing task's start).
+    pub required: Option<NaiveDate>,
+    /// RFQ issued, PO placed, manufacturing start, inspection release, delivered.
+    pub planned: [Option<NaiveDate>; 5],
+    pub actual: [Option<NaiveDate>; 5],
+    pub mfg_pct: f64,
+    /// The vendor's latest promised delivery.
+    pub promised: Option<NaiveDate>,
+    pub log: Vec<Expedite>,
+    /// Vendor documents (Document Register ids) the order waits for.
+    pub docs: Vec<u32>,
+    pub remarks: String,
+}
+
+/// A note in an order's expediting log.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Expedite { pub date: Option<NaiveDate>, pub note: String, pub by: String }
 
 /// Vendor documents, their submissions and the rules of their review cycle.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -875,7 +937,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(), documents: DocRegister::default(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(), documents: DocRegister::default(), procurement: ProcRegister::default(),
         }
     }
 
