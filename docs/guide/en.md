@@ -589,6 +589,16 @@ Classes 1 and 2 go first issue → approval issue → construction issue → fin
 
 With the link to the Document Register on, an order lists the vendor documents it waits for; the register shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own.
 
+### Portfolio and the resource pool
+
+**Portfolio** (sidebar) shows every plan in a workspace folder (**Choose folder…**; subfolders are the EPS levels), with totals across them at the top.
+
+- **Plans:** each plan's dates, finish against the baseline, progress, cost, SPI and CPI, late tasks, and the figures of its modules (contract dates late, documents and procurement earned against planned). Click a plan to open it.
+- **Timeline:** every plan as one bar, with its progress and ◆ its baseline finish; red when it finishes after the baseline.
+- **Resource Pool:** each resource's work across all the plans, matched by name, against its capacity, as a heat strip by week or month (green within capacity, amber up to 30 % over, red more). Click a resource for its hours by plan.
+
+To share resources between plans, keep one plan whose Resource Sheet lists them with their rates, units and calendars, and choose it as the **Pool plan**. Its units and availability set the capacity. In any other plan, **Take resources from the pool** gives its resources with the same names the pool's rates, units, availability and calendars; **…and add the others** adds the rest of the pool's resources.
+
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.

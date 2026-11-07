@@ -24,6 +24,8 @@ struct Options {
     logo: String,
     /// The folder whose plans make up the workspace (portfolio).
     workspace: String,
+    /// The plan whose resources are the shared pool ("" = none: the most any plan gives).
+    pool: String,
     /// Ask for project details when a plan is created.
     setup_panel: bool,
     /// auto, light or dark.
@@ -42,7 +44,7 @@ struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), setup_panel: true, theme: "auto".into(), open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true }
     }
 }
 
@@ -899,12 +901,9 @@ async fn compare(app: AppHandle, st: State<'_, St>) -> R<Option<(String, Vec<rep
     Ok(Some((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), diffs)))
 }
 
-#[derive(Serialize)]
-struct PlanCard { path: String, folder: String, name: String, start: String, finish: String, pct: f64, cost: String, spi: Option<f64>, cpi: Option<f64>, late: usize, tasks: usize, manager: String, error: Option<String> }
-
 /// Every plan in the workspace folder with its headline figures (portfolio view).
 #[tauri::command]
-async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String, Vec<PlanCard>)> {
+async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String, Vec<datum_core::portfolio::Card>)> {
     let mut folder = st.lock().opts.workspace.clone();
     if choose || folder.is_empty() {
         let Some(d) = app.dialog().file().blocking_pick_folder().and_then(|f| f.into_path().ok()) else { return Ok((folder, vec![])) };
@@ -916,7 +915,21 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
         }
     }
     let fmt = st.lock().opts.date_fmt.clone();
-    // Subfolders are the EPS: each level of folders is a level of the portfolio tree.
+    std::fs::read_dir(&folder).map_err(|e| format!("Could not read {folder}: {e}"))?;
+    let rel = |f: &Path| f.parent().and_then(|d| d.strip_prefix(&folder).ok()).map(|d| d.display().to_string().replace(['\\', '/'], " › ")).unwrap_or_default();
+    let cards = workspace_plans(&st.lock(), &folder).into_iter().map(|(f, d)| {
+        let path = f.display().to_string();
+        match d {
+            Ok(p) => datum_core::portfolio::card(&p, &fmt, today(), path, rel(&f)),
+            Err(e) => datum_core::portfolio::Card { path, folder: rel(&f), name: f.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), error: Some(e), ..Default::default() },
+        }
+    }).collect();
+    Ok((folder, cards))
+}
+
+/// The plans of the workspace folder (subfolders are the EPS levels), as open in a tab when they
+/// are (with their unsaved changes), else as saved. At most 200.
+fn workspace_plans(a: &App, folder: &str) -> Vec<(PathBuf, Result<Project, String>)> {
     fn walk(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
         let Ok(rd) = std::fs::read_dir(dir) else { return };
         for p in rd.filter_map(|e| e.ok().map(|e| e.path())) {
@@ -924,23 +937,59 @@ async fn workspace(app: AppHandle, st: State<'_, St>, choose: bool) -> R<(String
             else if p.extension().is_some_and(|x| x == "dplan") && !p.to_string_lossy().ends_with(".backup.dplan") { out.push(p) }
         }
     }
-    std::fs::read_dir(&folder).map_err(|e| format!("Could not read {folder}: {e}"))?;
     let mut files = vec![];
-    walk(Path::new(&folder), 0, &mut files);
+    walk(Path::new(folder), 0, &mut files);
     files.sort();
-    let rel = |f: &Path| f.parent().and_then(|d| d.strip_prefix(&folder).ok()).map(|d| d.display().to_string().replace(['\\', '/'], " › ")).unwrap_or_default();
-    let cards = files.iter().take(200).map(|f| {
-        let path = f.display().to_string();
-        match Doc::open(f) {
-            Ok(d) => {
-                let c = Calc::new(&d.p, &fmt, today());
-                let s = c.summary();
-                PlanCard { path, folder: rel(f), name: d.p.name.clone(), start: s.start, finish: s.finish, pct: s.pct, cost: s.cost, spi: s.spi, cpi: s.cpi, late: s.late, tasks: s.tasks, manager: d.p.manager.clone(), error: s.error }
-            }
-            Err(e) => PlanCard { path, folder: rel(f), name: f.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), start: String::new(), finish: String::new(), pct: 0.0, cost: String::new(), spi: None, cpi: None, late: 0, tasks: 0, manager: String::new(), error: Some(e) },
-        }
-    }).collect();
-    Ok((folder, cards))
+    files.truncate(200);
+    let open = docs(a);
+    files.into_iter().map(|f| {
+        let mine = open.iter().find(|d| d.path.as_deref().is_some_and(|x| x == f));
+        let p = match mine { Some(d) => Ok(d.p.clone()), None => Doc::open(&f).map(|d| d.p) };
+        (f, p)
+    }).collect()
+}
+
+/// The shared resource pool: every resource's work across the workspace's plans against its capacity.
+#[derive(Serialize)]
+struct PoolView { folder: String, pool: String, view: datum_core::portfolio::Pool }
+
+#[tauri::command]
+fn pool_view(st: State<St>, unit: String) -> R<PoolView> {
+    let a = st.lock();
+    let folder = a.opts.workspace.clone();
+    if folder.is_empty() { return Err("Choose the workspace folder first (Portfolio › Choose folder…).".into()) }
+    let plans: Vec<(PathBuf, Project)> = workspace_plans(&a, &folder).into_iter().filter_map(|(f, p)| p.ok().map(|p| (f, p))).collect();
+    let pool = plans.iter().find(|(f, _)| f.display().to_string() == a.opts.pool).map(|(_, p)| p);
+    let list: Vec<(String, &Project)> = plans.iter().filter(|(f, _)| f.display().to_string() != a.opts.pool).map(|(_, p)| (p.name.clone(), p)).collect();
+    let unit = if ["day", "week", "month"].contains(&unit.as_str()) { unit } else { "week".into() };
+    Ok(PoolView { folder, pool: pool.map(|p| p.name.clone()).unwrap_or_default(), view: datum_core::portfolio::pool(&list, pool, &a.opts.date_fmt, today(), &unit) })
+}
+
+/// Chooses the plan whose resources are the pool (empty: none).
+#[tauri::command]
+fn set_pool(app: AppHandle, st: State<St>, path: String) -> R<()> {
+    let mut a = st.lock();
+    a.opts.pool = path;
+    if let Some(f) = options_file(&app) { let _ = doc::write_atomic(&f, serde_json::to_string(&a.opts).unwrap_or_default().as_bytes()); }
+    Ok(())
+}
+
+/// The plan shown takes the pool plan's resources (same names; `add` brings the others too).
+#[tauri::command]
+fn pool_take(st: State<St>, add: bool) -> R<(Out, String)> {
+    let mut a = st.lock();
+    if a.opts.pool.is_empty() { return Err("Choose the pool plan first (Portfolio › Resource Pool).".into()) }
+    let path = PathBuf::from(&a.opts.pool);
+    if a.doc.path.as_deref() == Some(path.as_path()) { return Err("This plan is the pool.".into()) }
+    let pool = docs(&a).into_iter().find(|d| d.path.as_deref() == Some(path.as_path())).map(|d| d.p.clone()).map_or_else(|| Doc::open(&path).map(|d| d.p), Ok)?;
+    let before = a.doc.p.resources.len();
+    let fmt = a.opts.date_fmt.clone();
+    let mut probe = a.doc.p.clone();
+    let (up, _) = datum_core::portfolio::take(&mut probe, &pool.resources, &pool.calendars, add);
+    a.doc.apply(Op::PoolTake { from: pool.resources.clone(), cals: pool.calendars.clone(), add }, &fmt)?;
+    let added = a.doc.p.resources.len() - before;
+    let who = if up == 1 { "1 resource takes".to_string() } else { format!("{up} resources take") };
+    Ok((out(&a), format!("{who} the pool's rates, units and calendars{}.", if added > 0 { format!("; {added} added from the pool") } else { String::new() })))
 }
 
 #[tauri::command]
@@ -1641,7 +1690,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

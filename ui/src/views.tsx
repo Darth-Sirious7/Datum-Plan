@@ -2,7 +2,8 @@
 import { CountryList, Flag, countryCode, countryName } from "./flags";
 import { For, Index, Show, createSignal, createResource, createMemo, createEffect, JSX } from "solid-js";
 import { Net, Row, Usage, Check, Resource, fmtDay, dayDate, dateDay, money } from "./api";
-import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut } from "./store";
+import { call, grid, out, P, query, tick, sel, setSel, act, setFilter, setView, openMenu, toast, setBackstage, loadOut, setOut, opts, setOpts } from "./store";
+import { ChartBox, bar, line } from "./charts";
 import { C, selectUid } from "./cmds";
 import { Seg, Icon, Check as Chk } from "./ui";
 import { Help } from "./help";
@@ -404,25 +405,94 @@ const eps = (cards: any[]) => {
   }
   return out;
 };
+type Card = { path: string; folder: string; name: string; manager: string; client: string; start: string; finish: string; s: number; f: number; bf: number | null; var_finish: string; pct: number; cost: string; spi: number | null; cpi: number | null; tasks: number; late: number; critical: number; error: string | null; modules: string[];
+  contract: [number, number, number] | null; documents: [number, number, number] | null; procurement: [number, number, number, number] | null };
+type PoolRow = { name: string; group: string; plans: number[][]; load: number[]; cap: number[]; over: number; peak: number; in_pool: boolean };
+const PCOL = ["#3B82F6", "#F59E0B", "#10B981", "#8B5CF6", "#EF4444", "#38BDF8", "#EAB308", "#64748B"];
 export const Portfolio = () => {
   const [shut, setShut] = createSignal<string[]>([]);
-  const [again, setAgain] = createSignal(0);
-  const [data] = createResource(() => again(), k => call<[string, any[]]>("workspace", { choose: k < 0 }));
+  const [again, setAgain] = createSignal(0), [tab, setTab] = createSignal("plans"), [unit, setUnit] = createSignal("week"), [open, setOpen] = createSignal("");
+  const [data, { refetch }] = createResource(() => again(), k => call<[string, Card[]]>("workspace", { choose: k < 0 }));
+  const [pool, { refetch: rePool }] = createResource(() => (tab() === "pool" ? [unit(), again(), tick()] as const : null), ([u]) => call<{ folder: string; pool: string; view: { buckets: number[]; plans: string[]; rows: PoolRow[] } }>("pool_view", { unit: u }));
+  const cards = () => (data()?.[1] ?? []).filter(c => !c.error);
+  const sum = (f: (c: Card) => number) => cards().reduce((a, c) => a + f(c), 0);
+  const lateFinish = () => cards().filter(c => c.bf !== null && c.f > c.bf! + 0.5).length;
+  const mods = (k: "contract" | "documents" | "procurement") => cards().some(c => c[k]);
+  const day = (d: number) => fmtDay(d);
+  const span = createMemo(() => { const l = cards().filter(c => c.f > c.s); return l.length ? [Math.min(...l.map(c => c.s)), Math.max(...l.map(c => Math.max(c.f, c.bf ?? 0)))] : [0, 1]; });
+  const W = 900, px = (d: number) => ((d - span()[0]) / Math.max(1, span()[1] - span()[0])) * W;
+  const today = () => Math.floor(Date.now() / 864e5);
+  const setPool = async (path: string) => { await call("set_pool", { path }); rePool(); };
+  const take = async (add: boolean) => { const r = await call<[any, string]>("pool_take", { add }); if (r) { setOut(r[0]); toast(r[1], true); rePool(); } };
+  const heat = (load: number, cap: number) => { const r = cap > 0 ? load / cap : load > 0 ? 9 : 0; return r === 0 ? "#F3F5F8" : r <= 0.7 ? "#DDF2E5" : r <= 1.0001 ? "#A7DCB8" : r <= 1.3 ? "#FDE2A7" : "#F4A6A6"; };
   return (
-    <Page title="Portfolio" help="portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => setAgain(Math.abs(again()) + 1)}>Refresh</button></>}>
-      <div class="panel"><table class="tbl">
-        <thead><tr><th>Plan</th><th>Manager</th><th>Start</th><th>Finish</th><th class="r">Tasks</th><th>Complete</th><th class="r">Cost</th><th class="r">SPI</th><th class="r">CPI</th><th class="r">Late</th></tr></thead>
-        <tbody><For each={eps(data()?.[1] ?? [])}>{c => c.head !== undefined ? (
-          <tr class="eps" onClick={() => setShut(shut().includes(c.head) ? shut().filter(x => x !== c.head) : [...shut(), c.head])}>
-            <td colspan="5" style={{ "padding-left": `${6 + c.depth * 16}px` }}><b>{shut().includes(c.head) ? "▷" : "◢"} {c.head.split(" › ").pop() || "Workspace"}</b> <span class="muted">{c.n} plans</span></td>
-            <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td><td /><td /><td class="r" classList={{ late: c.late > 0 }}>{c.late}</td></tr>
-        ) : <Show when={!shut().some(h => c.folder === h || c.folder.startsWith(h + " › "))}><tr class="link" onClick={() => loadOut("open", { path: c.path })}>
-          <td style={{ "padding-left": `${22 + c.depth * 16}px` }}><b>{c.name}</b>{c.error && <div class="late">{c.error}</div>}</td><td>{c.manager}</td><td>{c.start}</td><td>{c.finish}</td><td class="r">{c.tasks}</td>
-          <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td>
-          <td class="r" classList={{ late: c.spi !== null && c.spi < 0.95 }}>{c.spi?.toFixed(2) ?? "—"}</td><td class="r" classList={{ late: c.cpi !== null && c.cpi < 0.95 }}>{c.cpi?.toFixed(2) ?? "—"}</td>
-          <td class="r" classList={{ late: c.late > 0 }}>{c.late}</td>
-        </tr></Show>}</For></tbody>
-      </table><Show when={!data()?.[1].length}><p class="empty">Choose a folder that holds your .dplan files to see every plan side by side. Subfolders become the EPS (enterprise project structure) levels.</p></Show></div>
+    <Page title="Portfolio" help="portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => { setAgain(Math.abs(again()) + 1); refetch(); }}>Refresh</button></>}>
+      <Show when={cards().length}>
+        <div class="kpis">
+          <div class="kpi"><div class="v">{cards().length}</div><div class="l">plans · {sum(c => c.tasks).toLocaleString()} tasks</div></div>
+          <div class="kpi" classList={{ bad: lateFinish() > 0 }}><div class="v">{lateFinish()}</div><div class="l">plans finishing after their baseline</div></div>
+          <div class="kpi" classList={{ bad: sum(c => c.late) > 0 }}><div class="v">{sum(c => c.late)}</div><div class="l">late tasks across the plans</div></div>
+          <div class="kpi"><div class="v">{(sum(c => c.pct) / Math.max(1, cards().length)).toFixed(1)} %</div><div class="l">average complete</div></div>
+          <Show when={mods("contract")}><div class="kpi" classList={{ bad: sum(c => c.contract?.[0] ?? 0) > 0 }}><div class="v">{sum(c => c.contract?.[0] ?? 0)} · {sum(c => c.contract?.[1] ?? 0)}</div><div class="l">contract dates late · at risk</div></div></Show>
+          <Show when={mods("procurement")}><div class="kpi" classList={{ bad: sum(c => c.procurement?.[2] ?? 0) > 0 }}><div class="v">{sum(c => c.procurement?.[2] ?? 0)}</div><div class="l">orders late for their plans</div></div></Show>
+        </div>
+      </Show>
+      <div class="dtabs"><Seg value={tab()} set={setTab} options={[["plans", "Plans"], ["timeline", "Timeline"], ["pool", "Resource Pool"]]} /></div>
+      <Show when={tab() === "plans"}>
+        <div class="panel ctr"><table class="tbl">
+          <thead><tr><th>Plan</th><th>Manager</th><th>Start</th><th>Finish</th><th title="Finish against the baseline">Var.</th><th class="r">Tasks</th><th>Complete</th><th class="r">Cost</th><th class="r">SPI</th><th class="r">CPI</th><th class="r">Late</th>
+            <Show when={mods("contract")}><th class="r" title="Contract dates late / at risk">Contract</th></Show><Show when={mods("documents")}><th class="r" title="Documents earned / planned">Documents</th></Show><Show when={mods("procurement")}><th class="r" title="Procurement earned / planned, orders late">Procurement</th></Show></tr></thead>
+          <tbody><For each={eps(data()?.[1] ?? [])}>{c => c.head !== undefined ? (
+            <tr class="eps" onClick={() => setShut(shut().includes(c.head) ? shut().filter(x => x !== c.head) : [...shut(), c.head])}>
+              <td colspan="6" style={{ "padding-left": `${6 + c.depth * 16}px` }}><b>{shut().includes(c.head) ? "▷" : "◢"} {c.head.split(" › ").pop() || "Workspace"}</b> <span class="muted">{c.n} plans</span></td>
+              <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td><td /><td /><td class="r" classList={{ late: c.late > 0 }}>{c.late}</td></tr>
+          ) : <Show when={!shut().some(h => c.folder === h || c.folder.startsWith(h + " › "))}><tr class="link" onClick={() => loadOut("open", { path: c.path })}>
+            <td style={{ "padding-left": `${22 + c.depth * 16}px` }}><b>{c.name}</b>{c.error && <div class="late">{c.error}</div>}</td><td>{c.manager}</td><td>{c.start}</td><td>{c.finish}</td><td classList={{ late: !!c.var_finish && !c.var_finish.startsWith("0") && !c.var_finish.startsWith("-") }}>{c.var_finish}</td><td class="r">{c.tasks}</td>
+            <td><div class="meter"><i style={{ width: `${c.pct}%` }} /></div></td><td class="r">{c.cost}</td>
+            <td class="r" classList={{ late: c.spi !== null && c.spi < 0.95 }}>{c.spi?.toFixed(2) ?? "—"}</td><td class="r" classList={{ late: c.cpi !== null && c.cpi < 0.95 }}>{c.cpi?.toFixed(2) ?? "—"}</td>
+            <td class="r" classList={{ late: c.late > 0 }}>{c.late}</td>
+            <Show when={mods("contract")}><td class="r" classList={{ late: (c.contract?.[0] ?? 0) > 0 }}>{c.contract ? `${c.contract[0]} / ${c.contract[1]}` : ""}</td></Show>
+            <Show when={mods("documents")}><td class="r">{c.documents ? `${c.documents[0].toFixed(0)} / ${c.documents[1].toFixed(0)} %` : ""}</td></Show>
+            <Show when={mods("procurement")}><td class="r" classList={{ late: (c.procurement?.[2] ?? 0) > 0 }}>{c.procurement ? `${c.procurement[0].toFixed(0)} / ${c.procurement[1].toFixed(0)} %${c.procurement[2] ? ` · ${c.procurement[2]} late` : ""}` : ""}</td></Show>
+          </tr></Show>}</For></tbody>
+        </table><Show when={!data()?.[1].length}><p class="empty">Choose a folder that holds your .dplan files to see every plan side by side. Subfolders become the EPS (enterprise project structure) levels.</p></Show></div>
+      </Show>
+      <Show when={tab() === "timeline"}>
+        <div class="panel ctr"><svg class="ptl" width={W + 230} height={cards().length * 30 + 40}>
+          <For each={cards()}>{(c, k) => <g transform={`translate(0,${k() * 30 + 28})`} class="link" onClick={() => loadOut("open", { path: c.path })}>
+            <text x="4" y="14" class="lane">{c.name.length > 30 ? c.name.slice(0, 29) + "…" : c.name}</text>
+            <rect x={220 + px(c.s)} y="4" width={Math.max(3, px(c.f) - px(c.s))} height="14" rx="2" fill={c.bf !== null && c.f > c.bf + 0.5 ? "#F2B0B0" : "#A9CAF6"} stroke={c.bf !== null && c.f > c.bf + 0.5 ? "#C73B3B" : "#2F6FCF"} />
+            <rect x={220 + px(c.s)} y="9" width={Math.max(0, (px(c.f) - px(c.s)) * c.pct / 100)} height="4" fill="#1B2733" />
+            {c.bf !== null && <path d={`M${220 + px(c.bf)} 2l4 5l-4 5l-4-5z`} fill="#55606E"><title>Baseline finish {day(c.bf)}</title></path>}
+            <title>{`${c.name}\n${c.start} → ${c.finish} · ${c.pct.toFixed(0)} % complete${c.bf !== null ? `\nBaseline finish ${day(c.bf)}` : ""}`}</title>
+          </g>}</For>
+          <Show when={today() > span()[0] && today() < span()[1]}><line x1={220 + px(today())} x2={220 + px(today())} y1="16" y2={cards().length * 30 + 34} stroke="#2E9D57" stroke-dasharray="4 3" /><text x={224 + px(today())} y="12" class="muted">today</text></Show>
+          <text x="220" y="12" class="muted">{day(span()[0])}</text><text x={W + 220} y="12" text-anchor="end" class="muted">{day(span()[1])}</text>
+        </svg><p class="muted">Bars: each plan from start to finish, the dark line its progress, ◆ its baseline finish; red when it finishes after the baseline. Click a plan to open it.</p></div>
+      </Show>
+      <Show when={tab() === "pool"}>
+        <div class="panel ctr">
+          <div class="phead"><label class="muted">Pool plan <select value={opts().pool ?? ""} onChange={e => { setOpts({ ...opts(), pool: e.currentTarget.value }); setPool(e.currentTarget.value); }}>
+              <option value="">— none: each resource's capacity is the most any plan gives it —</option><For each={cards()}>{c => <option value={c.path}>{c.name}</option>}</For></select></label>
+            <Seg value={unit()} set={setUnit} options={[["week", "Weeks"], ["month", "Months"]]} /><span class="grow" />
+            <button class="btn sm" disabled={!opts().pool} title="This plan's resources with the same names take the pool's rates, units, availability and calendars" onClick={() => take(false)}>Take resources from the pool</button>
+            <button class="btn sm" disabled={!opts().pool} title="…and add the pool's other resources to this plan" onClick={() => take(true)}>…and add the others</button></div>
+          <p class="muted">Every resource's work across the workspace's plans (matched by name) against its capacity. Green: within capacity; amber: up to 30 % over; red: more. Click a resource for its work by plan.</p>
+          <Show when={pool()} fallback={<p class="empty">{pool.error ? String(pool.error) : "Working out the pool…"}</p>}>{pv => <>
+            <div class="pool"><table class="tbl"><thead><tr><th>Resource</th><th>Group</th><th class="r" title="Highest load against capacity">Peak</th><th class="r" title="Periods over capacity">Over</th>
+              <For each={pv().view.buckets}>{b => <th class="pb" title={day(b)}>{unit() === "month" ? new Date(b * 864e5).toLocaleDateString("en-GB", { month: "short" }) : ""}</th>}</For></tr></thead>
+              <tbody><For each={pv().view.rows}>{r => <>
+                <tr class="link" onClick={() => setOpen(open() === r.name ? "" : r.name)}><td><b>{r.name}</b>{r.in_pool && <span class="muted" title="Defined in the pool plan"> · pool</span>}</td><td class="muted">{r.group}</td>
+                  <td class="r" classList={{ late: r.peak > 1.0001 }}>{(r.peak * 100).toFixed(0)} %</td><td class="r" classList={{ late: r.over > 0 }}>{r.over}</td>
+                  <For each={r.load}>{(v, j) => <td class="pc" style={{ background: heat(v, r.cap[j()]) }} title={`${day(pv().view.buckets[j()])}: ${v.toFixed(0)} h of ${r.cap[j()].toFixed(0)} h`} />}</For></tr>
+                <Show when={open() === r.name}><tr><td colspan={4 + pv().view.buckets.length}>
+                  <ChartBox title={`${r.name}: hours by plan`} type="bar" stacked labels={pv().view.buckets.map(day)} datasets={[...r.plans.map((h, k) => bar(pv().view.plans[k], h, PCOL[k % PCOL.length], "p")).filter((_, k) => r.plans[k].some(x => x > 0)), line("Capacity", r.cap, "#C73B3B", [4, 3]) as any]} />
+                </td></tr></Show>
+              </>}</For></tbody></table></div>
+            <Show when={!pv().view.rows.length}><p class="empty">No resources in the workspace's plans yet.</p></Show>
+          </>}</Show>
+        </div>
+      </Show>
     </Page>
   );
 };

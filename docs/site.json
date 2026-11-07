@@ -40,7 +40,8 @@
     "Resource calendars that drive task dates: each person's own working week and leave decide when their work is done, when you switch it on.",
     "Logos and pictures kept in the plan file, by party (client, your company, vendors, sub-vendors), for print headers, dashboards and sheets.",
     "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step.",
-    "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents)."
+    "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents).",
+    "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool."
   ],
   "screenshots": [
     "docs/images/gantt.png",
@@ -65,7 +66,7 @@
       "title": "Portfolio, quality and hardening",
       "when": "Later",
       "items": [
-        "One resource pool shared by several plans, a portfolio dashboard.",
+        "One resource pool shared by several plans, a portfolio dashboard (0.7.0).",
         "A schedule health score with its trend, ghost bars and a log of logic changes.",
         "What-if scenarios and delay analysis: as-planned against as-built, time impact, windows.",
         "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports."

@@ -1120,3 +1120,9 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .tbl.preg td:nth-child(1) input { width: 60px; }
 .tbl.preg td:nth-child(3) input, .tbl.preg td:nth-child(4) input { width: 90px; }
 .tbl td.wrap { white-space: normal; }
+/* Portfolio: timeline and resource pool */
+.ptl text.lane { font-size: 12px; fill: var(--ink, #1B2733); }
+.ptl text.muted { font-size: 10.5px; fill: #7A8594; }
+.pool { overflow-x: auto; }
+.pool th.pb { font-size: 9.5px; padding: 2px 1px; min-width: 14px; text-align: center; }
+.pool td.pc { padding: 0; min-width: 14px; height: 18px; border-left: 1px solid #fff; }

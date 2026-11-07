@@ -20,6 +20,7 @@ pub mod sched;
 pub mod sheet;
 pub mod contract;
 pub mod docreg;
+pub mod portfolio;
 pub mod procure;
 pub mod setupshare;
 pub mod sheetmove;

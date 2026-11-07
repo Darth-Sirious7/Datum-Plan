@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-11-07
+
+The portfolio and a shared resource pool.
+
+- **Portfolio** (sidebar) now has three tabs, with totals for the whole workspace at the top: plans and tasks, plans finishing after their baseline, late tasks, average complete, and (for plans that use the modules) contract dates late or at risk and orders late for their plans.
+- **Plans:** every plan of the workspace folder, grouped by subfolder (EPS), with its finish against the baseline and, where a plan uses them, its contract, document and procurement figures. Plans open in a tab show their unsaved changes.
+- **Timeline:** every plan as one bar from start to finish with its progress and baseline finish, red when it finishes after the baseline, and today's line.
+- **Resource Pool:** every resource's work across all the plans (matched by name) against its capacity, as a heat strip by week or month, over-allocated resources first. Click a resource for its hours by plan against the capacity line.
+- **The pool plan:** choose a plan of the workspace whose resources are the pool. Its units, availability and calendars set the capacity, and **Take resources from the pool** gives the plan in the tab the pool's rates, units, availability and calendars for resources with the same names (**…and add the others** brings the rest of the pool too). Without a pool plan, a resource's capacity is the most any plan gives it.
+
 ## 0.6.2 — 2026-11-07
 
 The Procurement Register: a module for sub-orders from enquiry to delivery.

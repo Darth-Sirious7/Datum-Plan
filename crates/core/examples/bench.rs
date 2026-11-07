@@ -25,5 +25,26 @@ fn main() {
     let t4 = Instant::now();
     let checks = check::run(&c, &Default::default());
     let t5 = Instant::now();
+    let size = serde_json::to_vec(&p).map(|v| v.len() / 1024).unwrap_or(0);
+    println!("plan as JSON: {size} KB");
     println!("{n} tasks, {} edges: schedule {:?}, calc {:?}, grid {:?}, json {:?} ({} KB), checks {:?} ({})", s.edges.len(), t1 - t0, t2 - t1, t3 - t2, t4 - t3, json.len() / 1024, t5 - t4, checks.len());
+    edit_cycle(p);
+}
+
+/// The edit cycle at size: an edit through `Doc::apply` (copy, normalize, schedule, undo step),
+/// saving and opening the file.
+fn edit_cycle(p: Project) {
+    let mut d = doc::Doc::new(p);
+    let uid = d.p.tasks[d.p.tasks.len() / 2 + 1].uid;
+    for k in 0..3 {
+        let t = Instant::now();
+        d.apply(doc::Op::Set { uid, field: "dur".into(), value: format!("{}d", 3 + k) }, "%d-%b-%y").unwrap();
+        println!("edit {k}: {:?}", t.elapsed());
+    }
+    let dir = std::env::temp_dir().join("datum-bench.dplan");
+    let t = Instant::now();
+    d.save(&dir).unwrap();
+    let t1 = Instant::now();
+    let e = doc::Doc::open(&dir).unwrap();
+    println!("save {:?} ({} KB), open {:?} ({} tasks)", t1 - t, std::fs::metadata(&dir).map(|m| m.len() / 1024).unwrap_or(0), t1.elapsed(), e.p.tasks.len());
 }
