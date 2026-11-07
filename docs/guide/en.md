@@ -551,7 +551,7 @@ Below, **Other open plans wait for** lists the tasks of this plan that tasks in 
 
 ## Modules: registers when you need them
 
-A plan can take on extra registers, called **modules**. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
+A plan can take on extra registers, called **modules**: Contract Dates & Payments and the Document Register. **Project › Modules** lists them. Tick one and **Apply**: its view joins the sidebar and the Project tab. A plan without modules stays exactly as it was. Untick a module to hide it; the dialog asks whether to keep its data in the plan (the default) or delete it.
 
 ### Contract Dates & Payments
 
@@ -564,6 +564,18 @@ A plan can take on extra registers, called **modules**. **Project › Modules** 
 5. **Payment milestones:** **+ Payment**, then the task whose finish triggers it, the share (%) or an amount, and the **terms** (days to payment). Type the invoiced and paid dates as they happen. The chart shows planned, forecast and received cash.
 
 On a master, a table at the bottom adds up the contract dates, damages and payments of its open subplans, with a button to open each one.
+
+### Document Register
+
+**Documents** (sidebar) keeps the vendor documents of a package and every submission of them.
+
+1. **Settings…** first: the **P date** (purchase order or kick-off; empty means the plan's start) and whether P + n counts in weeks or days; the client's **review** and our **turnaround** in working days. Each counts on **the plan's calendar** or **a calendar of its own**: pick one, or **New calendar…** to make one (the client's working week, or an engineering office abroad with its own holidays) and set its working time. Then the issue purposes of the cycle, the return codes (which accept a document, which ask for it again) and the progress weights of the six steps for each class (each class adds up to 100 %).
+2. **Import…** the register from Excel: choose the sheet; the heading row is found by itself; check what each column holds (document number, title, discipline, class, first issue P + n, MRB/VDB/IOM/PIM, …). Import again later to update documents with the same number. A transmittal log comes in the same way. Or add documents with **+ Document**.
+3. Each submission goes in the **Transmittal log**: **+ Sub** on a document adds its next one (next revision, the purpose its cycle needs, today's date). When the client answers, type the return date and pick the code.
+4. The **Register** shows, for every document, the planned and actual first issue, the latest submission, the review due date, the status, the earned progress, the **days the client kept it past the review period** and the forecast final issue. **Late for task** marks a document that will not be ready for the task that needs it.
+5. **Progress** draws the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export to Excel** writes the register and the log.
+
+Classes 1 and 2 go first issue → approval issue → construction issue → final issue; class 3 goes construction issue → final issue. A recurring submission, such as a monthly report, is never counted in progress.
 
 ## Files: save, import and export
 

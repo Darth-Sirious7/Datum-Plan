@@ -19,6 +19,7 @@ pub mod risk;
 pub mod sched;
 pub mod sheet;
 pub mod contract;
+pub mod docreg;
 pub mod setupshare;
 pub mod sheetmove;
 pub mod sheetx;

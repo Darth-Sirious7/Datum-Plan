@@ -10,33 +10,36 @@ import { ChartBox, COL, line } from "./charts";
 import { Dialog } from "./ui";
 import { showTab } from "./plans";
 
-/** The modules a plan can take on (the engine's `contract::MODULES`). */
-export const MODULES: [string, string, string][] = [
-  ["contract", "Contract Dates & Payments", "Contract dates against their forecast, delay damages at risk, payment milestones and the cash-in curve."],
+/** The modules a plan can take on (the engine's `contract::MODULES`), with their view. */
+export const MODULES: [string, string, string, string][] = [
+  ["contract", "Contract Dates & Payments", "Contract dates against their forecast, delay damages at risk, payment milestones and the cash-in curve.", "contract"],
+  ["documents", "Document Register", "Vendor documents and every submission: review cycles in working days, return codes, status, client delay, weighted progress and S-curves.", "documents"],
 ];
 export const hasModule = (k: string) => (out()?.project.modules ?? []).includes(k);
+/** Whether a module holds data in this plan, and the op that empties it. */
+const DATA: Record<string, [() => boolean, object]> = {
+  contract: [() => { const c = P().contract; return !!c && !!(c.dates.length || c.payments.length || c.value); }, { Contract: { c: {} } }],
+  documents: [() => { const r = P().documents; return !!r && !!(r.docs.length || r.log.length); }, { Documents: { r: {} } }],
+};
 
-/** Project › Modules: tick the modules this plan uses. Switching one off can keep or delete its data. */
+/** Project › Modules: tick the modules this plan uses. Switching one off keeps its data unless the user deletes it. */
 export const modules = () => openDialog(() => {
-  const [on, setOn] = createSignal<string[]>([...(P().modules ?? [])]), [drop, setDrop] = createSignal(false);
-  const off = () => (P().modules ?? []).filter(k => !on().includes(k));
-  const hasData = () => { const c = P().contract; return !!c && !!(c.dates.length || c.payments.length || c.value); };
+  const [on, setOn] = createSignal<string[]>([...(P().modules ?? [])]), [drop, setDrop] = createSignal<string[]>([]);
+  const off = () => (P().modules ?? []).filter(k => !on().includes(k) && DATA[k]?.[0]());
   const ok = async () => {
-    if (drop() && off().includes("contract") && hasData()) await act({ Contract: { c: {} } });
-    const fresh = on().includes("contract") && !(P().modules ?? []).includes("contract");
+    for (const k of off()) if (drop().includes(k)) await act(DATA[k][1]);
+    const fresh = on().find(k => !(P().modules ?? []).includes(k));
     await act({ Modules: { on: on() } });
-    if (fresh) setView("contract");
+    if (fresh) setView(MODULES.find(m => m[0] === fresh)![3] as "contract");
   };
   return (
     <Dialog title="Modules" help="modules" okText="Apply" ok={ok}>
       <p>Modules add registers to this plan. A plan shows only the ones ticked here; the rest of the app stays as it is.</p>
       <For each={MODULES}>{([k, l, d]) => <label class="chk modrow"><input type="checkbox" checked={on().includes(k)} onChange={() => setOn(on().includes(k) ? on().filter(x => x !== k) : [...on(), k])} /><span><b>{l}</b><small class="muted">{d}</small></span></label>}</For>
-      <Show when={off().includes("contract") && hasData()}>
-        <div class="modoff"><b>Contract Dates & Payments is being switched off.</b>
-          <label class="chk"><input type="radio" checked={!drop()} onChange={() => setDrop(false)} /> Keep its dates and payments in the plan, hidden, for later</label>
-          <label class="chk"><input type="radio" checked={drop()} onChange={() => setDrop(true)} /> Delete its dates and payments</label></div>
-      </Show>
-      <p class="muted">More modules come with later releases: a document register and a procurement register.</p>
+      <For each={off()}>{k => <div class="modoff"><b>{MODULES.find(m => m[0] === k)?.[1]} is being switched off.</b>
+        <label class="chk"><input type="radio" checked={!drop().includes(k)} onChange={() => setDrop(drop().filter(x => x !== k))} /> Keep its data in the plan, hidden, for later</label>
+        <label class="chk"><input type="radio" checked={drop().includes(k)} onChange={() => setDrop([...drop(), k])} /> Delete its data</label></div>}</For>
+      <p class="muted">A procurement register comes next.</p>
     </Dialog>
   );
 });
@@ -154,3 +157,4 @@ export const ContractView = () => {
 
 /** Opens the view, or offers to switch the module on. */
 export const openContract = () => (hasModule("contract") ? setView("contract") : (toast("Contract Dates & Payments is a module: tick it in Project › Modules."), modules()));
+export const openDocuments = () => (hasModule("documents") ? setView("documents") : (toast("The Document Register is a module: tick it in Project › Modules."), modules()));

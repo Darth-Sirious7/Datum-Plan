@@ -146,8 +146,8 @@ export const resourceInfo = (uid: number) => openDialog(() => {
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const parseHours = (s: string): [number, number][] => s.split(",").map(x => x.trim()).filter(Boolean).map(x => { const [a, b] = x.split("-").map(t => { const [h, m] = t.trim().split(":").map(Number); return h * 60 + (m || 0); }); return [a, b] as [number, number]; });
 const fmtHours = (h: [number, number][]) => h.map(([a, b]) => `${hm(a)}-${hm(b)}`).join(", ");
-export const calendars = () => openDialog(() => {
-  const [name, setName] = createSignal(P().calendar);
+export const calendars = (start?: string) => openDialog(() => {
+  const [name, setName] = createSignal(start && P().calendars.some(c => c.name === start) ? start : P().calendar);
   const cal = () => P().calendars.find(c => c.name === name()) ?? P().calendars[0];
   const [draft, setDraft] = createStore<Calendar>(JSON.parse(JSON.stringify(cal())));
   const load = (n: string) => { setName(n); setDraft(JSON.parse(JSON.stringify(cal()))); };

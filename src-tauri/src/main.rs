@@ -805,6 +805,45 @@ fn contract(st: State<St>) -> Vec<PlanContract> {
     }).collect()
 }
 
+/// The Document Register of the plan shown, and (on a master) of its open subplans.
+#[derive(serde::Serialize)]
+struct PlanDocs { tab: usize, name: String, on: bool, out: datum_core::docreg::RegOut }
+
+#[tauri::command]
+fn documents(st: State<St>) -> Vec<PlanDocs> {
+    let a = st.lock();
+    let (ds, tabs, cur) = (docs(&a), tab_list(&a), a.cur);
+    tabs.iter().enumerate().filter(|(k, t)| *k == cur || (t.role == "sub" && t.group == cur as i64)).map(|(k, _)| {
+        let d = ds[k];
+        PlanDocs { tab: k, name: d.p.name.clone(), on: d.p.modules.iter().any(|m| m == "documents"), out: datum_core::docreg::status(&Calc::new(&d.p, &a.opts.date_fmt, today())) }
+    }).collect()
+}
+
+/// A spreadsheet to bring documents or submissions in from: its sheets and the rows of one
+/// (asks for the file when `path` is empty).
+#[derive(serde::Serialize)]
+struct SheetRows { path: String, names: Vec<String>, rows: Vec<Vec<String>> }
+
+#[tauri::command]
+async fn docs_read(app: AppHandle, path: Option<String>, sheet: Option<String>) -> R<Option<SheetRows>> {
+    let Some(path) = path.map(PathBuf::from).or_else(|| pick(&app, "Spreadsheets", &["xlsx", "xlsm", "xls", "xlsb", "ods", "csv"])) else { return Ok(None) };
+    let (names, mut rows) = guard(|| io::table::read_sheet(&path, sheet.as_deref()))?;
+    rows.truncate(10_000);
+    for r in &mut rows { r.truncate(120) }
+    Ok(Some(SheetRows { path: path.display().to_string(), names, rows }))
+}
+
+/// Writes the register and the transmittal log to an Excel workbook.
+#[tauri::command]
+async fn docs_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
+    let name = st.lock().doc.p.name.clone();
+    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - Document Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let a = st.lock();
+    let o = datum_core::docreg::status(&calc(&a));
+    datum_core::docreg::write_xlsx(&a.doc.p, &o, &path)?;
+    Ok(Some(path.display().to_string()))
+}
+
 #[tauri::command]
 fn checks(st: State<St>, limits: check::Limits) -> Vec<check::Check> {
     check::run(&calc(&st.lock()), &limits)
@@ -1577,7 +1616,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, contract, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

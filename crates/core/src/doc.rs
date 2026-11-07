@@ -35,6 +35,8 @@ pub enum Op {
     Modules { on: Vec<String> },
     /// Replaces the contract (Contract Dates & Payments).
     Contract { c: Box<Contract> },
+    /// Replaces the Document Register.
+    Documents { r: Box<DocRegister> },
     /// Replaces a custom field definition (empty alias and formula with no values removes it).
     FieldDef { def: CustomDef },
     /// Deletes a custom field: its definition and every task's value.
@@ -766,6 +768,7 @@ fn exec(p: &mut Project, op: Op, fmt: &str) -> Result<(), String> {
             p.modules = crate::contract::MODULES.iter().map(|m| m.0.to_string()).filter(|k| on.contains(k)).collect();
         }
         Op::Contract { c } => { let mut c = *c; crate::contract::clean(&mut c); p.contract = c; }
+        Op::Documents { r } => { let mut r = *r; crate::docreg::clean(&mut r); p.documents = r; }
         Op::ProjectSet { field, value } => {
             let mut v = serde_json::to_value(&*p).map_err(|e| e.to_string())?;
             if v.get(&field).is_none() || matches!(field.as_str(), "tasks" | "resources" | "format" | "next_uid") {

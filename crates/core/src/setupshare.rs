@@ -62,6 +62,13 @@ pub fn adopt(p: &mut Project, from: &Project, parts: &[String]) -> Result<(), St
         for m in &from.modules { if !p.modules.contains(m) { p.modules.push(m.clone()) } }
         p.modules.sort_by_key(|m| crate::contract::MODULES.iter().position(|x| x.0 == m.as_str()));
         p.contract.warn_days = from.contract.warn_days;
+        let (r, f) = (&mut p.documents, &from.documents);
+        (r.p_date, r.p_unit, r.review_days, r.turnaround_days, r.review_cal, r.work_cal) = (f.p_date, f.p_unit.clone(), f.review_days, f.turnaround_days, f.review_cal.clone(), f.work_cal.clone());
+        (r.weights, r.codes, r.purposes, r.flow) = (f.weights.clone(), f.codes.clone(), f.purposes.clone(), f.flow.clone());
+        // A calendar the rules count on comes along.
+        for name in [&f.review_cal, &f.work_cal] {
+            if let Some(c) = from.calendars.iter().find(|c| &c.name == name) { if !p.calendars.iter().any(|x| x.name == c.name) { p.calendars.push(c.clone()) } }
+        }
     }
     Ok(())
 }

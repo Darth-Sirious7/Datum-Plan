@@ -1090,3 +1090,27 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .spark { vertical-align: middle; }
 .modoff { background: #FDF0D2; border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 .panel.ctr td { white-space: nowrap; }
+/* Document Register */
+.dtabs { margin: 14px 0 0; }
+.dset { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.dset h3 { margin: 12px 0 6px; font-size: 13px; }
+.dset textarea { width: 100%; }
+.dcal { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; padding: 8px 10px; background: var(--bg2); border-radius: 4px; }
+.dcal select { margin-left: 6px; max-width: 200px; }
+.dcalb { display: flex; gap: 6px; }
+.dform { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
+.dform label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.dflags { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; }
+.dmap { max-height: 46vh; overflow: auto; }
+.panel.ctr .tbl.dreg td input:not([type=number]):not([type=date]) { min-width: 0; }
+.tbl.dreg td:nth-child(1) input { width: 160px; }
+.tbl.dreg td:nth-child(2) input { width: 200px; }
+.tbl.dreg td:nth-child(3) input { width: 80px; }
+.tbl.dreg td:nth-child(4) input { width: 44px; }
+.tbl.dreg td select { min-width: 46px; }
+.tbl.dreg tr.key td:first-child { box-shadow: inset 3px 0 var(--amber); }
+.tbl td.acts { display: flex; gap: 2px; }
+.mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+.small { font-size: 11px; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.dwarn { color: var(--crit); }

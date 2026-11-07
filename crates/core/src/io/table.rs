@@ -175,7 +175,20 @@ pub(super) fn sheet_size(path: &Path, ext: &str) -> Result<(), String> {
 }
 
 pub fn read(path: &Path) -> Result<Table, String> {
+    let (_, mut rows) = read_sheet(path, None)?;
+    if rows.is_empty() {
+        return Err("The file has no rows.".into());
+    }
+    let headers: Vec<String> = rows.remove(0).into_iter().map(|h| h.trim().to_string()).collect();
+    let guess = guesses(&headers);
+    Ok(Table { headers, rows, guess })
+}
+
+/// The non-empty rows of one sheet (the first when `sheet` is None or not found), and the
+/// workbook's sheet names (none for CSV).
+pub fn read_sheet(path: &Path, sheet: Option<&str>) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let mut names = vec![];
     let mut rows = if ext == "csv" || ext == "txt" {
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         csv_rows(&String::from_utf8_lossy(&bytes))
@@ -183,7 +196,8 @@ pub fn read(path: &Path) -> Result<Table, String> {
         // Cell by cell: a range is the box around every cell, so two far-apart cells in a tiny
         // file would ask for hundreds of gigabytes (an abort, not an error).
         let mut wb: calamine::Xlsx<_> = calamine::open_workbook(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
-        let name = wb.sheet_names().first().cloned().ok_or("The workbook has no sheets.")?;
+        names = wb.sheet_names().to_vec();
+        let name = sheet.filter(|s| names.iter().any(|n| n == s)).map(String::from).or_else(|| names.first().cloned()).ok_or("The workbook has no sheets.")?;
         let mut rd = wb.worksheet_cells_reader(&name).map_err(|e| e.to_string())?;
         let mut got = vec![];
         while let Some(c) = rd.next_cell().map_err(|e| e.to_string())? {
@@ -202,16 +216,13 @@ pub fn read(path: &Path) -> Result<Table, String> {
     } else {
         sheet_size(path, &ext)?;
         let mut wb = open_workbook_auto(path).map_err(|e| format!("Could not read the workbook: {e}"))?;
-        let range = wb.worksheet_range_at(0).ok_or("The workbook has no sheets.")?.map_err(|e| e.to_string())?;
+        names = wb.sheet_names().to_vec();
+        let at = sheet.and_then(|s| names.iter().position(|n| n == s)).unwrap_or(0);
+        let range = wb.worksheet_range_at(at).ok_or("The workbook has no sheets.")?.map_err(|e| e.to_string())?;
         range.rows().map(|r| r.iter().map(cell).collect()).collect()
     };
     rows.retain(|r: &Vec<String>| r.iter().any(|c| !c.trim().is_empty()));
-    if rows.is_empty() {
-        return Err("The file has no rows.".into());
-    }
-    let headers: Vec<String> = rows.remove(0).into_iter().map(|h| h.trim().to_string()).collect();
-    let guess = guesses(&headers);
-    Ok(Table { headers, rows, guess })
+    Ok((names, rows))
 }
 
 /// Builds a plan from table rows, `map[c]` naming the field of column c. Returns the plan and

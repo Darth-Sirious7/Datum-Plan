@@ -35,12 +35,23 @@ export interface ContractOut {
   payments: { id: number; name: string; amount: number; task_name: string; planned: string | null; due: string | null; invoiced: string | null; paid: string | null; status: string }[];
   cash: [string, number, number, number | null][];
 }
+export interface VDoc { id: number; number: string; title: string; vendor: string; package: string; disc: string; kind: string; class: number; key: boolean; flags: string[]; offset: number | null; first: string | null; weight: number; progress: boolean; recurring: boolean; task: number; remarks: string }
+export interface Submission { id: number; doc: number; rev: string; purpose: string; transmittal: string; sent: string | null; ret_transmittal: string; returned: string | null; code: string; crs: string }
+export interface ReturnCode { code: string; meaning: string; accepted: boolean; resubmit: boolean }
+export interface DocRegister {
+  p_date: string | null; p_unit: string; review_days: number; turnaround_days: number; review_cal: string; work_cal: string; weights: number[][];
+  codes: ReturnCode[]; purposes: [string, string][]; flow: { first: string; approval: string; construction: string; final: string }; docs: VDoc[]; log: Submission[];
+}
+export type D6 = (string | null)[];
+export interface DocRow { id: number; planned: D6; actual: D6; forecast: D6; subs: number; cycles: number; rev: string; purpose: string; sent: string | null; due: string | null; returned: string | null; code: string; status: string; late1: number; client_late: number; earned: number; planned_pct: number; task_name: string; need: string | null; late_for_task: boolean }
+export interface RegPoint { end: string; planned: number; actual: number | null; first_planned: number; first_done: number }
+export interface RegOut { data_date: string | null; docs: DocRow[]; subs: { id: number; due: string | null; accepted: boolean; days: number; late: number; state: string }[]; earned: number; planned: number; client_late: number; weekly: RegPoint[]; monthly: RegPoint[]; weights_ok: boolean[] }
 export interface Project {
   format: number; name: string; start: string; status: string | null; day_min: number; manual_default: boolean; calendar: string; calendars: Calendar[];
   resources: Resource[]; next_uid: number; columns: [string, number][]; code: string; description: string; client: string; manager: string; location: string;
   company: string; logo: string; currency: Currency; setup_done: boolean; id_prefix: string; id_start: number; id_step: number; opts: SchedOpts;
   fields: CustomDef[]; codes: CodeDef[]; risks: Risk[]; log: LogItem[]; credit: CreditRule[]; snapshots: { date: string | null; label: string; comment: string; finish: number; pct: number; cost: number }[]; ui: any;
-  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract;
+  subplans?: SubPlan[]; master?: string; modules?: string[]; contract?: Contract; documents?: DocRegister;
   titles: Record<string, string>; sheets: SheetData[]; names?: DefName[]; pictures?: Picture[]; periods: { week_end: number; month_end: number; weight: string }; notes: PeriodNote[];
 }
 export interface Summary {

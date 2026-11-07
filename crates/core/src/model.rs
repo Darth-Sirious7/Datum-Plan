@@ -678,6 +678,113 @@ pub struct Project {
     /// Contract Dates & Payments (kept when the module is switched off, until deleted).
     #[serde(skip_serializing_if = "Contract::is_empty")]
     pub contract: Contract,
+    /// The Document Register (kept when the module is switched off, until deleted).
+    #[serde(skip_serializing_if = "DocRegister::is_empty")]
+    pub documents: DocRegister,
+}
+
+/// Vendor documents, their submissions and the rules of their review cycle.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DocRegister {
+    /// The P date (purchase order or kick-off) planned first issues count from; None = the plan's start.
+    pub p_date: Option<NaiveDate>,
+    /// "weeks" or "days": the unit of each document's P + n.
+    pub p_unit: String,
+    /// The client's review period and our turnaround, in working days.
+    pub review_days: i64,
+    pub turnaround_days: i64,
+    /// Calendars the review and the turnaround are counted on ("" = the plan's calendar).
+    pub review_cal: String,
+    pub work_cal: String,
+    /// Cumulative progress weights (%) of the six steps, per class 1, 2, 3.
+    pub weights: Vec<Vec<f64>>,
+    pub codes: Vec<ReturnCode>,
+    /// Issue purposes: code and meaning.
+    pub purposes: Vec<(String, String)>,
+    pub flow: Flow,
+    pub docs: Vec<VDoc>,
+    pub log: Vec<Submission>,
+}
+impl DocRegister {
+    pub fn is_empty(&self) -> bool { *self == Self::default() }
+}
+impl Default for DocRegister {
+    fn default() -> Self {
+        let code = |c: &str, m: &str, accepted: bool, resubmit: bool| ReturnCode { code: c.into(), meaning: m.into(), accepted, resubmit };
+        let pur = |c: &str, m: &str| (c.to_string(), m.to_string());
+        Self {
+            p_date: None, p_unit: "weeks".into(), review_days: 10, turnaround_days: 10, review_cal: String::new(), work_cal: String::new(),
+            weights: vec![vec![35.0, 35.0, 60.0], vec![15.0, 15.0, 20.0], vec![10.0, 10.0, 0.0], vec![10.0, 10.0, 0.0], vec![20.0, 20.0, 0.0], vec![10.0, 10.0, 20.0]],
+            codes: vec![
+                code("Code 1", "Approved – proceed", true, false), code("Code 2", "Approved with comments – proceed with the next revision", true, false),
+                code("Code 3", "Revise and resubmit", false, true), code("Code 4", "Retained for information", true, false),
+                code("Code 5", "Rejected", false, true), code("No Comment", "No reply within the review period (deemed accepted)", true, false),
+            ],
+            purposes: vec![pur("ICR", "Issued for client review"), pur("IFA", "Issued for approval"), pur("IFI", "Issued for information"), pur("IFD", "Issued for design"),
+                pur("IFP", "Issued for purchase"), pur("IFH", "Issued for HAZOP"), pur("IFC1", "Issued for construction"), pur("IFC2", "Issued final"), pur("RED-LINE", "Red-line mark-up"), pur("AS-BUILT", "As built")],
+            flow: Flow::default(), docs: vec![], log: vec![],
+        }
+    }
+}
+
+/// A client return code: whether it accepts the issue, or asks for it again.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReturnCode { pub code: String, pub meaning: String, pub accepted: bool, pub resubmit: bool }
+
+/// The issue purposes of the cycle: classes 1 and 2 go first → approval → construction → final;
+/// class 3 goes construction → final.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Flow { pub first: String, pub approval: String, pub construction: String, #[serde(rename = "final")] pub final_: String }
+impl Default for Flow {
+    fn default() -> Self { Self { first: "ICR".into(), approval: "IFA".into(), construction: "IFC1".into(), final_: "IFC2".into() } }
+}
+
+/// A vendor document.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VDoc {
+    pub id: u32,
+    pub number: String,
+    pub title: String,
+    pub vendor: String,
+    pub package: String,
+    pub disc: String,
+    pub kind: String,
+    /// 1, 2 or 3.
+    pub class: u8,
+    pub key: bool,
+    /// Marks such as MRB, VDB, IOM, PIM, Native, Eng. review, QA review.
+    pub flags: Vec<String>,
+    /// First issue at P + n (weeks or days), or on its own date.
+    pub offset: Option<f64>,
+    pub first: Option<NaiveDate>,
+    pub weight: f64,
+    /// Counted in progress (a recurring submission never is).
+    pub progress: bool,
+    pub recurring: bool,
+    /// The task that needs the document.
+    pub task: u32,
+    pub remarks: String,
+}
+
+/// One submission of a document and the client's return.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Submission {
+    pub id: u32,
+    pub doc: u32,
+    pub rev: String,
+    pub purpose: String,
+    pub transmittal: String,
+    pub sent: Option<NaiveDate>,
+    pub ret_transmittal: String,
+    pub returned: Option<NaiveDate>,
+    pub code: String,
+    /// Comment sheet reference or remarks.
+    pub crs: String,
 }
 
 /// The contract: its value, contract dates (with delay damages) and payment milestones.
@@ -768,7 +875,7 @@ impl Project {
             code: String::new(), description: String::new(), client: String::new(), manager: String::new(), location: String::new(),
             company: String::new(), logo: String::new(), currency: Currency::default(), setup_done: false,
             id_prefix: "A".into(), id_start: 1000, id_step: 10, opts: SchedOpts::default(),
-            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(),
+            fields: vec![], codes: vec![], risks: vec![], snapshots: vec![], credit: vec![], log: vec![], titles: BTreeMap::new(), sheets: vec![], names: vec![], pictures: vec![], periods: PeriodOpts::default(), notes: vec![], ui: Value::Null, subplans: vec![], master: String::new(), modules: vec![], contract: Contract::default(), documents: DocRegister::default(),
         }
     }
 

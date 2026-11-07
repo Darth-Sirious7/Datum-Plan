@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1 — 2026-11-07
+
+The Document Register: a module for vendor documents and their review cycle.
+
+- **Project › Modules › Document Register** adds the register to a plan (sidebar › Documents).
+- **Documents:** number, title, vendor, package, discipline, type, class (1, 2 or 3), key document, MRB, VDB, IOM, PIM, native, engineering and QA review, weight, counted in progress, recurring, the task that needs it, remarks.
+- **Planned dates** from the **P date** (purchase order or kick-off; the plan's start when empty): the first issue at P + n weeks or days (or on its own date), then the client's review and our turnaround in **working days**.
+- **Calendars:** the client's review and our turnaround each count on **the plan's calendar or a calendar of their own**, for a client's working week or an engineering office in another country. **New calendar…** creates one from the plan's calendar and opens its working time.
+- **The cycle:** classes 1 and 2 go first issue → approval issue → construction issue → final issue; class 3 goes construction issue → final issue. The issue purposes (ICR, IFA, IFC1, IFC2 by default), the return codes (which accept, which ask again) and the progress weights of the six steps per class are all settings.
+- **Transmittal log:** one row per submission with revision, purpose, transmittal, date sent, review due date, return transmittal, date returned, code and comments reference. **+ Sub** logs a document's next submission: next revision, the purpose its cycle needs.
+- **Worked out for every document:** submissions and resubmission cycles, latest revision and purpose, review due, status (Not submitted, Not submitted – overdue, Under review, Review overdue, Resubmit, Accepted – next issue, Final issued), first-issue delay, **days the client kept it past the review period**, earned and planned progress, the forecast of every step, and whether it is late for the task that needs it.
+- **Progress:** weighted planned and actual S-curves by week (ending on the plan's week-end day) or by month, first issues per period, and progress by vendor, discipline, type and class. Recurring submissions are never counted.
+- **Import** a document register or a transmittal log from Excel or CSV: choose the sheet, the heading row (found by itself) and what each column holds (guessed from the headings). Running it again updates documents with the same number. **Export to Excel** writes the register and the transmittal log.
+- On a master, a table adds up the registers of its open subplans. **Apply Setup to Subplans › Modules** gives the subplans the register's settings and the calendars they count on.
+
 ## 0.6.0 — 2026-11-07
 
 Modules: registers a plan takes on only when it needs them. The first is Contract Dates & Payments.
