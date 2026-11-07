@@ -240,7 +240,7 @@ fn close_all(app: AppHandle, st: State<St>) -> Out {
 
 fn out(a: &App) -> Out {
     let d = &a.doc;
-    let mut project = serde_json::to_value(&d.p).unwrap_or_default();
+    let mut project = serde_json::to_value(d.p.head()).unwrap_or_default();
     if let Some(m) = project.as_object_mut() {
         m.remove("tasks");
         if let Some(snaps) = m.get_mut("snapshots").and_then(|v| v.as_array_mut()) {

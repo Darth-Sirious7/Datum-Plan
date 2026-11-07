@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1 — 2026-11-07
+
+Hardening: very large plans, measured at 100,000 tasks.
+
+- **Undo stays within memory on very large plans.** Each undo step keeps a copy of the plan (about 33 MB at 100,000 tasks). Small plans still keep 200 steps; very large plans keep fewer (20 at 50,000 tasks, 10 at 100,000), so undo holds about 330 MB at most instead of several gigabytes.
+- **Less work per edit:** the plan sent to the window after each edit no longer copies all its tasks to JSON first only to drop them (a tenth of a second per edit at 100,000 tasks), and the task rows sent to the grid are about a quarter smaller (no false flags, dates rounded to under a second).
+- **Smoother Gantt scrolling:** the row of each task is worked out once per change of the rows, not on every scroll frame.
+- **Measured** (in the repository: `npm run bench` and `npm run perf:ui`): at 100,000 tasks the engine schedules in about 0.12 s, an edit takes about 0.2 s, saving 0.1 s and opening 0.4 s; the window paints the first rows in under 0.1 s and scrolls at full frame rate.
+
 ## 0.7.0 — 2026-11-07
 
 The portfolio and a shared resource pool.

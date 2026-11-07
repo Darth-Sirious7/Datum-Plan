@@ -8,7 +8,9 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "test:ui": "cargo run -q -p datum-core --example dump > tests_ui/fixture.json && npm run build:ui && node tests_ui/run.cjs",
-    "guide": "node tests_ui/guide_shots.cjs && node scripts/guide.cjs"
+    "guide": "node tests_ui/guide_shots.cjs && node scripts/guide.cjs",
+    "perf:ui": "node tests_ui/perf.cjs 100000",
+    "bench": "cargo run -q --release -p datum-core --example bench -- 100000"
   },
   "devDependencies": {
     "@fontsource/noto-sans-sc": "^5.3.1",

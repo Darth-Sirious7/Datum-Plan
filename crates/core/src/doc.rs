@@ -132,6 +132,10 @@ pub struct Doc {
 }
 
 const UNDO_LIMIT: usize = 200;
+/// Undo steps kept: 200, fewer for a very large plan (each step is a copy of the plan, about
+/// 330 bytes a task), so the copies hold about a million tasks (some 330 MB) in all: 10 steps at
+/// 100,000 tasks, never fewer.
+pub fn undo_keep(tasks: usize) -> usize { (1_000_000 / tasks.max(1)).clamp(10, UNDO_LIMIT) }
 /// The sheets a workbook export adds: no tab may take their names.
 const RESERVED: [&str; 4] = ["plan", "resources", "tasks", "datumplan"];
 /// A tab name a workbook can hold: 1 to 31 characters, none of []:*?/\, no apostrophe at either end.
@@ -162,8 +166,9 @@ impl Doc {
             return Ok(());
         }
         self.undo.push(std::mem::replace(&mut self.p, q));
-        if self.undo.len() > UNDO_LIMIT {
-            self.undo.remove(0);
+        let keep = undo_keep(self.p.tasks.len());
+        if self.undo.len() > keep {
+            self.undo.drain(..self.undo.len() - keep);
         }
         self.redo.clear();
         self.dirty = true;
@@ -176,6 +181,8 @@ impl Doc {
             self.dirty = true;
         }
     }
+
+    pub fn undo_steps(&self) -> usize { self.undo.len() }
 
     pub fn redo(&mut self) {
         if let Some(p) = self.redo.pop() {

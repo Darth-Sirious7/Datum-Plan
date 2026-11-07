@@ -18,6 +18,7 @@ Checks before pushing:
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test --workspace`
 - `npm run check:ui`, then `npm run build:ui` and the UI tests (`node tests_ui/run.cjs`)
+- For changes to the grid, the Gantt or what the engine sends per edit: `npm run perf:ui` (the window with 100,000 rows) and `npm run bench` (engine times, edit cycle and memory at 100,000 tasks)
 - `cargo deny check` (licences, advisories, sources; CI runs it)
 
 Releasing:

@@ -45,18 +45,28 @@ pub struct Query {
 
 #[derive(Serialize, Default)]
 pub struct Bar {
-    /// Days since 1970-01-01 (fractions are times of day).
+    /// Days since 1970-01-01 (fractions are times of day), sent with 5 decimals (under a second).
+    #[serde(serialize_with = "r5")]
     pub s: f64,
+    #[serde(serialize_with = "r5")]
     pub f: f64,
+    #[serde(serialize_with = "r5")]
     pub ls: f64,
+    #[serde(serialize_with = "r5")]
     pub lf: f64,
+    #[serde(serialize_with = "r5o")]
     pub bs: Option<f64>,
+    #[serde(serialize_with = "r5o")]
     pub bf: Option<f64>,
+    #[serde(serialize_with = "r5o")]
     pub dl: Option<f64>,
     pub pct: u8,
     pub segs: Vec<(f64, f64)>,
     pub links: Vec<(u32, LinkType)>,
 }
+
+fn r5<S: serde::Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> { s.serialize_f64((v * 1e5).round() / 1e5) }
+fn r5o<S: serde::Serializer>(v: &Option<f64>, s: S) -> Result<S::Ok, S::Error> { match v { Some(v) => s.serialize_some(&((v * 1e5).round() / 1e5)), None => s.serialize_none() } }
 
 #[derive(Serialize, Default)]
 pub struct GRow {
@@ -66,14 +76,23 @@ pub struct GRow {
     pub lvl: u8,
     /// task, summary, group, project.
     pub kind: &'static str,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ms: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub crit: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub late: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub manual: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub off: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub lp: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub kids: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hl: bool,
     /// Name and resources for bar labels and tips.
     pub name: String,

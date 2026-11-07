@@ -23,17 +23,26 @@ fn main() {
     let t3 = Instant::now();
     let json = serde_json::to_string(&g).unwrap();
     let t4 = Instant::now();
+    if std::env::var("ROW").is_ok() { println!("{}", serde_json::to_string(&g.rows[5]).unwrap()); }
     let checks = check::run(&c, &Default::default());
     let t5 = Instant::now();
     let size = serde_json::to_vec(&p).map(|v| v.len() / 1024).unwrap_or(0);
-    println!("plan as JSON: {size} KB");
+    let tv = Instant::now();
+    let v = serde_json::to_value(&p).unwrap();
+    println!("plan as JSON: {size} KB; to_value {:?}", tv.elapsed());
+    drop(v);
     println!("{n} tasks, {} edges: schedule {:?}, calc {:?}, grid {:?}, json {:?} ({} KB), checks {:?} ({})", s.edges.len(), t1 - t0, t2 - t1, t3 - t2, t4 - t3, json.len() / 1024, t5 - t4, checks.len());
     edit_cycle(p);
 }
 
 /// The edit cycle at size: an edit through `Doc::apply` (copy, normalize, schedule, undo step),
 /// saving and opening the file.
+fn rss() -> usize { std::fs::read_to_string("/proc/self/statm").ok().and_then(|s| s.split_whitespace().nth(1)?.parse::<usize>().ok()).unwrap_or(0) * 4096 / 1024 / 1024 }
 fn edit_cycle(p: Project) {
+    let before = rss();
+    let copies: Vec<Project> = (0..5).map(|_| p.clone()).collect();
+    println!("memory per copy of the plan: {} MB", (rss() - before) / 5);
+    drop(copies);
     let mut d = doc::Doc::new(p);
     let uid = d.p.tasks[d.p.tasks.len() / 2 + 1].uid;
     for k in 0..3 {

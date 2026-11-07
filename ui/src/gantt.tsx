@@ -1,6 +1,6 @@
 // The Gantt chart and the timeline strip: canvas drawing, timescale, zoom, and dragging bars
 // to move, resize, change progress or link.
-import { createSignal, createEffect, onMount, onCleanup, Show } from "solid-js";
+import { createSignal, createEffect, createMemo, onMount, onCleanup, Show } from "solid-js";
 import { Row, fmtDay, iso, dateDay } from "./api";
 import { grid, out, sel, setSel, cur, setCur, zoom, setZoom, set, act, openMenu, view, timeline, tick, baseline, call, query, themeTick } from "./store";
 import { RH } from "./grid";
@@ -105,6 +105,8 @@ export const Gantt = () => {
     ctx.fillStyle = K.line; ctx.fillRect(0, 20, w, 1); ctx.fillRect(0, 39, w, 1);
   };
 
+  // Row of each task, worked out once per change of the rows (not on every scroll frame).
+  const rowAt = createMemo(() => new Map(grid().rows.map((r, i) => [r.uid, i])));
   const drawBars = () => {
     const { w, h } = size(), top = body.scrollTop, pd = zoom(), rows = grid().rows, trk = view() === "tracking", crit = showCrit() || trk, base = showBase() || trk;
     const ctx = fit(barsCv, w, h);
@@ -122,7 +124,7 @@ export const Gantt = () => {
     const sd = out()?.summary.status_day;
     if (sd) line(sd, "#2E9D57", [6, 3]);
     // Links
-    const at = new Map(rows.map((r, i) => [r.uid, i]));
+    const at = rowAt();
     const ends = (r: Row) => (r.ms ? [X(r.bar.s) - 6, X(r.bar.s) + 6] : [X(r.bar.s), X(r.bar.f)]);
     ctx.lineWidth = 1;
     rows.forEach((r, i) => r.bar.links.forEach(([pu, k]) => {

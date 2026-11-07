@@ -69,7 +69,7 @@
         "One resource pool shared by several plans, a portfolio dashboard (0.7.0).",
         "A schedule health score with its trend, ghost bars and a log of logic changes.",
         "What-if scenarios and delay analysis: as-planned against as-built, time impact, windows.",
-        "Smooth with 100,000 tasks; a signed installer (no Windows warning); crash reports."
+        "Smooth with 100,000 tasks (0.7.1); a signed installer (no Windows warning) before 1.0."
       ]
     },
     {

@@ -644,3 +644,13 @@ fn remaining_duration_of_an_elapsed_task() {
     d.apply(Op::TaskList { uid, field: "splits".into(), value: serde_json::json!([[1920, 480], [480, 960], [480, 60]]) }, "%d-%b-%y").unwrap();
     assert_eq!(d.p.tasks[i].splits, vec![(480, 60), (1920, 480)]);
 }
+
+#[test]
+fn a_very_large_plan_keeps_fewer_undo_steps() {
+    use crate::doc::{undo_keep, Doc, Op};
+    assert_eq!((undo_keep(500), undo_keep(5_000), undo_keep(50_000), undo_keep(100_000), undo_keep(2_000_000)), (200, 200, 20, 10, 10));
+    // A small plan still keeps every step up to 200.
+    let mut d = Doc::new(crate::model::Project::new("Undo", chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap()));
+    for k in 0..210 { d.apply(Op::QuickAdd { at: 0, text: format!("Task {k}") }, "%d/%m/%Y").unwrap(); }
+    assert_eq!(d.undo_steps(), 200);
+}

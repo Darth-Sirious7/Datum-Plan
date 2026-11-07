@@ -1031,6 +1031,14 @@ impl Project {
         uid
     }
 
+    /// The plan without its tasks and with snapshots' rows left out: what the window keeps of it.
+    /// (Copying the tasks only to drop them cost a tenth of a second per edit at 100,000 tasks.)
+    #[allow(clippy::clone_on_copy)]
+    pub fn head(&self) -> Project {
+        let snapshots = self.snapshots.iter().map(|s| Snapshot { rows: vec![], ..Snapshot { date: s.date, label: s.label.clone(), comment: s.comment.clone(), finish: s.finish, pct: s.pct, cost: s.cost, rows: vec![] } }).collect();
+        Project { tasks: vec![], snapshots, format: self.format.clone(), name: self.name.clone(), start: self.start.clone(), status: self.status.clone(), day_min: self.day_min.clone(), manual_default: self.manual_default.clone(), calendar: self.calendar.clone(), calendars: self.calendars.clone(), resources: self.resources.clone(), next_uid: self.next_uid.clone(), columns: self.columns.clone(), code: self.code.clone(), description: self.description.clone(), client: self.client.clone(), manager: self.manager.clone(), location: self.location.clone(), company: self.company.clone(), logo: self.logo.clone(), currency: self.currency.clone(), setup_done: self.setup_done.clone(), id_prefix: self.id_prefix.clone(), id_start: self.id_start.clone(), id_step: self.id_step.clone(), opts: self.opts.clone(), fields: self.fields.clone(), codes: self.codes.clone(), risks: self.risks.clone(), credit: self.credit.clone(), log: self.log.clone(), titles: self.titles.clone(), sheets: self.sheets.clone(), names: self.names.clone(), pictures: self.pictures.clone(), periods: self.periods.clone(), notes: self.notes.clone(), ui: self.ui.clone(), subplans: self.subplans.clone(), master: self.master.clone(), modules: self.modules.clone(), contract: self.contract.clone(), documents: self.documents.clone(), procurement: self.procurement.clone() }
+    }
+
     pub fn cal(&self, name: Option<&str>) -> &Calendar {
         let n = name.unwrap_or(&self.calendar);
         self.calendars.iter().find(|c| c.name == n).or_else(|| self.calendars.iter().find(|c| c.name == self.calendar)).unwrap_or(&self.calendars[0])
