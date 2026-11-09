@@ -75,7 +75,7 @@ export const projectInfo = () => openDialog(() => {
       </div>
       <h4>Statistics</h4>
       <table class="tbl stats"><thead><tr><th /><th>Start</th><th>Finish</th></tr></thead><tbody>
-        <tr><td>Current</td><td>{s.start}</td><td>{s.finish}</td></tr><tr><td>Baseline</td><td>—</td><td>{s.bl_finish || "—"}</td></tr><tr><td>Variance</td><td /><td>{s.var_finish || "—"}</td></tr>
+        <tr><td>Current</td><td>{s.start}</td><td>{s.finish}</td></tr><tr><td>Baseline</td><td>{s.bl_start || "—"}</td><td>{s.bl_finish || "—"}</td></tr><tr><td>Variance</td><td /><td>{s.var_finish || "—"}</td></tr>
       </tbody></table>
       <table class="tbl stats"><thead><tr><th>Duration</th><th>Work</th><th>Cost</th><th>Complete</th><th>Tasks</th><th>PV</th><th>EV</th><th>AC</th></tr></thead>
         <tbody><tr><td>{s.dur}</td><td>{s.work}</td><td>{s.cost}</td><td>{Math.round(s.pct)}%</td><td>{s.done} / {s.tasks}</td><td>{s.pv}</td><td>{s.ev}</td><td>{s.ac}</td></tr></tbody></table>
@@ -197,6 +197,7 @@ export const scheduleOptions = () => openDialog(() => {
         <Row label="Resource calendars"><Check label="People's own calendars and leave drive their tasks' dates" value={!!o.res_cals} set={x => setO("res_cals", x)} /></Row>
         <Row label=""><Check label="Schedule from the project finish date" value={o.from_finish} set={x => setO("from_finish", x)} /></Row>
         <Row label="Finish date"><Text type="date" value={o.finish_date} disabled={!o.from_finish} set={x => setO("finish_date", x || null)} /></Row>
+        <Row label=""><Check label="Several critical paths: the end of each chain is critical (as MS Project)" value={!!o.multi_critical} set={x => setO("multi_critical", x)} /></Row>
         <Row label=""><Check label="Show open-ended tasks as critical" value={o.open_ends_critical} set={x => setO("open_ends_critical", x)} /></Row>
         <Row label="Leveling order"><Pick value={o.level_order} set={x => setO("level_order", x)} options={[["Standard", "Standard"], ["Priority", "Priority, Standard"], ["IdOnly", "ID only"]]} /></Row>
         <Row label=""><Check label="Level only within available slack" value={o.level_within_slack} set={x => setO("level_within_slack", x)} /></Row>

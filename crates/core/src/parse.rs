@@ -58,7 +58,8 @@ pub fn dur(s: &str, day: i64) -> Result<(i64, Unit), String> {
 }
 
 fn num(v: f64) -> String {
-    let s = format!("{:.2}", v);
+    // Halves round up (54.625 → 54.63), as MS Project shows them; plain {:.2} rounds them to even.
+    let s = format!("{:.2}", (v * 100.0).round() / 100.0);
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 

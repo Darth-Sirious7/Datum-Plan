@@ -142,6 +142,9 @@ pub struct Task {
     pub constraint: Constraint,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cdate: Option<NaiveDate>,
+    /// The time of day of the constraint (minutes), for the date it was given with; a new date drops it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ctime: Option<(NaiveDate, u16)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deadline: Option<NaiveDate>,
     #[serde(skip_serializing_if = "is_false")]
@@ -378,6 +381,8 @@ pub struct SchedOpts {
     pub float_paths: u8,
     /// Open-ended tasks are shown as critical (diagnostic).
     pub open_ends_critical: bool,
+    /// Every task with no successor is critical when it is the last of its chain (its late finish is its own finish), as MS Project's "Calculate multiple critical paths".
+    pub multi_critical: bool,
     pub level_within_slack: bool,
     pub level_split: bool,
     pub level_order: LevelOrder,
@@ -398,9 +403,9 @@ pub struct SchedOpts {
 impl Default for SchedOpts {
     fn default() -> Self {
         Self {
-            retained: true, critical_float: 0, longest_path: false, lag_cal: LagCal::Successor, float_paths: 0, open_ends_critical: false,
+            retained: true, critical_float: 0, longest_path: false, lag_cal: LagCal::Successor, float_paths: 0, open_ends_critical: false, multi_critical: false,
             level_within_slack: false, level_split: false, level_order: LevelOrder::Standard, effort_default: false,
-            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None, res_cals: false, msp_status: false,
+            task_type_default: TaskType::FixedUnits, from_finish: false, finish_date: None, res_cals: false, msp_status: false,
         }
     }
 }

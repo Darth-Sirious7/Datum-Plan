@@ -404,6 +404,7 @@ pub struct Summary {
     pub pct: f64,
     pub work: String,
     pub cost: String,
+    pub bl_start: String,
     pub bl_finish: String,
     pub var_finish: String,
     pub pv: String,
@@ -434,6 +435,7 @@ impl Calc<'_> {
         let cal = &p.calendars[pc];
         let dur: f64 = leaves.iter().map(|&i| p.tasks[i].dur as f64).sum();
         let bl_end = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.finish)).max();
+        let bl_begin = p.tasks.iter().filter_map(|t| t.bls.get(&0).map(|b| b.start)).min();
         let mut off_days: Vec<i64> = cal.exceptions.iter().filter(|e| e.hours.is_empty()).flat_map(|e| {
             let (a, b) = (at(e.from) / DAY, at(e.to) / DAY);
             a..=b.min(a + 3700)
@@ -451,6 +453,7 @@ impl Calc<'_> {
             pct: if dur > 0.0 { leaves.iter().map(|&i| p.tasks[i].pct as f64 * p.tasks[i].dur as f64).sum::<f64>() / dur }
                 else if leaves.is_empty() { 0.0 } else { leaves.iter().map(|&i| p.tasks[i].pct as f64).sum::<f64>() / leaves.len() as f64 },
             work: format!("{} hrs", (tot(&self.l.work) / 60.0).round() + 0.0), cost: fields::money(tot(&self.l.cost), cur),
+            bl_start: bl_begin.map(df).unwrap_or_default(),
             bl_finish: bl_end.map(|b| df(b - 1)).unwrap_or_default(),
             var_finish: bl_end.map(|b| crate::parse::fmt_dur(between(b, s.finish), Unit::D, p.day_min)).unwrap_or_default(),
             pv: fields::money(pv, cur), ev: fields::money(ev, cur), ac: fields::money(ac, cur),

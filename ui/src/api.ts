@@ -23,7 +23,7 @@ export interface CustomDef { key: string; alias: string; lookup: { value: string
 export interface CodeDef { name: string; scope: string; values: { value: string; desc: string; color: string }[] }
 export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string; days: number }
 export interface SchedOpts {
-  retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
+  retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean; multi_critical?: boolean;
   level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null; res_cals?: boolean; msp_status?: boolean;
 }
 export interface ContractDate { id: number; name: string; task: number; date: string | null; value: number; ld_rate: number; ld_cap: number; grace: number; note: string }
@@ -61,7 +61,7 @@ export interface Project {
 }
 export interface Summary {
   name: string; start: string; finish: string; s: number; f: number; status: string; status_day: number | null; measured_at: string; dur: string; pct: number; work: string; cost: string;
-  bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
+  bl_start: string; bl_finish: string; var_finish: string; pv: string; ev: string; ac: string; spi: number | null; cpi: number | null; tasks: number; done: number; late: number;
   critical: number; milestones: number; error: string | null; week: boolean[]; off_days: number[];
 }
 export interface SubPlan { file: string; name: string; level?: number }

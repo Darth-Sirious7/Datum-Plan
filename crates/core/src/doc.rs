@@ -361,8 +361,31 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         "code" => p.tasks[i].code = v.into(),
         "dur" => {
             let (m, u, e) = parse::dur_any(v, day)?;
+            // Work typed on a task with no resource is fixed, as in MS Project: a new duration changes its units, not its work.
+            let kind: Vec<(bool, bool)> = p.tasks[i].res.iter().map(|a| p.res_idx(a.res).map_or((false, false), |k| (p.resources[k].unassigned, p.resources[k].kind == ResKind::Work))).collect();
             let t = &mut p.tasks[i];
+            let (was, done) = (t.dur, t.act_finish.is_some());
+            if was > 0 && m > 0 && m != was {
+                let fixed_work = t.task_type == TaskType::FixedWork;
+                for (a, &(none, work)) in t.res.iter_mut().zip(&kind) {
+                    if none {
+                        // A finished task keeps its work when shortened (rescaled by the duration); lengthened, each extra minute adds one at 100 %.
+                        a.units = match (done, m > was) { (false, _) => a.units * was as f64 / m as f64, (true, true) => (a.units * was as f64 + (m - was) as f64) / m as f64, (true, false) => a.units };
+                    } else if work && fixed_work {
+                        a.units *= was as f64 / m as f64; // Fixed Work: the people's units follow the duration
+                    }
+                }
+            }
+            // As in MS Project, a finished task given more duration is under way again (the work done stays, the rest is still
+            // to do); given less, it stays finished and its actual finish moves back.
+            let old = t.act_finish.is_some().then_some(t.dur).filter(|&d| d > 0);
+            match old {
+                Some(d) if m > d => (t.pct, t.act_finish) = (((d * 100 + m / 2) / m).min(99) as u8, None),
+                Some(d) if m < d => t.act_finish = None,
+                _ => {}
+            }
             (t.dur, t.unit, t.elapsed) = (m, u, e);
+            if old.is_some_and(|d| m < d) { set_pct(p, i, 100)? }
         }
         "work" => {
             let (m, _) = parse::dur(if v.chars().all(|c| c.is_ascii_digit() || c == '.') { format!("{v}h") } else { v.to_string() }.as_str(), day)?;
@@ -481,12 +504,16 @@ fn set_by(p: &mut Project, i: usize, field: &str, value: &str, fmt: &str, s: Opt
         }
         "res" => {
             let before = work_units(p, i);
+            let ids = |p: &Project| { let mut v: Vec<u32> = p.tasks[i].res.iter().map(|a| a.res).collect(); v.sort_unstable(); v };
+            let people = ids(p);
             let res = parse::res(v, p)?;
             p.tasks[i].res = res;
             let after = work_units(p, i);
-            // Fixed work, or effort-driven fixed units: the work stays and the duration changes.
+            // Fixed work: the work stays and the duration changes. Fixed units too when the same people get other units;
+            // when people are added or taken off, only if the task is effort-driven (as in MS Project).
+            let same_people = ids(p) == people;
             let t = &mut p.tasks[i];
-            if before > 0.0 && after > 0.0 && (t.task_type == TaskType::FixedWork || (t.effort && t.task_type == TaskType::FixedUnits)) {
+            if before > 0.0 && after > 0.0 && (t.task_type == TaskType::FixedWork || (t.task_type == TaskType::FixedUnits && (t.effort || same_people))) {
                 t.dur = (t.dur as f64 * before / after).round() as i64;
             }
         }

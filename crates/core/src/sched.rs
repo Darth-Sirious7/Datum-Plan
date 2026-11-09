@@ -42,7 +42,7 @@ pub struct Sched {
 }
 
 #[derive(Clone, Copy)]
-pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64, /** Elapsed lag: clock time, round the clock. */ pub el: bool }
+pub struct Edge { pub p: usize, pub s: usize, pub kind: LinkType, pub lag: i64, /** Elapsed lag: clock time, round the clock. */ pub el: bool, /** Comes from a link on the predecessor's summary. */ pub up: bool }
 
 /// The other plan's task a task mirrors (SS and FF to it, no lag), as its last known start and finish.
 pub fn mirrored(t: &crate::model::Task) -> Option<(i64, i64)> {
@@ -119,14 +119,17 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         open.push(i);
         up
     }).collect();
-    let leaves_of = |i: usize| -> Vec<usize> { if summary[i] { p.subtree(i).filter(|&j| leaf(j)).collect() } else { vec![i] } };
+    // An inactive summary stands for its inactive tasks, an active one for its active tasks.
+    let leaves_of = |i: usize| -> Vec<usize> { if summary[i] { p.subtree(i).filter(|&j| !summary[j] && off[j] == off[i]).collect() } else { vec![i] } };
+    // Inactive tasks are still scheduled from their predecessors (as in MS Project) but drive nothing.
+    let node = |i: usize| !summary[i];
 
     let mut edges: Vec<Edge> = vec![];
     let (mut inc, mut out) = (vec![vec![]; n], vec![vec![]; n]);
-    for (s, t) in p.tasks.iter().enumerate().filter(|&(s, _)| !off[s]) {
+    for (s, t) in p.tasks.iter().enumerate() {
         for l in &t.preds {
             let Some(&q) = ix.get(&l.pred) else { continue };
-            if off[q] {
+            if off[q] && !off[s] {
                 continue;
             }
             if (summary[q] && p.subtree(q).contains(&s)) || (summary[s] && p.subtree(s).contains(&q)) {
@@ -145,7 +148,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                     let lag = if l.pct { dur[a] * l.lag / 100 } else { l.lag };
                     inc[b].push(edges.len());
                     out[a].push(edges.len());
-                    edges.push(Edge { p: a, s: b, kind: l.kind, lag, el: l.elapsed && !l.pct });
+                    edges.push(Edge { p: a, s: b, kind: l.kind, lag, el: l.elapsed && !l.pct, up: summary[q] });
                 }
             }
         }
@@ -153,7 +156,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
 
     // Topological order (Kahn), stable by row.
     let mut indeg: Vec<usize> = inc.iter().map(Vec::len).collect();
-    let mut order: Vec<usize> = (0..n).filter(|&i| leaf(i) && indeg[i] == 0).collect();
+    let mut order: Vec<usize> = (0..n).filter(|&i| node(i) && indeg[i] == 0).collect();
     let mut k = 0;
     while k < order.len() {
         for &e in &out[order[k]] {
@@ -165,8 +168,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         }
         k += 1;
     }
-    if order.len() < (0..n).filter(|&i| leaf(i)).count() {
-        let i = (0..n).find(|&i| leaf(i) && indeg[i] > 0).unwrap();
+    if order.len() < (0..n).filter(|&i| node(i)).count() {
+        let i = (0..n).find(|&i| node(i) && indeg[i] > 0).unwrap();
         return Err(format!("Circular link: task {} \"{}\" ends up depending on itself.", i + 1, p.tasks[i].name));
     }
 
@@ -232,8 +235,18 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             continue;
         }
         // The earliest start on calendar `c`: finish links and constraints count back on it.
+        // A constraint's moment: the time it was given with (from Project), else the start or end of its working day.
+        let at_time = |cd: NaiveDate| t.ctime.filter(|(d, _)| *d == cd).map(|(_, m)| at(cd) + m as i64);
         let want = |c: &WorkCal| {
-            let mut v = match data { Some(dd) if t.pct == 0 => dd.max(start), _ => start };
+            // No task starts before the plan start, unless a start-no-earlier-than says so or a predecessor
+            // already starts before it (as in MS Project; a lead alone does not pull a task out of the plan).
+            let first_pred = inc[i].iter().filter(|&&e| !loe[edges[e].p]).map(|&e| es[edges[e].p]).min();
+            let base = match (t.constraint, t.cdate) {
+                (C::SNET, Some(cd)) => start.min(at_time(cd).unwrap_or(at(cd))),
+                _ if !(t.manual && t.mstart.is_some()) => first_pred.map_or(start, |f| start.min(f)),
+                _ => start,
+            };
+            let mut v = match data { Some(dd) if t.pct == 0 => dd.max(base), _ => base };
             if !(t.manual && t.mstart.is_some()) {
                 for &e in inc[i].iter().filter(|&&e| !loe[edges[e].p]) {
                     let x = need(&edges[e], &es, &ef);
@@ -242,18 +255,20 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
                 v = v.max(ext_need(i, c, sp).unwrap_or(v));
             }
             if let Some(cd) = t.cdate {
+                let (cs, ce) = (at_time(cd).unwrap_or(at(cd)), at_time(cd).unwrap_or(c.end_of(cd)));
                 match t.constraint {
-                    C::SNET => v = v.max(at(cd)),
-                    C::FNET => v = v.max(c.sub(c.end_of(cd), sp)),
+                    C::SNET => v = v.max(cs),
+                    C::FNET => v = v.max(c.sub(ce, sp)),
                     // A milestone may sit anywhere on its day (at the end of it after a finish).
-                    C::MSO if sp == 0 => v = v.clamp(at(cd), c.end_of(cd).max(at(cd))),
-                    C::MSO => v = at(cd),
-                    C::MFO => v = c.sub(c.end_of(cd), sp),
+                    C::MSO if sp == 0 => v = v.clamp(cs, ce.max(cs)),
+                    C::MSO => v = cs,
+                    C::MFO => v = c.sub(ce, sp),
                     _ => {}
                 }
             }
             if let (true, Some(m)) = (t.manual, t.mstart) {
-                v = at(m);
+                // A manual milestone sits at the end of its day, as MS Project places it (its successors start the next day).
+                v = if sp == 0 { c.end_of(m).max(at(m)) } else { at(m) };
             }
             v
         };
@@ -284,7 +299,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             ef[i] = r.max(es[i]);
         }
     }
-    let mut finish = order.iter().map(|&i| ef[i]).max().unwrap_or(start);
+    let mut finish = order.iter().filter(|&&i| !off[i]).map(|&i| ef[i]).max().unwrap_or(start);
     let back_from = match (o.from_finish, o.finish_date) { (true, Some(f)) => pc.end_of(f), _ => finish };
 
     // Which links drive their successor (for the longest path and the Inspect pane).
@@ -300,21 +315,36 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     let (mut ls, mut lf, mut ff) = (es.clone(), ef.clone(), vec![0i64; n]);
     for &i in order.iter().rev() {
         let (t, c, sp) = (&p.tasks[i], &cals[ci[i].get()], span[i]);
-        let mut v = back_from;
-        let mut free = c.between(ef[i], back_from);
+        // With several critical paths the end of each chain is its own finish; otherwise the end of the plan.
+        // (Inactive successors do not count, nor a manual task's start links: such a task ends its chain.)
+        let ends = out[i].iter().all(|&e| (off[edges[e].s] && !off[i]) || (p.tasks[i].manual && matches!(edges[e].kind, LinkType::SS | LinkType::SF)));
+        let mut v = if o.multi_critical && ends && !fixed[i] { ef[i] } else { back_from };
+        let mut free = c.between(ef[i], v);
         for &e in &out[i] {
             let Edge { s, kind, lag, .. } = edges[e];
             // Finished work, and (with progress override) work already under way, no longer waits for this task.
-            if fixed[s] || (!o.retained && p.tasks[s].act_start.is_some()) {
+            if fixed[s] || (!o.retained && p.tasks[s].act_start.is_some()) || (off[s] && !off[i]) {
+                continue;
+            }
+            // A start link no longer limits a task that has already started (its start is a fact), as in MS Project.
+            if t.act_start.is_some() && matches!(kind, LinkType::SS | LinkType::SF) {
                 continue;
             }
             let lc = &cals[lag_cal(&edges[e])];
+            // A manual task's late dates come from its finish links only: a start link still counts in its free
+            // float but not in its late finish (as MS Project computes them; checked on a manual milestone).
+            if !(t.manual && matches!(kind, LinkType::SS | LinkType::SF)) {
             v = v.min(match kind {
                 LinkType::FS => lc.sub(ls[s], lag),
                 LinkType::SS => c.add(lc.sub(ls[s], lag), sp),
                 LinkType::FF => lc.sub(lf[s], lag),
                 LinkType::SF => c.add(lc.sub(lf[s], lag), sp),
             });
+            }
+            // A link on its summary holds the task but is not its own: it does not count in its free float.
+            if edges[e].up {
+                continue;
+            }
             free = free.min(match kind {
                 LinkType::FS => c.between(lc.add(ef[i], lag), es[s]),
                 LinkType::SS => c.between(lc.add(es[i], lag), es[s]),
@@ -323,16 +353,18 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
             });
         }
         if let Some(cd) = t.cdate {
+            let tm = t.ctime.filter(|(d, _)| *d == cd).map(|(_, m)| at(cd) + m as i64);
+            let (cs, ce) = (tm.unwrap_or(at(cd)), tm.unwrap_or(c.end_of(cd)));
             match t.constraint {
                 // Dates are whole days: a milestone starts "on" its day up to the end of it.
                 C::SNLT | C::MSO if sp == 0 => {
-                    let a = c.next_start(at(cd));
-                    v = if t.constraint == C::MSO { v.clamp(a, c.end_of(cd).max(a)) } else { v.min(c.end_of(cd).max(a)) };
+                    let a = c.next_start(cs);
+                    v = if t.constraint == C::MSO { v.clamp(a, ce.max(a)) } else { v.min(ce.max(a)) };
                 }
-                C::SNLT => v = v.min(c.add(c.next_start(at(cd)), sp)),
-                C::FNLT => v = v.min(c.end_of(cd)),
-                C::MSO => v = c.add(c.next_start(at(cd)), sp),
-                C::MFO => v = c.end_of(cd),
+                C::SNLT => v = v.min(c.add(c.next_start(cs), sp)),
+                C::FNLT => v = v.min(ce),
+                C::MSO => v = c.add(c.next_start(cs), sp),
+                C::MFO => v = ce,
                 _ => {}
             }
         }
@@ -380,15 +412,22 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         }
     }
     let mut tf: Vec<i64> = (0..n).map(|i| if leaf(i) && !fixed[i] && !loe[i] { cals[ci[i].get()].between(ef[i], lf[i]) } else { 0 }).collect();
+    for i in (0..n).filter(|&i| leaf(i)) {
+        // Free float never exceeds total float; a task under way can no longer start late (MS Project shows its start).
+        ff[i] = ff[i].min(tf[i].max(0));
+        if p.tasks[i].act_start.is_some() && !fixed[i] {
+            ls[i] = es[i];
+        }
+    }
     let mut start = start;
     if o.from_finish && o.finish_date.is_some() {
-        start = order.iter().map(|&i| es[i]).min().unwrap_or(start);
+        start = order.iter().filter(|&&i| !off[i]).map(|&i| es[i]).min().unwrap_or(start);
         finish = back_from;
     }
 
     // Longest path: back from the tasks that finish last, through driving links.
     let mut lp = vec![false; n];
-    let mut stack: Vec<usize> = order.iter().copied().filter(|&i| ef[i] >= finish && !loe[i]).collect();
+    let mut stack: Vec<usize> = order.iter().copied().filter(|&i| ef[i] >= finish && !loe[i] && !off[i]).collect();
     while let Some(i) = stack.pop() {
         if std::mem::replace(&mut lp[i], true) {
             continue;
@@ -398,7 +437,7 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     // Float paths: 1 is the longest path, then tasks grouped by total float, most critical first.
     let mut fpath = vec![0u8; n];
     if o.float_paths > 0 {
-        let mut rest: Vec<usize> = order.iter().copied().filter(|&i| !lp[i] && !fixed[i] && !loe[i]).collect();
+        let mut rest: Vec<usize> = order.iter().copied().filter(|&i| !lp[i] && !fixed[i] && !loe[i] && !off[i]).collect();
         rest.sort_by_key(|&i| (tf[i], es[i]));
         order.iter().filter(|&&i| lp[i]).for_each(|&i| fpath[i] = 1);
         let (mut path, mut last) = (1u8, None);
@@ -415,18 +454,39 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
     }
 
     for i in (0..n).filter(|&i| summary[i]) {
-        let kids: Vec<usize> = p.subtree(i).filter(|&j| leaf(j)).collect();
+        let kids: Vec<usize> = p.subtree(i).filter(|&j| !summary[j] && off[j] == off[i]).collect();
         if kids.is_empty() {
             continue;
         }
         es[i] = kids.iter().map(|&j| es[j]).min().unwrap();
         ef[i] = kids.iter().map(|&j| ef[j]).max().unwrap();
-        ls[i] = kids.iter().map(|&j| ls[j]).min().unwrap();
         lf[i] = kids.iter().map(|&j| lf[j]).max().unwrap();
-        tf[i] = kids.iter().filter(|&&j| !loe[j] && !fixed[j]).map(|&j| tf[j]).min().unwrap_or(0);
-        ff[i] = kids.iter().filter(|&&j| !fixed[j]).map(|&j| ff[j]).min().unwrap_or(0);
+        // As MS Project shows a summary: the float of its unfinished tasks that finish last, its free float up to its own successors
+        // (below), and a late start that is its start once under way, else its start moved by that float.
+        let open: Vec<usize> = kids.iter().copied().filter(|&j| !fixed[j] && !loe[j]).collect();
+        let last = open.iter().map(|&j| ef[j]).max();
+        // An elapsed task's float is on the clock: the summary takes it in whole days of the plan (as MS Project does).
+        let plan_days = |j: usize| if p.tasks[j].elapsed { tf[j].div_euclid(DAY) * p.day_min } else { tf[j] };
+        tf[i] = open.iter().filter(|&&j| Some(ef[j]) == last).map(|&j| plan_days(j)).min().unwrap_or(0);
+        ff[i] = tf[i];
+        ls[i] = if kids.iter().any(|&j| p.tasks[j].act_start.is_some()) || tf[i] <= 0 { es[i] } else { pc.add(es[i], tf[i]) };
         lp[i] = kids.iter().any(|&j| lp[j]);
         fpath[i] = kids.iter().map(|&j| fpath[j]).filter(|&f| f > 0).min().unwrap_or(0);
+    }
+    for (s, t) in p.tasks.iter().enumerate().filter(|&(s, _)| !off[s]) {
+        for l in &t.preds {
+            let Some(&q) = ix.get(&l.pred) else { continue };
+            if !summary[q] || off[q] {
+                continue;
+            }
+            let gap = match l.kind {
+                LinkType::FS => pc.between(pc.add(ef[q], l.lag), es[s]),
+                LinkType::SS => pc.between(pc.add(es[q], l.lag), es[s]),
+                LinkType::FF => pc.between(pc.add(ef[q], l.lag), ef[s]),
+                LinkType::SF => pc.between(pc.add(es[q], l.lag), ef[s]),
+            };
+            ff[q] = ff[q].min(gap.max(0));
+        }
     }
     let ci = ci.iter().map(std::cell::Cell::get).collect();
     // Remaining work starts at the start, except for work under way at the status date.
@@ -437,7 +497,17 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
 impl Sched {
     /// Is task `i` critical under the plan's options?
     pub fn critical(&self, p: &Project, i: usize) -> bool {
-        if self.off[i] || self.loe[i] || p.tasks[i].pct >= 100 && !self.summary[i] {
+        if self.off[i] || self.loe[i] {
+            return false;
+        }
+        // A finished task is not critical, and neither is a summary whose tasks are all finished (as in MS Project).
+        let done = if self.summary[i] {
+            let mut leaves = p.subtree(i).filter(|&j| !self.summary[j] && !self.off[j]).peekable();
+            leaves.peek().is_some() && leaves.all(|j| p.tasks[j].pct >= 100)
+        } else {
+            p.tasks[i].pct >= 100
+        };
+        if done {
             return false;
         }
         if p.opts.longest_path { self.lp[i] } else { self.tf[i] <= p.opts.critical_float }

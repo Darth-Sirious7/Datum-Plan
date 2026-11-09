@@ -128,6 +128,175 @@ fn progress_against_the_status_date() {
 }
 
 #[test]
+fn more_duration_reopens_a_finished_task() {
+    let mut doc = Doc::new(plan(&[(4, ""), (4, "1")]));
+    let uid = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Set { uid, field: "pct".into(), value: "100".into() }).unwrap();
+    assert!(doc.p.tasks[0].act_finish.is_some());
+    op(&mut doc, Op::Set { uid, field: "dur".into(), value: "5d".into() }).unwrap();
+    let t = &doc.p.tasks[0];
+    assert!(t.act_finish.is_none() && t.pct < 100 && t.pct > 0); // the work done stays, the rest is to do
+    let s = schedule(&doc.p).unwrap();
+    assert!(s.ef[0] > s.es[0] + 4 * 24 * 60 - 1); // the finish moves with the new duration
+}
+
+#[test]
+fn less_duration_moves_a_finished_tasks_finish_back() {
+    let mut doc = Doc::new(plan(&[(4, ""), (4, "1")]));
+    let uid = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Set { uid, field: "pct".into(), value: "100".into() }).unwrap();
+    let before = doc.p.tasks[0].act_finish.unwrap();
+    op(&mut doc, Op::Set { uid, field: "dur".into(), value: "2d".into() }).unwrap();
+    let t = &doc.p.tasks[0];
+    assert_eq!(t.pct, 100);
+    assert!(t.act_finish.is_some_and(|f| f < before)); // still finished, and earlier
+}
+
+#[test]
+fn work_with_no_resource_stays_fixed_when_the_duration_changes() {
+    let mut p = plan(&[(4, ""), (4, "1")]);
+    p.resources.push(Resource { uid: 900, name: "Project work (no resource)".into(), kind: ResKind::Work, max: 100.0, unassigned: true, ..Default::default() });
+    for t in &mut p.tasks { t.res = vec![Assign { res: 900, units: 2.0, table: 0 }] }
+    let mut doc = Doc::new(p);
+    let (a, b) = (doc.p.tasks[0].uid, doc.p.tasks[1].uid);
+    let work = |d: &Doc, i: usize| d.p.tasks[i].res[0].units * d.p.tasks[i].dur as f64;
+    let w0 = work(&doc, 0);
+    // Not finished: the work stays, the units follow.
+    op(&mut doc, Op::Set { uid: a, field: "dur".into(), value: "6d".into() }).unwrap();
+    assert!((work(&doc, 0) - w0).abs() < 1e-6);
+    // Finished and lengthened: the extra time adds work at 100 % (one more day of the usual day).
+    op(&mut doc, Op::Set { uid: b, field: "pct".into(), value: "100".into() }).unwrap();
+    let (w1, d1) = (work(&doc, 1), doc.p.tasks[1].dur);
+    op(&mut doc, Op::Set { uid: b, field: "dur".into(), value: "5d".into() }).unwrap();
+    assert!((work(&doc, 1) - (w1 + (doc.p.tasks[1].dur - d1) as f64)).abs() < 1e-6);
+}
+
+#[test]
+fn several_critical_paths_make_the_end_of_each_chain_critical() {
+    // Two chains: 10 days and 4 days. Alone, the short one has 6 days of float; with several paths it is critical.
+    let mut p = plan(&[(5, ""), (5, "1"), (2, ""), (2, "3")]);
+    let float = |p: &Project| { let s = schedule(p).unwrap(); (s.tf[2], s.tf[3]) };
+    let (a, b) = float(&p);
+    assert!(a > 0 && b > 0);
+    p.opts.multi_critical = true;
+    assert_eq!(float(&p), (0, 0));
+}
+
+#[test]
+fn a_start_link_no_longer_limits_a_task_that_has_started() {
+    let mut p = plan(&[(10, ""), (3, "1SS+7d"), (15, "")]);
+    p.opts.multi_critical = true; // the end of each chain is critical: B has no float, so A would have none through the SS link
+    assert_eq!(schedule(&p).unwrap().tf[0], 0);
+    p.tasks[0].act_start = Some(d(2026, 11, 2));
+    p.tasks[0].pct = 30;
+    assert!(schedule(&p).unwrap().tf[0] > 0); // its start is a fact: only its own finish matters now
+}
+
+#[test]
+fn fixed_work_keeps_the_work_when_the_duration_changes() {
+    let mut doc = Doc::new(plan(&[(5, ""), (5, "")]));
+    let (a, b) = (doc.p.tasks[0].uid, doc.p.tasks[1].uid);
+    for u in [a, b] { op(&mut doc, Op::Set { uid: u, field: "res".into(), value: "Ana".into() }).unwrap() }
+    let work = |d: &Doc, i: usize| d.p.tasks[i].res[0].units * d.p.tasks[i].dur as f64;
+    op(&mut doc, Op::Set { uid: a, field: "type".into(), value: "Fixed Work".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: b, field: "type".into(), value: "Fixed Units".into() }).unwrap();
+    let (w0, w1) = (work(&doc, 0), work(&doc, 1));
+    for u in [a, b] { op(&mut doc, Op::Set { uid: u, field: "dur".into(), value: "10d".into() }).unwrap() }
+    assert!((work(&doc, 0) - w0).abs() < 1e-6); // Fixed Work: units change, work stays
+    assert!((work(&doc, 1) - 2.0 * w1).abs() < 1e-6); // Fixed Units: work follows the duration
+}
+
+#[test]
+fn a_summary_of_finished_tasks_is_not_critical() {
+    let mut p = plan(&[(0, ""), (3, ""), (3, "2")]);
+    (p.tasks[1].level, p.tasks[2].level) = (1, 1);
+    let s = schedule(&p).unwrap();
+    assert!(s.critical(&p, 0)); // one chain: everything has no float
+    (p.tasks[1].pct, p.tasks[2].pct) = (100, 100);
+    assert!(!schedule(&p).unwrap().critical(&p, 0));
+    p.tasks[2].pct = 40;
+    assert!(schedule(&p).unwrap().critical(&p, 0));
+}
+
+#[test]
+fn fixed_units_units_change_moves_the_duration_but_more_people_do_not() {
+    let mut doc = Doc::new(plan(&[(5, "")]));
+    let u = doc.p.tasks[0].uid;
+    op(&mut doc, Op::Set { uid: u, field: "type".into(), value: "Fixed Units".into() }).unwrap();
+    op(&mut doc, Op::Set { uid: u, field: "res".into(), value: "Ana".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].dur, 5 * D); // the first person: nothing to rescale
+    op(&mut doc, Op::Set { uid: u, field: "res".into(), value: "Ana[200%]".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].dur, 5 * D / 2); // same person, other units: the work stays, the duration follows
+    op(&mut doc, Op::Set { uid: u, field: "res".into(), value: "Ana[200%], Rui".into() }).unwrap();
+    assert_eq!(doc.p.tasks[0].dur, 5 * D / 2); // not effort-driven: one more person does not shorten it
+}
+
+#[test]
+fn a_manual_milestone_sits_at_the_end_of_its_day() {
+    let mut p = plan(&[(0, ""), (2, "1")]);
+    (p.tasks[0].manual, p.tasks[0].mstart) = (true, Some(d(2026, 11, 4)));
+    let s = schedule(&p).unwrap();
+    assert_eq!(when(s.es[0]), "04 17:00");
+    assert_eq!(when(s.es[1]), "05 08:00"); // its successor starts the next day, as in MS Project
+}
+
+#[test]
+fn a_summary_float_is_its_own_finish_to_late_finish() {
+    // Summary 1 holds A (5d) and B (3d after A); C (10d) sets the plan's finish two days later.
+    let mut p = plan(&[(0, ""), (5, ""), (3, "2"), (10, "")]);
+    (p.tasks[1].level, p.tasks[2].level) = (1, 1);
+    let s = schedule(&p).unwrap();
+    assert_eq!((s.tf[0], s.ff[0]), (2 * D, 2 * D));
+}
+
+#[test]
+fn a_snet_before_the_plan_start_holds_and_its_successors_follow() {
+    // The plan starts on 2 Nov; A must start no earlier than 28 Oct; B starts with A; C has a lead on A.
+    let mut p = plan(&[(2, ""), (2, "1SS"), (2, "1SS-1d")]);
+    (p.tasks[0].constraint, p.tasks[0].cdate) = (Constraint::SNET, Some(d(2026, 10, 28)));
+    let s = schedule(&p).unwrap();
+    assert_eq!(date_of(s.es[0]), d(2026, 10, 28));
+    assert_eq!(date_of(s.es[1]), d(2026, 10, 28)); // a predecessor already starts before the plan
+    // Without the constraint, a lead alone does not pull a task before the plan start.
+    p.tasks[0].constraint = Constraint::ASAP;
+    assert_eq!(schedule(&p).unwrap().es[2], schedule(&p).unwrap().es[0]);
+}
+
+#[test]
+fn a_constraint_keeps_its_time_of_day() {
+    // On a 24-hour calendar, finish no earlier than 5 Nov at 17:00 (as Project writes it), not at midnight.
+    let mut p = plan(&[(1, "")]);
+    p.calendars.push(Calendar::full("24 Hours"));
+    p.calendar = "24 Hours".into();
+    (p.tasks[0].constraint, p.tasks[0].cdate, p.tasks[0].ctime) = (Constraint::FNET, Some(d(2026, 11, 5)), Some((d(2026, 11, 5), 17 * 60)));
+    assert_eq!(when(schedule(&p).unwrap().ef[0]), "05 17:00");
+    // A new date drops the old time: then the end of that day counts.
+    p.tasks[0].cdate = Some(d(2026, 11, 6));
+    assert_eq!(when(schedule(&p).unwrap().ef[0]), "07 00:00");
+    // The time goes to Project XML and comes back.
+    p.tasks[0].cdate = Some(d(2026, 11, 5));
+    let f = std::env::temp_dir().join(format!("datum-ctime-{}.xml", std::process::id()));
+    crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let crate::io::Imported::Plan(q, _) = crate::io::import(&f).unwrap() else { panic!("xml should import as a plan") };
+    assert_eq!(q.tasks[0].ctime, Some((d(2026, 11, 5), 17 * 60)));
+    let _ = std::fs::remove_file(&f);
+}
+
+#[test]
+fn a_manual_tasks_start_links_leave_its_late_dates() {
+    // A is manual (2d); B starts with A and holds D (7d) after it. In MS Project A's late finish comes from its
+    // finish links only, so the SS link to the critical B does not make A critical.
+    let mut p = plan(&[(2, ""), (3, "1SS"), (7, "2")]);
+    (p.tasks[0].manual, p.tasks[0].mstart) = (true, Some(d(2026, 11, 2)));
+    assert_eq!(schedule(&p).unwrap().tf[0], 8 * D);
+    p.tasks[0].manual = false;
+    assert_eq!(schedule(&p).unwrap().tf[0], 0); // an automatic task is held by its start link
+    // With several critical paths, a manual task with only start links ends its chain.
+    (p.tasks[0].manual, p.opts.multi_critical) = (true, true);
+    assert_eq!(schedule(&p).unwrap().tf[0], 0);
+}
+
+#[test]
 fn edits_undo_and_cycles() {
     let mut doc = Doc::new(plan(&[(1, ""), (1, "1"), (1, ""), (1, "")]));
     let u: Vec<u32> = doc.p.tasks.iter().map(|t| t.uid).collect();
@@ -278,6 +447,17 @@ fn same_schedule(a: &Project, b: &Project) {
 }
 
 #[test]
+fn msproject_task_types_survive_an_xml_round_trip() {
+    let mut p = rich();
+    (p.tasks[3].task_type, p.tasks[4].task_type, p.tasks[5].task_type) = (TaskType::FixedUnits, TaskType::FixedWork, TaskType::FixedDuration);
+    let f = std::env::temp_dir().join(format!("datum-type-{}.xml", std::process::id()));
+    crate::io::export(&p, &f, "%d-%b-%y", d(2026, 11, 1), &[]).unwrap();
+    let crate::io::Imported::Plan(q, _) = crate::io::import(&f).unwrap() else { panic!("xml should import as a plan") };
+    assert_eq!((q.tasks[3].task_type, q.tasks[4].task_type, q.tasks[5].task_type), (TaskType::FixedUnits, TaskType::FixedWork, TaskType::FixedDuration));
+    let _ = std::fs::remove_file(&f);
+}
+
+#[test]
 fn exchange_round_trips() {
     let p = rich();
     let dir = std::env::temp_dir().join(format!("datum-io-{}", std::process::id()));
@@ -375,6 +555,7 @@ fn leveling_and_task_types() {
     op(&mut doc, Op::Set { uid: u[1], field: "type".into(), value: "Fixed Work".into() }).unwrap();
     op(&mut doc, Op::Set { uid: u[1], field: "res".into(), value: "Welder, Fitter".into() }).unwrap();
     assert_eq!(doc.p.tasks[1].dur, 3 * D / 2);
+    op(&mut doc, Op::Set { uid: u[0], field: "type".into(), value: "Fixed Duration".into() }).unwrap();
     op(&mut doc, Op::Set { uid: u[0], field: "res".into(), value: "Welder, Fitter".into() }).unwrap();
     assert_eq!(doc.p.tasks[0].dur, 2 * D);
     op(&mut doc, Op::Set { uid: u[0], field: "work".into(), value: "8".into() }).unwrap();

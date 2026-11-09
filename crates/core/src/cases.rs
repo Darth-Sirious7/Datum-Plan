@@ -128,8 +128,9 @@ fn summaries_inactive_and_splits() {
     let mut p = build(&["0||", "5d||", "3d|2|", "2d|1|"], plain);
     for t in &mut p.tasks[1..3] { t.level = 1 }
     assert_eq!(dates(&p), ["Nov02 08:00 Nov11 17:00 0", "Nov02 08:00 Nov06 17:00 0", "Nov09 08:00 Nov11 17:00 0", "Nov12 08:00 Nov13 17:00 0"]);
-    // An inactive task and its links are left out (it is not scheduled at all).
-    check("inactive", &["5d||", "10d|1|active=No", "2d|2|"], plain, &["Nov02 08:00 Nov06 17:00 0", "Nov02 08:00 Nov02 08:00 0", "Nov02 08:00 Nov03 17:00 3"]);
+    // An inactive task is still scheduled from its predecessors (as in MS Project) but drives nothing:
+    // its successor starts as if it were not there, and it has no float of its own.
+    check("inactive", &["5d||", "10d|1|active=No", "2d|2|"], plain, &["Nov02 08:00 Nov06 17:00 0", "Nov09 08:00 Nov20 17:00 0", "Nov02 08:00 Nov03 17:00 3"]);
     // A split: one day of work, a two-day pause, then the remaining four days.
     let mut doc = Doc::new(build(&["5d||", "1d|1|"], plain));
     let uid = doc.p.tasks[0].uid;

@@ -34,6 +34,7 @@ fn round_trip(p: &Project, ext: &str) -> Project {
 fn baseline_work_is_frozen() {
     let mut doc = Doc::new(plan(&[(2, "")]));
     doc.p.resources.push(Resource { uid: 1, name: "Fitter".into(), max: 2.0, ..Default::default() });
+    set(&mut doc, 0, "type", "Fixed Duration"); // so that other units change the work, not the duration
     set(&mut doc, 0, "res", "Fitter");
     op(&mut doc, Op::Baseline { uids: vec![], clear: false, n: 0 });
     let c = Calc::new(&doc.p, "%d-%b-%y", d(2026, 11, 1));

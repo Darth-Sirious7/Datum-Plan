@@ -61,7 +61,7 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         let _ = write!(o, "<StatusDate>{}</StatusDate>", dt(at(st) + 17 * 60));
     }
     // Project's "move start of remaining parts before the status date forward": Datum style when on.
-    let _ = write!(o, "<MoveRemainingStartsForward>{}</MoveRemainingStartsForward>", !p.opts.msp_status as u8);
+    let _ = write!(o, "<MoveRemainingStartsForward>{}</MoveRemainingStartsForward><MultipleCriticalPaths>{}</MultipleCriticalPaths>", !p.opts.msp_status as u8, p.opts.multi_critical as u8);
     o.push_str("\n<Calendars>");
     for (k, c) in p.calendars.iter().enumerate() {
         let _ = write!(o, "<Calendar><UID>{}</UID><Name>{}</Name><IsBaseCalendar>1</IsBaseCalendar><BaseCalendarUID>-1</BaseCalendarUID><WeekDays>", k + 1, esc(&c.name));
@@ -107,14 +107,16 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         let num = wbs.iter().map(u32::to_string).collect::<Vec<_>>().join(".");
         let (dn, cons, cdate) = super::held(p, s, i, held[i]);
         let (sum, d) = (s.summary[i], if s.summary[i] { s.cals[s.ci[i]].between(s.es[i], s.ef[i]) } else { dn });
-        let _ = write!(o, "<Task><UID>{}</UID><ID>{}</ID><Name>{}</Name><Active>{}</Active><Manual>{}</Manual><Type>0</Type><IsNull>0</IsNull><WBS>{num}</WBS><OutlineNumber>{num}</OutlineNumber>\
+        let _ = write!(o, "<Task><UID>{}</UID><ID>{}</ID><Name>{}</Name><Active>{}</Active><Manual>{}</Manual><Type>{}</Type><IsNull>0</IsNull><WBS>{num}</WBS><OutlineNumber>{num}</OutlineNumber>\
 <OutlineLevel>{}</OutlineLevel><Start>{}</Start><Finish>{}</Finish><Duration>{}</Duration><DurationFormat>{}</DurationFormat><Milestone>{}</Milestone><Summary>{}</Summary>\
 <Critical>{}</Critical><PercentComplete>{}</PercentComplete><PhysicalPercentComplete>{}</PhysicalPercentComplete><EarnedValueMethod>{}</EarnedValueMethod>\
 <FixedCost>{}</FixedCost><FixedCostAccrual>{}</FixedCostAccrual><ConstraintType>{}</ConstraintType><CalendarUID>{}</CalendarUID><Cost>{:.2}</Cost>",
-            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && d == 0) as u8, sum as u8,
+            t.uid, i + 1, esc(&t.name), !t.inactive as u8, t.manual as u8, match t.task_type { TaskType::FixedUnits => 0, TaskType::FixedDuration => 1, TaskType::FixedWork => 2 }, lv + 1, dt(s.es[i]), dt(s.ef[i]), dur(d), unit_code(t.unit) + t.elapsed as u8, (!sum && d == 0) as u8, sum as u8,
             (s.tf[i] <= 0) as u8, t.pct, t.phys, (t.pct_type == PctType::Physical) as u8, t.fixed_cost, match t.accrual { Accrual::Start => 1, Accrual::Prorated => 2, Accrual::End => 3 }, CONS.iter().position(|c| *c == cons).unwrap_or(0), t.cal.as_deref().map_or(-1, |c| cal_uid(c) as i64), cost[i]);
         if let Some(c) = cdate {
-            let _ = write!(o, "<ConstraintDate>{}T08:00:00</ConstraintDate>", c);
+            // The time it was given with, else the usual start (or finish, for a finish constraint) of a day.
+            let m = t.ctime.filter(|(d, _)| *d == c).map(|(_, m)| m).unwrap_or(if matches!(cons, Constraint::FNET | Constraint::FNLT | Constraint::MFO) { 17 * 60 } else { 8 * 60 });
+            let _ = write!(o, "<ConstraintDate>{}T{:02}:{:02}:00</ConstraintDate>", c, m / 60, m % 60);
         }
         if t.ignore_rc {
             o.push_str("<IgnoreResourceCalendar>1</IgnoreResourceCalendar>");
@@ -268,7 +270,9 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
             pct: t.val("PercentComplete").parse().unwrap_or(0),
             constraint: t.val("ConstraintType").parse::<usize>().ok().and_then(|i| CONS.get(i).copied()).unwrap_or_default(),
             cdate: date(t.val("ConstraintDate")), deadline: date(t.val("Deadline")),
+            ctime: date(t.val("ConstraintDate")).zip(t.val("ConstraintDate").get(11..16).and_then(|h| Some(h.get(..2)?.parse::<u16>().ok()? * 60 + h.get(3..)?.parse::<u16>().ok()?))),
             manual: t.val("Manual") == "1", inactive: t.val("Active") == "0",
+            task_type: match t.val("Type") { "0" => TaskType::FixedUnits, "2" => TaskType::FixedWork, "1" => TaskType::FixedDuration, _ => TaskType::default() }, effort: t.val("EffortDriven") == "1",
             cal: cal_names.get(t.val("CalendarUID")).cloned(),
             act_start: date(t.val("ActualStart")), act_finish: date(t.val("ActualFinish")),
             code: t.val("Text1").to_string(), notes: t.get("Notes").map_or(String::new(), |n| n.text.clone()),
@@ -348,6 +352,12 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     // Unless the file asks for remaining work to move forward to the status date (Project's
     // calculation option, which Datum Plan writes), the status date measures progress only.
     p.opts.msp_status = root.val("MoveRemainingStartsForward") != "1";
+    p.opts.multi_critical = root.val("MultipleCriticalPaths") == "1";
+    // New tasks follow the project's own defaults (MS Project: Fixed Units, not effort driven unless set).
+    if let "0" | "1" | "2" = root.val("DefaultTaskType") {
+        p.opts.task_type_default = match root.val("DefaultTaskType") { "0" => TaskType::FixedUnits, "2" => TaskType::FixedWork, _ => TaskType::FixedDuration };
+        p.opts.effort_default = root.val("NewTasksEffortDriven") == "1";
+    }
     // Project's flag moves only the remaining parts of tasks under way; Datum style also holds
     // unstarted work back, so the two match when the flag is off and differ a little when on.
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();

@@ -187,7 +187,9 @@ impl<'a> Calc<'a> {
             }
             let kids: Vec<&Task> = p.subtree(i).skip(1).filter(|&j| !s.summary[j] && !s.off[j]).map(|j| &p.tasks[j]).collect();
             let w: i64 = kids.iter().map(|k| k.dur).sum();
-            if w > 0 { (kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64).round() as u8 } else { (kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64).round() as u8 }
+            let v = if w > 0 { (kids.iter().map(|k| k.pct as f64 * k.dur as f64).sum::<f64>() / w as f64).round() as u8 } else { (kids.iter().map(|k| k.pct as f64).sum::<f64>() / kids.len().max(1) as f64).round() as u8 };
+            // 100 % only once every task under it is done (MS Project shows 99 % until then).
+            if kids.iter().all(|k| k.pct >= 100) { v } else { v.min(99) }
         }).collect();
         let defs = p.fields.iter().map(|d| (d.key.clone(), (d.clone(), formula::parse(&d.formula).ok().filter(|_| !d.formula.trim().is_empty())))).collect();
         let mut names: HashMap<String, String> = task_fields().iter().map(|f| (f.name.to_lowercase(), f.key.clone())).collect();
@@ -494,6 +496,8 @@ impl<'a> Calc<'a> {
             (Kind::Dur, x) => {
                 let m = x.num().round() as i64;
                 if matches!(key, "dur" | "rem" | "adur") && t.elapsed { parse::fmt_edur(m, t.unit) }
+                // An elapsed task's float is on the clock (24-hour days), shown in elapsed days as MS Project does.
+                else if matches!(key, "tf" | "ff") && t.elapsed && !self.s.summary[i] { parse::fmt_edur(m, Unit::D) }
                 else { parse::fmt_dur(m, if matches!(key, "dur" | "rem" | "adur") && !self.s.summary[i] { t.unit } else { Unit::D }, p.day_min) }
             }
             (Kind::Date, F::Date(d)) => date_of(*d).format(&self.fmt).to_string(),
