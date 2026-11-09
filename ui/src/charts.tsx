@@ -8,8 +8,13 @@ import { money } from "./api";
 
 Chart.register(...registerables);
 
-/** The chart colours: clear and easy to tell apart (also for most colour-blind readers). */
-export const COL = { blue: "#3B82F6", orange: "#F59E0B", green: "#10B981", red: "#EF4444", purple: "#8B5CF6", sky: "#38BDF8", yellow: "#EAB308", grey: "#A3ABB8", black: "#1F2937" };
+/** The chart colours: clear and easy to tell apart. With Options › Colour-blind safe colours they
+ * become the Okabe-Ito set, told apart with every common kind of colour-blindness. */
+const STD = { blue: "#3B82F6", orange: "#F59E0B", green: "#10B981", red: "#EF4444", purple: "#8B5CF6", sky: "#38BDF8", yellow: "#EAB308", grey: "#A3ABB8", black: "#1F2937" };
+const SAFE = { blue: "#0072B2", orange: "#E69F00", green: "#009E73", red: "#D55E00", purple: "#CC79A7", sky: "#56B4E9", yellow: "#C9B200", grey: "#A3ABB8", black: "#1F2937" };
+export const COL = { ...STD };
+/** Switches the chart and status colours (the page's `data-cb`) to the colour-blind safe set or back. */
+export const setColourSafe = (on: boolean) => { Object.assign(COL, on ? SAFE : STD); document.documentElement.dataset.cb = on ? "1" : "0"; };
 
 const cssv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -197,7 +202,7 @@ export const ChartBox = (p: ChartProps) => {
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
+      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={() => ch && import("./picture").then(m => m.copyCanvas(ch!.canvas, p.title))} title="Copy the chart as a picture, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

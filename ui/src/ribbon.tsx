@@ -53,7 +53,23 @@ const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boole
     {p.run && p.dd && <button class="rb sarr" title={`${p.l} options`} onClick={e => p.dd!(e)}>▾</button>}
   </div>
 );
-const G = (p: { l: string; h?: string; children: JSX.Element }) => <div class="grp"><div class="items">{p.children}</div><div class="cap">{p.l}{p.h && <Help k={p.h} />}</div></div>;
+const G = (p: { l: string; h?: string; children: JSX.Element }) => {
+  let g!: HTMLDivElement;
+  // Folded (a narrow window): one button with the group's name opens its commands, named, below it.
+  const open = (e: MouseEvent) => {
+    const was = g.classList.contains("open");
+    document.querySelectorAll(".ribbon .grp.open").forEach(x => x.classList.remove("open"));
+    if (was) return;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect(), items = g.querySelector<HTMLElement>(".items")!;
+    g.classList.add("open");
+    items.style.left = `${Math.max(4, Math.min(r.left, innerWidth - items.offsetWidth - 8))}px`;
+    items.style.top = `${r.bottom + 2}px`;
+    const close = (ev: MouseEvent) => { if (!items.contains(ev.target as Node) && ev.target !== e.currentTarget) { g.classList.remove("open"); removeEventListener("mousedown", close, true); } };
+    addEventListener("mousedown", close, true);
+  };
+  const ran = (e: MouseEvent) => { if (g.classList.contains("open") && (e.target as Element).closest("button") && !(e.target as Element).closest(".dd")) setTimeout(() => g.classList.remove("open"), 0); };
+  return <div class="grp" ref={g}><div class="items" onClick={ran}>{p.children}</div><button class="gfold" title={p.l} onClick={open}><span>{p.l}</span> ▾</button><div class="cap">{p.l}{p.h && <Help k={p.h} />}</div></div>;
+};
 const S = (p: { children: JSX.Element }) => <div class="stack">{p.children}</div>;
 
 const views: [string, string, Parameters<typeof C.view>[0]][] = [
@@ -83,7 +99,14 @@ const zoomMenu = (): Item[] => [
   ...([["Days", 40], ["Weeks", 14], ["Months", 4], ["Quarters", 1.6], ["Years", 0.5]] as [string, number][]).map(([l, z]) => ({ label: l, run: () => setZoom(z) })),
   "-", { label: "Zoom In", run: C.zoomIn }, { label: "Zoom Out", run: C.zoomOut }, { label: "Entire Project", run: C.fit },
 ];
-const exportMenu = (): Item[] => [["Excel workbook (.xlsx)", "xlsx"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
+/** Report › Copy Picture: the task sheet and Gantt as shown. */
+const copyGantt = async () => {
+  if (!["gantt", "tracking"].includes(view())) return toast("Copy Picture copies the Gantt chart: open the Gantt (or the Tracking Gantt) first. Each chart has its own Copy button.");
+  const { ganttPicture } = await import("./gantt"), { copyCanvas } = await import("./picture");
+  const cv = ganttPicture();
+  if (cv) copyCanvas(cv, "The Gantt chart");
+};
+const exportMenu = (): Item[] => [["Workbook (.xlsx)", "xlsx"], ["OpenDocument spreadsheet (.ods)", "ods"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
 const baselineMenu = (): Item[] => Array.from({ length: 11 }, (_, k) => ({ label: k ? `Baseline ${k}` : "Baseline", run: () => { setBaseline(k); setShowBase(true); }, on: baseline() === k && showBase() }));
 
 /** Tell Me / command search (Ctrl+K, Alt+Q). */
@@ -134,7 +157,7 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
   </header>
 );
 
-/** Shrinks the ribbon in steps (labels of small buttons, then of big ones) instead of scrolling sideways. */
+/** Fits the ribbon to the window instead of scrolling sideways: tighter spacing, then groups folded from the right. */
 const fitRibbon = (el: HTMLElement) => {
   // Tighten everything first, then fold groups from the right: small-button labels, then big-button labels.
   const fit = () => {
@@ -143,7 +166,9 @@ const fitRibbon = (el: HTMLElement) => {
     const over = () => el.scrollWidth > el.clientWidth + 1;
     if (!over()) return;
     el.dataset.fit = "1";
-    for (const lvl of ["2", "3"]) for (let i = gs.length - 1; i >= 0 && over(); i--) gs[i].dataset.fit = lvl;
+    // Whole groups fold from the right into a button with the group's name, its commands named
+    // below it (never a row of icons without names).
+    for (let i = gs.length - 1; i >= 0 && over(); i--) gs[i].dataset.fit = "4";
   };
   new ResizeObserver(fit).observe(el);
   new MutationObserver(() => requestAnimationFrame(fit)).observe(el, { childList: true, subtree: false });
@@ -222,7 +247,7 @@ const SheetCells = () => {
       <B i="list" l="Validation" title="Data validation: a drop-down list, or whole numbers, decimals, dates, times or a text length within bounds" run={run("editList")} dd={e => openMenu(e, [{ label: "Data Validation…", run: run("editList") }, "-", { label: "Circle Invalid Data", run: run("circle") }, { label: "Clear Validation Circles", off: !A()?.circling(), run: run("clearCircles") }])} />
       <B i="note" l="Note" title="A note on the cell (Shift+F2)" run={run("editNote")} dd={e => openMenu(e, [{ label: "New or Edit Note…", keys: "Shift+F2", run: run("editNote") }, { label: "Delete Notes", run: run("deleteNotes") }])} /></S>
       <S><B i="fields" l="Names" title="Defined names: call a range, a value or a formula by name in any sheet's formulas" run={run("nameManager")} dd={e => openMenu(e, [{ label: "Define Name…", run: run("defineName") }, { label: "Name Manager…", run: run("nameManager") }])} /></S></G>
-    <G l="Insert" h="sheets"><S><B i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /><B i="link" l="Link…" title="A web or mail link in the cell (Ctrl+K); Ctrl+click opens it" run={run("editLink")} /></S><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Excel Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
+    <G l="Insert" h="sheets"><S><B i="image" l="Picture" dd={run("picture")} title="Place a logo or picture from the plan's library on the selected cell" /><B i="fx" l="AutoSum" run={() => A()?.autoSum("SUM")} dd={e => openMenu(e, (A()?.sumItems() ?? []) as Item[])} /><B i="link" l="Link…" title="A web or mail link in the cell (Ctrl+K); Ctrl+click opens it" run={run("editLink")} /></S><S><B i="fx" l="Function" run={run("insertFn")} /><B i="table" l="Plan Data" run={run("planData")} /><B i="import" l="Workbook…" title="Bring the sheets of a workbook (.xlsx, .xls, .ods) in as sheet tabs: values, formulas, formats, styles, merged cells, sizes, pictures" run={importWorkbook} /></S></G>
   </>;
 };
 /** Sheet Tools › Format, second part: the page views, page setup and printing. Each sheet keeps its own page setup. */
@@ -243,7 +268,7 @@ const SheetPageTab = () => {
       <B i="fit" l={`Width: ${pg().fit_w ? `${pg().fit_w} page${pg().fit_w! > 1 ? "s" : ""}` : "Automatic"}`} dd={e => openMenu(e, [{ label: "Automatic", on: !pg().fit_w, run: () => set({ fit_w: 0 }) }, ...[1, 2, 3, 4].map(n => ({ label: `${n} page${n > 1 ? "s" : ""}`, on: pg().fit_w === n, run: () => set({ fit_w: n }) }))])} />
       <B i="fit" l={`Height: ${pg().fit_h ? `${pg().fit_h} page${pg().fit_h! > 1 ? "s" : ""}` : "Automatic"}`} dd={e => openMenu(e, [{ label: "Automatic", on: !pg().fit_h, run: () => set({ fit_h: 0 }) }, ...[1, 2, 3, 4].map(n => ({ label: `${n} page${n > 1 ? "s" : ""}`, on: pg().fit_h === n, run: () => set({ fit_h: n }) }))])} />
       <B i="zin" l={`Scale: ${pg().scale || 100} %`} off={!!(pg().fit_w || pg().fit_h)} dd={e => openMenu(e, [50, 70, 80, 90, 100, 110, 125, 150].map(n => ({ label: `${n} %`, on: (pg().scale || 100) === n, run: () => set({ scale: n === 100 ? 0 : n }) })))} /></S></G>
-    <G l="Print" h="report"><S><B i="grid" l="Print Options" title="What goes on the paper: header and footer, gridlines, row and column labels, centring" dd={e => openMenu(e, [{ label: "Header & Footer", on: !pg().no_hf, run: () => set({ no_hf: !pg().no_hf }) }, { label: "Gridlines", on: !pg().no_grid, run: () => set({ no_grid: !pg().no_grid }) }, { label: "Row & Column Labels", on: !!pg().headings, run: () => set({ headings: !pg().headings }) }, { label: "Centre on Page", on: !!pg().center, run: () => set({ center: !pg().center }) }])} /><B i="print" l="Print Preview" run={C.print} /><B i="export" l="Save as Excel" title="Save the sheets as an Excel workbook to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></S></G>
+    <G l="Print" h="report"><S><B i="grid" l="Print Options" title="What goes on the paper: header and footer, gridlines, row and column labels, centring" dd={e => openMenu(e, [{ label: "Header & Footer", on: !pg().no_hf, run: () => set({ no_hf: !pg().no_hf }) }, { label: "Gridlines", on: !pg().no_grid, run: () => set({ no_grid: !pg().no_grid }) }, { label: "Row & Column Labels", on: !!pg().headings, run: () => set({ headings: !pg().headings }) }, { label: "Centre on Page", on: !!pg().center, run: () => set({ center: !pg().center }) }])} /><B i="print" l="Print Preview" run={C.print} /><B i="export" l="Save as Workbook" title="Save the sheets as a workbook (.xlsx) to share; formulas, formats, styles, merged cells, pictures and page setup go with them" run={exportSheets} /></S></G>
   </>;
 };
 export const Ribbon = () => (
@@ -277,7 +302,7 @@ export const Ribbon = () => (
       <G l="View Reports" h="reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health" h="health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /><B big i="ev" l="Schedule Risk" run={() => C.view("simrisk")} /></G>
       <G l="Portfolio" h="portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
-      <G l="Export" h="export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
+      <G l="Export" h="export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /><B big i="copy" l="Copy Picture" title="Copy the task sheet and the Gantt chart as shown (the rows and dates in view), to paste into a document, slides or a workbook" run={copyGantt} /></G>
     </Show>
     <Show when={tab() === "project"}>
       <G l="Properties" h="project"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="fields" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S><S><B i="image" l="Pictures" title="The plan's pictures: logos of the client, your company, vendors and sub-vendors" run={() => import("./pictures").then(m => m.pictureLibrary())} /></S>

@@ -903,7 +903,7 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .simg .corner { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: var(--blue); border: 1px solid #fff; cursor: nwse-resize; }
 .simg .x { position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; line-height: 17px; }
 @media print { .simg.on { outline: 0; } .simg .corner, .simg .x { display: none; } }
-/* 0.5.17 Sheet Tools: row heights, merged cells, cell styles, Excel-style tabs */
+/* 0.5.17 Sheet Tools: row heights, merged cells, cell styles, spreadsheet-style tabs */
 .sheetgrid .rowh { position: sticky; }
 .sheetgrid .rowh.on { background: var(--sel2); color: var(--navy); }
 .rowh .rszr { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: row-resize; z-index: 3; }
@@ -1126,3 +1126,26 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .pool { overflow-x: auto; }
 .pool th.pb { font-size: 9.5px; padding: 2px 1px; min-width: 14px; text-align: center; }
 .pool td.pc { padding: 0; min-width: 14px; height: 18px; border-left: 1px solid #fff; }
+/* Narrow windows: a ribbon group folds into one button with its name; its commands open below it, named. */
+.ribbon .grp .gfold { display: none; }
+.ribbon .grp[data-fit="4"] { padding: 0 2px; }
+.ribbon .grp[data-fit="4"] .gfold { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 76px; padding: 0 8px; font-size: 11.5px; color: var(--ink); white-space: nowrap; border-radius: 3px; }
+.ribbon .grp[data-fit="4"] .gfold:hover, .ribbon .grp[data-fit="4"].open .gfold { background: var(--sel); }
+.ribbon .grp[data-fit="4"] .gfold span { font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.ribbon .grp[data-fit="4"] .cap { display: none; }
+.ribbon .grp[data-fit="4"] .items { display: none; }
+.ribbon .grp[data-fit="4"].open .items { display: flex; position: fixed; z-index: 60; background: var(--bg2); border: 1px solid var(--line3); box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; gap: 4px; }
+.ribbon .grp[data-fit="4"].open .items .stack .rb span { display: revert; }
+/* Dialogs move by their title bar. */
+.dlg header { cursor: move; user-select: none; }
+/* Short windows: a compact File page. */
+@media (max-height: 700px) { .bs aside button { padding: 6px 0; gap: 2px; font-size: 12px; } .bs aside .back { padding: 6px 0 8px; } }
+/* Colour-blind safe statuses (Options): blue for good, yellow-orange for warnings, vermillion for problems. */
+:root[data-cb="1"] .st.good { background: #DCEBF7; color: #0B4F7A; }
+:root[data-cb="1"] .st.warn { background: #FFF1C9; color: #6B5300; }
+:root[data-cb="1"] .st.bad { background: #FADCCB; color: #8A3300; }
+:root[data-cb="1"] .kpi.bad .v, :root[data-cb="1"] td.bad, :root[data-cb="1"] .late { color: #B34700; }
+:root[data-cb="1"] .kpi.good .v { color: #0B4F7A; }
+/* Over capacity: a dot as well as the colour. */
+.pool td.pc.ov { text-align: center; font-size: 10px; line-height: 1; color: #6E2A0C; }
+.pool td.pc.ov::after { content: "●"; }

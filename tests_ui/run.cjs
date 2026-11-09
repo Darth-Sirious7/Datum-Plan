@@ -42,6 +42,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   };
   await p.addInitScript(mock, fix);
   const bridge = mock;
+  /** Clicks a ribbon button, first opening its group when a narrow ribbon has folded it into a named button. */
+  const click0 = p.click.bind(p);
+  const rclick = async (sel, o) => { const h = await p.$(sel); if (h && !(await h.isVisible())) { await p.evaluate(el => el.closest(".grp")?.querySelector(".gfold")?.click(), h); await p.waitForTimeout(150); } return click0(sel, o); };
+  p.click = (sel, o) => (typeof sel === "string" && sel.startsWith(".ribbon ") ? rclick(sel, o) : click0(sel, o));
   await p.goto(url);
   await p.waitForTimeout(700);
   await p.click(".bs aside .back");
@@ -553,6 +557,50 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Progress shows the weighted S-curve and orders by sub-vendor", !!(await p.$(".page canvas")) && (await p.textContent(".page")).includes("By sub-vendor"));
   if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-proc.png") }); }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  // 0.7.2 (from Datum Plot's testers): Enter keeps what was typed; dialogs move; small screens.
+  await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Project Information')"); await p.waitForTimeout(300);
+  const pin = ".dlg .bd input[type=text] >> nth=0";
+  await p.fill(pin, "Typed then Enter"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+  check("pressing Enter in a dialog keeps what was just typed in the box", !(await p.$(".dlg")) && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-3))).includes("Typed then Enter"));
+  await p.click(".ribbon button:has-text('Project Information')"); await p.waitForTimeout(300);
+  const b0 = await p.$eval(".dlg", d => d.getBoundingClientRect().left);
+  const hb = await p.$eval(".dlg header", h => { const r = h.getBoundingClientRect(); return [r.left + 60, r.top + 10]; });
+  await p.mouse.move(hb[0], hb[1]); await p.mouse.down(); await p.mouse.move(hb[0] - 200, hb[1] + 30, { steps: 5 }); await p.mouse.up();
+  check("a dialog moves when its title bar is dragged", Math.abs((await p.$eval(".dlg", d => d.getBoundingClientRect().left)) - (b0 - 200)) < 2);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+  await p.setViewportSize({ width: 1092, height: 589 }); await p.waitForTimeout(400);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(300);
+  const folded = await p.$$eval(".ribbon .grp", gs => gs.map(g => [g.dataset.fit ?? "", g.querySelector(".gfold")?.textContent ?? "", getComputedStyle(g.querySelector(".gfold")).display]));
+  check("on a small screen (1092 × 589) ribbon groups fold into buttons with their names, never icons without names", folded.some(g => g[0] === "4" && g[2] !== "none" && /\w/.test(g[1])) && folded.every(g => g[0] !== "3") && (await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth)) <= 1, JSON.stringify(folded));
+  const fb = await p.$(".ribbon .grp[data-fit='4'] .gfold"); await fb.click(); await p.waitForTimeout(200);
+  const pop = await p.$eval(".ribbon .grp.open .items", it => [getComputedStyle(it).display, [...it.querySelectorAll(".rb span")].filter(x => getComputedStyle(x).display !== "none" && x.textContent.trim()).length, it.getBoundingClientRect().top]);
+  check("…and a folded group opens its commands below it, with their names", pop[0] === "flex" && pop[1] > 0 && pop[2] > 60, JSON.stringify(pop));
+  await p.mouse.click(700, 450); await p.waitForTimeout(150);
+  check("…closing again on a click elsewhere", !(await p.$(".ribbon .grp.open")));
+  const dh = await p.evaluate(() => { const d = document.querySelector(".dsplit")?.nextElementSibling; return d ? d.getBoundingClientRect().height : 0; });
+  check("on a short window the details pane is shown and leaves room for the task rows", dh > 50 && dh <= 589 * 0.34 + 1, String(dh));
+  await p.click(".tabs > button:text-is('View')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Details')"); await p.waitForTimeout(150);
+  check("…and hiding it is remembered for the next start", !(await p.$(".dsplit")) && (await p.evaluate(() => localStorage.getItem("pane-details"))) === "0");
+  await p.click(".ribbon button:has-text('Details')"); await p.waitForTimeout(150);
+  check("…as is showing it again", !!(await p.$(".dsplit")) && (await p.evaluate(() => localStorage.getItem("pane-details"))) === "1");
+  await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
+  // 0.7.4: Copy Picture (Gantt and charts) and OpenDocument spreadsheet export.
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300);
+  await p.click(".tabs > button:text-is('Report')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Copy Picture')"); await p.waitForTimeout(600);
+  const cp = await p.evaluate(() => { const c = window.__calls.filter(x => x[0] === "copy_picture").pop()?.[1]; if (!c) return null; const d = atob(c.dib.slice(0, 64)); const v = new DataView(Uint8Array.from(atob(c.dib), ch => ch.charCodeAt(0)).buffer); return { png: c.png.startsWith("data:image/png"), hdr: v.getUint32(0, true), w: v.getInt32(4, true), h: v.getInt32(8, true), bits: v.getUint16(14, true), len: atob(c.dib).length, d: d.length }; });
+  check("Report › Copy Picture copies the task sheet and Gantt as a PNG and a bitmap (DIB)", !!cp && cp.png && cp.hdr === 40 && cp.bits === 32 && cp.w > 800 && cp.h > 200 && cp.len === 40 + cp.w * cp.h * 4 && (await p.textContent("#toast")).includes("copied"), JSON.stringify(cp));
+  await p.click(".ribbon button:has-text('Export')"); await p.waitForTimeout(200);
+  check("Export offers an OpenDocument spreadsheet (.ods)", (await p.textContent(".menu")).includes("OpenDocument spreadsheet (.ods)"));
+  await p.click(".menu button:has-text('OpenDocument spreadsheet')"); await p.waitForTimeout(300);
+  check("…and exports the task table to it", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "export").pop()?.[1]?.kind)) === '"ods"');
+  await p.click('.side button[title="Dashboard"]'); await p.waitForTimeout(600);
+  await p.evaluate(() => { window.__calls.length = 0; });
+  await p.click(".chartbox header button:has-text('Copy') >> nth=0"); await p.waitForTimeout(400);
+  check("every chart has Copy, to paste it as a picture", (await p.evaluate(() => window.__calls.filter(c => c[0] === "copy_picture").length)) === 1);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.7.0: Portfolio: plans with their modules, a timeline, and the shared resource pool.
   await p.click('.side button[title="Portfolio"]'); await p.waitForTimeout(400);
   const pk = await p.textContent(".kpis");
@@ -569,6 +617,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".page button:has-text('Take resources from the pool')"); await p.waitForTimeout(300);
   check("this plan takes its resources' rates, units and calendars from the pool", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "pool_take").pop()?.[1])) === '{"add":false}');
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-pool.png") });
+  check("periods over capacity carry a mark as well as a colour", (await p.$$(".pool td.pc.ov")).length === 1);
+  // 0.7.3: colour-blind safe colours (Options), statuses keep their words.
+  await p.click(".tabs .file"); await p.waitForTimeout(200); await p.click(".bs aside button:has-text('Options')"); await p.waitForTimeout(300);
+  await p.click(".opt:has-text('Colour-blind safe colours') input"); await p.waitForTimeout(150);
+  check("Options › Colour-blind safe colours switches the colours at once", await p.evaluate(() => document.documentElement.dataset.cb === "1"));
+  await p.click(".options button:has-text('Save')"); await p.waitForTimeout(300);
+  check("…and is kept with the options", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "set_options").pop()?.[1].opts.colourSafe)) === "true");
+  await p.click(".options .opt:has-text('Colour-blind safe colours') input"); await p.click(".options button:has-text('Save')"); await p.waitForTimeout(200);
+  await p.click(".bs aside .back"); await p.waitForTimeout(200);
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.5.28: the master gives its setup (ticked parts) to the ticked subplans; name and code stay theirs.
   await p.click(".plantabs .plantab >> nth=0", { button: "right" }); await p.waitForTimeout(200);
@@ -727,11 +784,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.5.20: workbooks in and out; Backspace edits.
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
-  await p.click(".ribbon button:has-text('Excel Workbook')"); await p.waitForTimeout(400);
-  check("Insert › Excel Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
+  await p.click(".ribbon button:has-text('Workbook')"); await p.waitForTimeout(400);
+  check("Insert › Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
-  await p.click(".ribbon button:has-text('Save as Excel')"); await p.waitForTimeout(300);
-  check("Page › Save as Excel saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
+  await rclick(".ribbon button:has-text('Save as Workbook')"); await p.waitForTimeout(300);
+  check("Page › Save as Workbook saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Backspace"); await p.waitForTimeout(150);

@@ -31,7 +31,13 @@ jobs:
           fi
           echo "V=$V" >> "$GITHUB_ENV"
       - run: cargo test -p datum-core -p datum-cli
-      - run: npx tauri build --bundles nsis
+      - name: Build the installer
+        # The installer tools are downloaded from GitHub releases, which sometimes answer 504:
+        # try again a few times (the app is already compiled after the first try).
+        shell: bash
+        run: |
+          for i in 1 2 3 4; do npx tauri build --bundles nsis && exit 0; echo "Attempt $i failed; trying again"; sleep $((i * 45)); done
+          exit 1
       - run: cargo build --release -p datum-cli
       - name: Installer, command line and checksums
         shell: bash

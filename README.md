@@ -78,7 +78,7 @@ Datum Plan is a complete project scheduling and control tool, written from scrat
 ### Report, print and share
 - **Dashboard** with key figures and charts, **Progress reports** for any week or month with notes and photos, **S-curves**, and a **Report Builder** with templates (weekly management, monthly client, schedule health, cost).
 - **Print to paper or PDF from every view:** paper size, orientation, scaling or fit to pages, margins, date ranges, page ranges, headers and footers with your logo and your client's, page numbers and a legend.
-- Excel (.xlsx) export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
+- Workbook (.xlsx) export keeps formulas and formatting. Also exports to CSV, HTML, iCalendar and JSON, and imports and exports the common project exchange files (XML, XER, PMXML, MPX). Every import ends with a report of anything changed or left out, and whether every task gets the same dates as in the file.
 
 ### Views
 Gantt Chart · Tracking Gantt · Schedule Risk · Look-ahead · Manpower · Network Diagram (whiteboard canvas, legend, WBS bands, mini-map, path highlight) · Calendar · Timeline with a zoom box · Task Usage · Resource Sheet · Resource Usage · Resource Graph · Team Planner · Relationship Diagram · Sheets · Dashboard · Progress · S-Curves · Checks · Risks · Portfolio.

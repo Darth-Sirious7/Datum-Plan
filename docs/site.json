@@ -8,7 +8,7 @@
   "for": "Project managers, planners, engineers and contractors.",
   "about": [
     "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
-    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like a spreadsheet and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF. A plan from another scheduler's XML can keep its dates: the status date then measures progress without moving unfinished work."
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like a spreadsheet and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from a workbook (.xlsx) and CSV sheets, export to a workbook (.xlsx) with formulas as well as XML, XER and MPX, and every view prints to PDF. A plan from another scheduler's XML can keep its dates: the status date then measures progress without moving unfinished work."
   ],
   "steps": [
     {
@@ -31,7 +31,7 @@
     "Schedule risk analysis: how likely each finish date is (P50, P80), criticality and the tasks that drive the finish.",
     "A 3-week look-ahead with a constraint log; progress by rules of credit or installed quantities.",
     "Dashboard, progress reports and a report builder; print to PDF from every view; printed Gantt text sized in points, by row type or row by row, with columns that fit their text.",
-    "Network Diagram on a whiteboard canvas; timeline with a zoom box; Excel (.xlsx) export with formulas.",
+    "Network Diagram on a whiteboard canvas; timeline with a zoom box; workbook (.xlsx) export with formulas.",
     "A command line and an MCP server, so scripts and AI assistants can build and update plans with the same operations as the window.",
     "A step-by-step guide with pictures, in English and Simplified Chinese (Help › Guide).",
     "A guided tutorial: an example plan that uses every view, with a note on each saying how it was filled in (Help › Tutorial).",
@@ -41,7 +41,9 @@
     "Logos and pictures kept in the plan file, by party (client, your company, vendors, sub-vendors), for print headers, dashboards and sheets.",
     "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step.",
     "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents).",
-    "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool."
+    "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool.",
+    "Colour-blind safe colours for charts and statuses, as an option; every status also says what it means in words.",
+    "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods)."
   ],
   "screenshots": [
     "docs/images/gantt.png",

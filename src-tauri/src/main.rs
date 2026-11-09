@@ -1,5 +1,6 @@
 //! Datum Plan desktop shell: owns the open plan, files, options and recovery, and talks to the window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod clip;
 mod pdf;
 mod update;
 
@@ -30,6 +31,8 @@ struct Options {
     setup_panel: bool,
     /// auto, light or dark.
     theme: String,
+    /// Colours told apart with every common kind of colour-blindness (charts, statuses).
+    colour_safe: bool,
     /// Reopen the last plan at start, and the view a plan opens in.
     open_last: bool,
     start_view: String,
@@ -44,7 +47,7 @@ struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true }
+        Self { date_fmt: "%d-%b-%y".into(), autosave: 5, beta: false, currency: Default::default(), company: String::new(), logo: String::new(), workspace: String::new(), pool: String::new(), setup_panel: true, theme: "auto".into(), colour_safe: false, open_last: false, start_view: "gantt".into(), manual_default: false, week_end: 4, month_end: 0, paper: "A4".into(), landscape: true }
     }
 }
 
@@ -460,7 +463,8 @@ fn import_table(st: State<St>, map: Vec<String>) -> R<TableResult> {
 #[tauri::command]
 async fn export(app: AppHandle, st: State<'_, St>, kind: String, cols: Vec<String>) -> R<Option<String>> {
     let (label, ext) = match kind.as_str() {
-        "xlsx" => ("Excel workbook", "xlsx"),
+        "xlsx" => ("Workbook", "xlsx"),
+        "ods" => ("OpenDocument spreadsheet", "ods"),
         "csv" => ("CSV", "csv"),
         "xml" => ("Project XML", "xml"),
         "xer" => ("XER", "xer"),
@@ -536,7 +540,7 @@ fn sheet_to_plan(st: State<St>, k: usize, to: usize, copy: bool) -> R<(Out, Stri
 #[tauri::command]
 async fn export_sheets(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
     let name = st.lock().doc.p.name.clone();
-    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - sheets.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let Some(path) = app.dialog().file().add_filter("Workbook", &["xlsx"]).set_file_name(format!("{name} - sheets.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let a = st.lock();
     let c = datum_core::fields::Calc::new(&a.doc.p, &a.opts.date_fmt, today());
     io::table::write_sheets_xlsx(&c, &path)?;
@@ -835,14 +839,14 @@ async fn docs_read(app: AppHandle, path: Option<String>, sheet: Option<String>) 
     Ok(Some(SheetRows { path: path.display().to_string(), names, rows }))
 }
 
-/// Writes the register and the transmittal log to an Excel workbook.
+/// Writes the register and the transmittal log to a workbook (.xlsx).
 #[tauri::command]
 async fn docs_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
     let name = st.lock().doc.p.name.clone();
-    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - Document Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let Some(path) = app.dialog().file().add_filter("Workbook", &["xlsx"]).add_filter("OpenDocument spreadsheet", &["ods"]).set_file_name(format!("{name} - Document Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let a = st.lock();
     let o = datum_core::docreg::status(&calc(&a));
-    datum_core::docreg::write_xlsx(&a.doc.p, &o, &path)?;
+    datum_core::docreg::write_book(&a.doc.p, &o, &path)?;
     Ok(Some(path.display().to_string()))
 }
 
@@ -860,14 +864,14 @@ fn procurement(st: State<St>) -> Vec<PlanProc> {
     }).collect()
 }
 
-/// Writes the Procurement Register and its expediting log to an Excel workbook.
+/// Writes the Procurement Register and its expediting log to a workbook (.xlsx).
 #[tauri::command]
 async fn proc_export(app: AppHandle, st: State<'_, St>) -> R<Option<String>> {
     let name = st.lock().doc.p.name.clone();
-    let Some(path) = app.dialog().file().add_filter("Excel workbook", &["xlsx"]).set_file_name(format!("{name} - Procurement Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    let Some(path) = app.dialog().file().add_filter("Workbook", &["xlsx"]).add_filter("OpenDocument spreadsheet", &["ods"]).set_file_name(format!("{name} - Procurement Register.xlsx")).blocking_save_file().and_then(|f| f.into_path().ok()) else { return Ok(None) };
     let a = st.lock();
     let o = datum_core::procure::status(&calc(&a));
-    datum_core::procure::write_xlsx(&a.doc.p, &o, &path)?;
+    datum_core::procure::write_book(&a.doc.p, &o, &path)?;
     Ok(Some(path.display().to_string()))
 }
 
@@ -1690,7 +1694,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             state, apply, history, new_plan, templates, open, save, import, import_table, export, save_file, pick_logo, import_workbook, export_sheets, sheet_to_plan, share_setup, copy, paste,
-            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
+            query, resources, field_list, task_info, usage, curve, checks, contract, documents, docs_read, docs_export, procurement, proc_export, pool_view, set_pool, pool_take, clip::copy_picture, risk_run, level_preview, manpower, earned_schedule, lookahead, credit_library, network, compare, workspace, snapshot_rows, sheet_view, sheet_check, sheet_catalog, formula_shift, dash_eval, switch_tab, close_tab, close_all, save_pdf, close_tabs, new_subplan, add_subplan, remove_subplan, open_subplans, subplan_rows, link_go, goto_link, link_target_file, save_all, link_targets, link_states, link_users, update_links, linked_example, tutorial_example, open_in_plot, scurve, periods, period_report,
             options, set_options, autosave, recovery, recover, recent, startup_file, version, open_url, open_link, quit, check_update, install_update, guide
         ])
         .run(tauri::generate_context!())

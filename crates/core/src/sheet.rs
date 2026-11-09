@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// 1970-01-01 as an Excel date serial.
+/// 1970-01-01 as a spreadsheet date serial.
 const EPOCH: f64 = 25569.0;
 
 /// Our value as a spreadsheet value: dates become serials, durations become days.
@@ -337,7 +337,7 @@ pub struct SheetOut {
     pub cond: Vec<[String; 2]>,
 }
 
-/// The plan's date format as an Excel format code (`%d-%b-%y` → `dd-mmm-yy`).
+/// The plan's date format as a spreadsheet number format code (`%d-%b-%y` → `dd-mmm-yy`).
 pub fn excel_date(fmt: &str) -> String {
     let mut out = String::new();
     let mut it = fmt.chars();
@@ -348,7 +348,7 @@ pub fn excel_date(fmt: &str) -> String {
     out
 }
 
-/// The Excel format code for one of our short format names, or the code itself.
+/// The spreadsheet number format code for one of our short format names, or the code itself.
 fn code_of(fmt: &str, c: &Calc) -> String {
     match fmt {
         "date" => excel_date(&c.fmt),

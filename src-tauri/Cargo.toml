@@ -1,6 +1,6 @@
 [package]
 name = "datum-plan"
-version = "0.7.3"
+version = "0.7.5"
 edition = "2021"
 description = "Datum Plan: project scheduling for Windows."
 license = "MIT"
@@ -17,8 +17,11 @@ serde.workspace = true
 serde_json.workspace = true
 ureq = { version = "2", features = ["json", "native-certs"] }
 sha2 = "0.10"
+base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 # Save as PDF straight from the WebView (no print window, no browser header or footer).
 webview2-com = "0.39"
 windows-core = "0.62"
+# Copy Picture: the clipboard (already in the tree through webview2-com).
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole"] }

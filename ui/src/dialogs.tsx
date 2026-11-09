@@ -186,7 +186,7 @@ export const scheduleOptions = () => openDialog(() => {
   return (
     <Dialog title="Schedule Options" help="change" ok={() => act({ ProjectSet: { field: "opts", value: { ...o, critical_float: Math.round(+o.critical_float) } } })}>
       <div class="form">
-        <Row label="Status date"><Pick value={o.msp_status ? "m" : "d"} set={x => setO("msp_status", x === "m")} options={[["d", "Moves unfinished work after it"], ["m", "Measures progress only (as in MS Project)"]]} /></Row>
+        <Row label="Status date"><Pick value={o.msp_status ? "m" : "d"} set={x => setO("msp_status", x === "m")} options={[["d", "Moves unfinished work after it"], ["m", "Measures progress only (as in Project)"]]} /></Row>
         <Row label="Out-of-sequence progress"><Pick value={o.retained ? "r" : "p"} set={x => setO("retained", x === "r")} options={[["r", "Retained logic"], ["p", "Progress override"]]} /></Row>
         <Row label="Critical tasks"><Pick value={o.longest_path ? "lp" : "tf"} set={x => setO("longest_path", x === "lp")} options={[["tf", "Total float ≤ limit"], ["lp", "Longest path"]]} /></Row>
         <Row label="Critical when float ≤ (days)"><Text type="number" value={o.critical_float / P().day_min} set={x => setO("critical_float", +x * P().day_min)} /></Row>
@@ -197,7 +197,7 @@ export const scheduleOptions = () => openDialog(() => {
         <Row label="Resource calendars"><Check label="People's own calendars and leave drive their tasks' dates" value={!!o.res_cals} set={x => setO("res_cals", x)} /></Row>
         <Row label=""><Check label="Schedule from the project finish date" value={o.from_finish} set={x => setO("from_finish", x)} /></Row>
         <Row label="Finish date"><Text type="date" value={o.finish_date} disabled={!o.from_finish} set={x => setO("finish_date", x || null)} /></Row>
-        <Row label=""><Check label="Several critical paths: the end of each chain is critical (as MS Project)" value={!!o.multi_critical} set={x => setO("multi_critical", x)} /></Row>
+        <Row label=""><Check label="Several critical paths: the end of each chain is critical (as Project)" value={!!o.multi_critical} set={x => setO("multi_critical", x)} /></Row>
         <Row label=""><Check label="Show open-ended tasks as critical" value={o.open_ends_critical} set={x => setO("open_ends_critical", x)} /></Row>
         <Row label="Leveling order"><Pick value={o.level_order} set={x => setO("level_order", x)} options={[["Standard", "Standard"], ["Priority", "Priority, Standard"], ["IdOnly", "ID only"]]} /></Row>
         <Row label=""><Check label="Level only within available slack" value={o.level_within_slack} set={x => setO("level_within_slack", x)} /></Row>
@@ -465,8 +465,8 @@ export const importFile = async () => {
         <Dialog title="Import report" wide help="importReport" ok={ask ? apply : undefined}>
           <p>The plan is open. Save it as a .dplan file to keep it.{r.notes.length ? " What Datum Plan noticed on the way in:" : ""}</p>
           <Show when={r.notes.length}><ul class="notes"><For each={r.notes}>{n => <li classList={{ sub: n.startsWith("  ") }}>{n.trim()}</li>}</For></ul></Show>
-          <Show when={ask}><div class="form"><Row label="Status date"><Pick value={msp() ? "m" : "d"} set={x => setMsp(x === "m")} options={[["m", "Measures progress only (as in MS Project): late work keeps its dates"], ["d", "Moves unfinished work after it (Datum style)"]]} /></Row></div>
-            <p class="muted">The dates compared above use the first choice when the file comes from Microsoft Project. You can change this later in Project › Schedule Options.</p></Show>
+          <Show when={ask}><div class="form"><Row label="Status date"><Pick value={msp() ? "m" : "d"} set={x => setMsp(x === "m")} options={[["m", "Measures progress only (as in Project): late work keeps its dates"], ["d", "Moves unfinished work after it (Datum style)"]]} /></Row></div>
+            <p class="muted">The dates compared above use the first choice when the file comes from Project. You can change this later in Project › Schedule Options.</p></Show>
         </Dialog>
       );
     });

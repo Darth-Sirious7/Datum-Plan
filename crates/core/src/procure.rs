@@ -179,33 +179,28 @@ pub fn clean(r: &mut ProcRegister) {
     }
 }
 
-/// The register as an Excel workbook: the orders and the expediting log.
-pub fn write_xlsx(p: &Project, o: &ProcOut, path: &std::path::Path) -> Result<(), String> {
-    use rust_xlsxwriter::{Format, Workbook};
+/// The register as a workbook (.xlsx) or an OpenDocument spreadsheet (.ods), by the file's extension: the orders and the expediting log.
+pub fn write_book(p: &Project, o: &ProcOut, path: &std::path::Path) -> Result<(), String> {
+    use crate::io::book::{Cell, Sheet};
     let r = &p.procurement;
-    let mut wb = Workbook::new();
-    let head = Format::new().set_bold().set_background_color(0xEAF0F8);
-    let dt = |d: Option<NaiveDate>| d.map(|x| x.format("%d-%b-%y").to_string()).unwrap_or_default();
-    let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
-    let ws = wb.add_worksheet().set_name("Procurement").map_err(e)?;
-    let mut cols: Vec<String> = ["Item", "Order / equipment", "Vendor", "Origin", "PO No.", "Value", "Long lead"].map(String::from).to_vec();
-    cols.extend(MILESTONES.iter().map(|m| format!("Planned: {m}")));
-    cols.extend(MILESTONES.iter().map(|m| format!("Actual: {m}")));
-    cols.extend(["Mfg %", "Promised delivery", "Forecast delivery", "Delivery var. (d)", "Required", "Float (d)", "Status", "Next", "Next planned", "Days late", "Earned %", "Planned %", "Remarks"].map(String::from));
-    for (j, h) in cols.iter().enumerate() { ws.write_with_format(0, j as u16, h, &head).map_err(e)?; }
-    for (i, (it, x)) in r.items.iter().zip(&o.items).enumerate() {
-        let mut v = vec![it.tag.clone(), it.name.clone(), it.vendor.clone(), it.origin.clone(), it.po_no.clone(), if it.value > 0.0 { it.value.to_string() } else { String::new() }, if it.long_lead { "Yes".into() } else { String::new() }];
-        v.extend(x.planned.iter().map(|&q| dt(q)));
-        v.extend(x.actual.iter().map(|&q| dt(q)));
-        v.extend([format!("{:.0}", it.mfg_pct), dt(it.promised), dt(x.forecast), x.var.map(|v| v.to_string()).unwrap_or_default(), dt(x.required), x.float.map(|v| v.to_string()).unwrap_or_default(), x.status.clone(), x.next.clone(), dt(x.next_date), x.days_late.to_string(), format!("{:.1}", x.earned), format!("{:.1}", x.planned_pct), it.remarks.clone()]);
-        for (j, c) in v.iter().enumerate() { ws.write((i + 1) as u32, j as u16, c).map_err(e)?; }
+    let opt = |v: Option<i64>| v.map_or(Cell::Empty, |v| Cell::Num(v as f64));
+    let mut head: Vec<String> = ["Item", "Order / equipment", "Vendor", "Origin", "PO No.", "Value", "Long lead"].map(String::from).to_vec();
+    head.extend(MILESTONES.iter().map(|m| format!("Planned: {m}")));
+    head.extend(MILESTONES.iter().map(|m| format!("Actual: {m}")));
+    head.extend(["Mfg %", "Promised delivery", "Forecast delivery", "Delivery var. (d)", "Required", "Float (d)", "Status", "Next", "Next planned", "Days late", "Earned %", "Planned %", "Remarks"].map(String::from));
+    let mut rows = vec![head.into_iter().map(Cell::from).collect::<Vec<_>>()];
+    for (it, x) in r.items.iter().zip(&o.items) {
+        let mut v: Vec<Cell> = vec![it.tag.clone().into(), it.name.clone().into(), it.vendor.clone().into(), it.origin.clone().into(), it.po_no.clone().into(), if it.value > 0.0 { Cell::Num(it.value) } else { Cell::Empty }, Cell::from(if it.long_lead { "Yes" } else { "" })];
+        v.extend(x.planned.iter().map(|&q| Cell::from(q)));
+        v.extend(x.actual.iter().map(|&q| Cell::from(q)));
+        v.extend([Cell::Num(it.mfg_pct.round()), it.promised.into(), x.forecast.into(), opt(x.var), x.required.into(), opt(x.float), x.status.clone().into(), x.next.clone().into(), x.next_date.into(), Cell::Num(x.days_late as f64), Cell::Num((x.earned * 10.0).round() / 10.0), Cell::Num((x.planned_pct * 10.0).round() / 10.0), it.remarks.clone().into()]);
+        rows.push(v);
     }
-    ws.set_freeze_panes(1, 2).map_err(e)?;
-    let ws = wb.add_worksheet().set_name("Expediting Log").map_err(e)?;
-    for (j, h) in ["Item", "Order / equipment", "Date", "Note", "By"].iter().enumerate() { ws.write_with_format(0, j as u16, *h, &head).map_err(e)?; }
-    let mut row = 1u32;
-    for it in &r.items { for x in &it.log { for (j, c) in [it.tag.clone(), it.name.clone(), dt(x.date), x.note.clone(), x.by.clone()].iter().enumerate() { ws.write(row, j as u16, c).map_err(e)?; } row += 1; } }
-    wb.save(path).map_err(e)
+    let mut widths = vec![12.0; rows[0].len()];
+    widths[1] = 32.0;
+    let mut log = vec![["Item", "Order / equipment", "Date", "Note", "By"].map(Cell::from).to_vec()];
+    for it in &r.items { for x in &it.log { log.push(vec![it.tag.clone().into(), it.name.clone().into(), x.date.into(), x.note.clone().into(), x.by.clone().into()]) } }
+    crate::io::book::write(path, &[Sheet { name: "Procurement".into(), widths, rows }, Sheet { name: "Expediting Log".into(), widths: vec![10.0, 32.0, 12.0, 60.0, 16.0], rows: log }])
 }
 
 #[cfg(test)]

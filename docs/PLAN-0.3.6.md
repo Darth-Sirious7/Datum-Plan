@@ -61,7 +61,7 @@ The same Print page (headers, footers, logos, legend, margins, paper, scaling, p
 - **Relationship Diagram** and **Timeline:** one page.
 
 ### F. The rest of the 0.3.4 limits
-- **Excel (.xlsx) export keeps formatting:** bold, italic, underline, strikethrough, font, size, colours, fill and alignment on task rows and sheet cells. Column widths and frozen header kept.
+- **workbook (.xlsx) export keeps formatting:** bold, italic, underline, strikethrough, font, size, colours, fill and alignment on task rows and sheet cells. Column widths and frozen header kept.
 - **One shared grid** for the task sheet and Sheets: same selection, clipboard, fill handle and formula bar.
   - The fill handle **continues series**: numbers 1, 2, 3; dates +1 day or +1 week; "Phase 1", "Phase 2"; Ctrl+drag copies.
   - **Paste Special:** values only, formats only, transpose.

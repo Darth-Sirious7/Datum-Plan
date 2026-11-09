@@ -163,7 +163,7 @@ export const ProcurementView = () => {
   return (
     <Page title="Procurement Register" help="procurement" tools={<>
       <button class="btn" onClick={procSettings}>Settings…</button><button class="btn" onClick={procImport}>Import…</button>
-      <button class="btn" onClick={async () => { const f = await call<string | null>("proc_export"); if (f) toast(`Saved ${f}`, true); }}>Export to Excel</button>
+      <button class="btn" onClick={async () => { const f = await call<string | null>("proc_export"); if (f) toast(`Saved ${f}`, true); }} title="A workbook (.xlsx) or an OpenDocument spreadsheet (.ods): choose the type in the Save window">Export…</button>
       <button class="btn pri" onClick={() => { const id = next(preg().items); save({ items: [...preg().items, blank(id)] }).then(() => editItem(preg().items.find(x => x.id === id) ?? blank(id))); }}>+ Order</button>
     </>}>
       <Show when={me()}>{o => <>
@@ -203,7 +203,7 @@ export const ProcurementView = () => {
                   <Show when={preg().link_docs}><td classList={{ bad: !!r()?.docs_late }} title={r()?.docs_late ? "Vendor documents not accepted when manufacturing should start" : ""}>{r()?.docs ? `${r()!.docs_ok}/${r()!.docs}` : "—"}</td></Show>
                   <td class="acts"><button class="x" title="Edit" onClick={() => editItem(it)}>✎</button><button class="x" title="Add an expediting note" onClick={() => { setNote({ ...note(), id: it.id }); setTab("log"); }}>✉</button><button class="x" title="Remove" onClick={() => save({ items: preg().items.filter(x => x.id !== it.id) })}>×</button></td>
                 </tr>); }}</For></tbody></table>
-            <Show when={!preg().items.length}><p class="empty">No orders yet. <b>Import…</b> a procurement status register from Excel, or add them with <b>+ Order</b>. Link each to the task for its manufacture and delivery and to the task that needs it.</p></Show>
+            <Show when={!preg().items.length}><p class="empty">No orders yet. <b>Import…</b> a procurement status register from a workbook (.xlsx), or add them with <b>+ Order</b>. Link each to the task for its manufacture and delivery and to the task that needs it.</p></Show>
           </div>
         </Show>
         <Show when={tab() === "log"}>

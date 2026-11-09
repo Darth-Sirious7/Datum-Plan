@@ -73,6 +73,49 @@ const pal = () => {
 };
 export const off = (d: number) => { const s = out()?.summary; if (!s) return dow(d) >= 5; return !s.week[dow(d)] || s.off_days.includes(Math.floor(d)); };
 
+/** The Gantt's canvases while it is shown (for Copy Picture). */
+let shown: { scale: HTMLCanvasElement; bars: HTMLCanvasElement } | null = null;
+
+/** The task sheet and the Gantt chart as shown (the rows and dates in view), drawn on one canvas. */
+export const ganttPicture = (): HTMLCanvasElement | null => {
+  const gs = document.querySelector<HTMLElement>(".gscroll"), head = document.querySelector<HTMLElement>(".ghead");
+  if (!shown || !gs || !head) return null;
+  const gr = gs.getBoundingClientRect(), sc = shown.scale.getBoundingClientRect(), br = shown.bars.getBoundingClientRect();
+  const hh = Math.max(head.getBoundingClientRect().height, sc.height), gw = Math.round(gr.width), W = gw + Math.round(br.width), H = Math.round(hh + br.height), k = 2;
+  const cv = document.createElement("canvas");
+  cv.width = W * k; cv.height = H * k;
+  const ctx = cv.getContext("2d")!;
+  ctx.scale(k, k);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#EAF0F8"; ctx.fillRect(0, 0, gw, hh);
+  ctx.textBaseline = "middle";
+  const text = (t: string, x: number, y: number, w: number, h: number, font: string, color: string, right = false) => {
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.font = font; ctx.fillStyle = color; ctx.textAlign = right ? "right" : "left";
+    ctx.fillText(t, right ? x + w - 4 : x + 4, y + h / 2); ctx.restore();
+  };
+  for (const c of head.querySelectorAll<HTMLElement>(".hc:not(.add)")) {
+    const r = c.getBoundingClientRect();
+    if (r.right > gr.left && r.left < gr.right) text((c.textContent ?? "").replace(/[▾▴⏷]/g, "").trim(), r.left - gr.left, 0, r.width, hh, "600 11px 'IBM Plex Sans', 'Segoe UI', sans-serif", "#0C1A2B");
+  }
+  for (const row of document.querySelectorAll<HTMLElement>(".gbody .row:not(.blank)")) {
+    const rr = row.getBoundingClientRect(), y = rr.top - br.top + hh;
+    if (rr.bottom <= br.top || rr.top >= br.bottom) continue;
+    const bold = row.classList.contains("sum"), dim = row.classList.contains("off");
+    for (const c of row.children as HTMLCollectionOf<HTMLElement>) {
+      const r = c.getBoundingClientRect();
+      if (r.right <= gr.left || r.left >= gr.right) continue;
+      const pad = parseFloat(getComputedStyle(c).paddingLeft) || 0, ind = c.querySelector<HTMLElement>("span")?.offsetWidth ?? 0;
+      text((c.textContent ?? "").trim(), r.left - gr.left + (c.classList.contains("nm") ? ind + Math.max(0, pad - 4) : 0), y, r.width - (c.classList.contains("nm") ? ind : 0), rr.height, `${bold ? 600 : 400} 12px 'IBM Plex Sans', 'Segoe UI', sans-serif`, dim ? "#7A8594" : "#1B2733", c.classList.contains("r"));
+    }
+    ctx.fillStyle = "#E6E9EE"; ctx.fillRect(0, y + rr.height - 1, gw, 1);
+  }
+  ctx.drawImage(shown.scale, gw, 0, br.width, Math.min(hh, sc.height));
+  ctx.drawImage(shown.bars, gw, hh, br.width, br.height);
+  ctx.fillStyle = "#8D99A8"; ctx.fillRect(gw, 0, 1, H); ctx.fillRect(0, hh - 1, W, 1);
+  return cv;
+};
+
 export const Gantt = () => {
   let body!: HTMLDivElement, scaleCv!: HTMLCanvasElement, barsCv!: HTMLCanvasElement;
   const [size, setSize] = createSignal({ w: 800, h: 600 });
@@ -280,6 +323,7 @@ export const Gantt = () => {
 
   const ro = new ResizeObserver(() => setSize({ w: body.clientWidth, h: body.clientHeight }));
   onMount(() => {
+    shown = { scale: scaleCv, bars: barsCv };
     ro.observe(body);
     addEventListener("mousemove", move); addEventListener("mouseup", up);
     document.addEventListener("gantt-fit", fitAll); document.addEventListener("gantt-range", range); document.addEventListener("gantt-scroll", scrollDay); document.addEventListener("chart-scroll", syncY);
@@ -288,6 +332,7 @@ export const Gantt = () => {
   });
   onCleanup(() => {
     setInView(null);
+    shown = null;
     ro.disconnect(); removeEventListener("mousemove", move); removeEventListener("mouseup", up);
     document.removeEventListener("gantt-fit", fitAll); document.removeEventListener("gantt-range", range); document.removeEventListener("gantt-scroll", scrollDay); document.removeEventListener("chart-scroll", syncY);
   });

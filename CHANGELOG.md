@@ -1,21 +1,54 @@
 # Changelog
 
-## 0.7.3 — 2026-11-09
+## Unreleased (fork): schedules as in Project
 
-Polish for plans from Microsoft Project.
+The same values as Project for plans from Project XML: dates, float, critical tasks, % complete.
 
-- **The import report asks how the status date should work** for a plan with one: *Measures progress only (as in MS Project)*, suggested for files from Project, or *Moves unfinished work after it*.
+- **Task types** (fixed units, fixed work, fixed duration) and effort driven come in and go out with Project XML; new plans are fixed units. Changing a duration, work or units follows the task type; work with no resource stays as typed; more duration reopens a finished task.
+- **Several critical paths** (Schedule Options): the end of each chain is critical. Inactive tasks are scheduled but drive nothing; a manual milestone sits at the end of its day; a start-no-earlier-than before the plan start holds; constraints keep their time of day.
+- **Float of summaries** and summary **% complete** as Project (99 % until every task is done); a summary of finished tasks is not critical.
+- **The import report asks how the status date should work** for a plan with one: *Measures progress only (as in Project)*, suggested for files from Project, or *Moves unfinished work after it*.
 - **Work with no resource goes back to Project as it came:** the stand-in resource is now **Project work (no resource)**; Project XML export writes its hours as unassigned work and leaves the resource out, so a round trip adds no resource in Project.
 - **Schedule check 9 (Invalid dates)** no longer counts late, unstarted work as invalid when the status date only measures progress.
 - The guide (English and Chinese) explains both status-date modes.
+- **Status date as in Project** (Schedule Options › Status date › *Measures progress only*): the status date measures progress (late tasks, planned % complete, S-curves) without moving unfinished work after it, so a plan keeps the dates Project gave it and shows its delay against the baseline. *Moves unfinished work after it* is the Datum style, as before.
+- **Project XML import:** a file from Project opens in that mode, unless it was saved with Project's "move start of remaining parts forward to the status date" (Datum Plan's own XML export writes that flag, so its round trip is unchanged).
+- **Work with no resource is kept:** hours typed on tasks without a resource come in on a work resource named "Project work", with units that give each task its hours back, so work, S-curves weighted by hours and manpower match Project.
+
+## 0.7.5 — 2026-11-09
+
+The details pane is back.
+
+- The details pane (below the task sheet) starts shown again on every screen. In 0.7.2 it started closed on shorter windows, which with Windows display scaling meant most laptops. It still takes at most about a third of the window.
+- The details pane and the timeline open as you last left them: hide one (View › Split View) and it stays hidden at the next start.
+
+## 0.7.4 — 2026-11-09
+
+Copy Picture, and OpenDocument spreadsheets.
+
+- **Report › Copy Picture** copies the task sheet and the Gantt chart as shown (the rows and dates in view) as a picture. Paste it into a document, slides or a workbook. Scroll and zoom first to choose what it shows; File › Print still makes whole pages.
+- **Every chart has Copy** beside PNG: S-curves, dashboards, reports, manpower, the resource pool's hours by plan.
+- The picture goes on the clipboard twice, as a bitmap every program pastes and as PNG for the programs that prefer it (Windows).
+- **OpenDocument spreadsheets (.ods):** File › Export › **OpenDocument spreadsheet** writes the task table with real dates, durations in days and numbers. The Document and Procurement Registers' **Export…** writes .xlsx or .ods: choose the type in the Save window. Formulas and formatting stay with the workbook (.xlsx).
+
+## 0.7.3 — 2026-11-09
+
+File types by name, and colours for colour-blind readers.
+
+- **File types are named by what they are**, not by another company's product: **Workbook (.xlsx)** in File › Export, **Export to Workbook** in the registers, **Save as Workbook** and Insert › **Workbook…** in Sheet Tools, in the help, the guide and this changelog. A test keeps product names out of the window and the documents.
+- **Colour-blind safe colours** (File › Options): charts use a set of colours told apart with every common kind of colour-blindness, and statuses (On track, At risk, Late, Under review…) turn blue, yellow and vermillion instead of green and red. Every status keeps its word, so colour is never the only sign.
+- **Resource Pool:** each period over capacity carries a dot as well as its colour.
 
 ## 0.7.2 — 2026-11-09
 
-Microsoft Project files keep their dates.
+Fixes found by testing Datum Plot, the family's graphing app, that apply here too.
 
-- **Status date as in MS Project** (Schedule Options › Status date › *Measures progress only*): the status date measures progress (late tasks, planned % complete, S-curves) without moving unfinished work after it, so a plan keeps the dates Project gave it and shows its delay against the baseline. *Moves unfinished work after it* is the Datum style, as before.
-- **Project XML import:** a file from Microsoft Project opens in that mode, unless it was saved with Project's "move start of remaining parts forward to the status date" (Datum Plan's own XML export writes that flag, so its round trip is unchanged).
-- **Work with no resource is kept:** hours typed on tasks without a resource come in on a work resource named "Project work", with units that give each task its hours back, so work, S-curves weighted by hours and manpower match Project.
+- **Pressing Enter in a dialog keeps what you just typed.** Before, a value typed into a box and confirmed with Enter (instead of clicking OK) could be lost, because OK ran before the box had passed its value on.
+- **Dialogs move:** drag a dialog by its title bar to see what it covers.
+- **Small screens** (a laptop at 125 %, about 1090 × 590):
+  - Ribbon groups that do not fit fold, from the right, into one button with the group's name, such as **EDITING ▾**. Click it and the group's commands open below it, with their names. No more rows of icons without names.
+  - On a short window the details pane and the timeline start closed, so the task rows have room (turn them on in View › Split View); the details pane never takes more than about a third of the window.
+  - The File page's commands are compact, so more of them fit without scrolling.
 
 ## 0.7.1 — 2026-11-07
 
@@ -48,7 +81,7 @@ The Procurement Register: a module for sub-orders from enquiry to delivery.
 - **Weighted progress:** milestone weights from a preset (balanced, more credit at the order, more credit at delivery) or your own; manufacturing counted pro rata to its %; orders weighed by PO value, equally or by a typed weight. Weekly and monthly S-curves, and orders by sub-vendor and country.
 - **Expediting log:** dated notes per order.
 - **Linking to the Document Register is your choice** (Settings): linked, each order lists the vendor documents it waits for, shows how many are accepted and is flagged when its drawings hold up manufacturing; unlinked, orders stand on their own.
-- **Import** a procurement status register from Excel or CSV (the heading row and the planned and actual columns are found by themselves; check and change any of them). **Export to Excel** writes the register and the expediting log.
+- **Import** a procurement status register from a workbook (.xlsx) or CSV (the heading row and the planned and actual columns are found by themselves; check and change any of them). **Export to Workbook** writes the register and the expediting log.
 - On a master, a table adds up the registers of its open subplans; **Apply Setup to Subplans › Modules** gives the subplans the register's settings.
 
 ## 0.6.1 — 2026-11-07
@@ -63,7 +96,7 @@ The Document Register: a module for vendor documents and their review cycle.
 - **Transmittal log:** one row per submission with revision, purpose, transmittal, date sent, review due date, return transmittal, date returned, code and comments reference. **+ Sub** logs a document's next submission: next revision, the purpose its cycle needs.
 - **Worked out for every document:** submissions and resubmission cycles, latest revision and purpose, review due, status (Not submitted, Not submitted – overdue, Under review, Review overdue, Resubmit, Accepted – next issue, Final issued), first-issue delay, **days the client kept it past the review period**, earned and planned progress, the forecast of every step, and whether it is late for the task that needs it.
 - **Progress:** weighted planned and actual S-curves by week (ending on the plan's week-end day) or by month, first issues per period, and progress by vendor, discipline, type and class. Recurring submissions are never counted.
-- **Import** a document register or a transmittal log from Excel or CSV: choose the sheet, the heading row (found by itself) and what each column holds (guessed from the headings). Running it again updates documents with the same number. **Export to Excel** writes the register and the transmittal log.
+- **Import** a document register or a transmittal log from a workbook (.xlsx) or CSV: choose the sheet, the heading row (found by itself) and what each column holds (guessed from the headings). Running it again updates documents with the same number. **Export to Workbook** writes the register and the transmittal log.
 - On a master, a table adds up the registers of its open subplans. **Apply Setup to Subplans › Modules** gives the subplans the register's settings and the calendars they count on.
 
 ## 0.6.0 — 2026-11-07
@@ -106,7 +139,7 @@ The last open items closed, and Ctrl+K back to Tell Me everywhere.
 - **Ctrl+K** opens Tell Me in Sheets too. Add a link with Insert › Link… or right-click › Link….
 - **Rules follow their cells:** validation limits, list sources and conditional formats that point at cells move with inserted, deleted and shifted cells and renamed sheets, and show #REF! when their cells go. Conditional formats can compare with a cell (`=$E$1`).
 - **Validation by a custom formula** (`=AND(A2>0,A2<=B2)`), checked for each cell, with Stop or Warn and Circle Invalid Data.
-- **Names for one sheet:** a defined name's scope is the plan or a single sheet. Sheet names go to and from Excel workbooks as local names, and move with their sheet to another plan.
+- **Names for one sheet:** a defined name's scope is the plan or a single sheet. Sheet names go to and from workbooks (.xlsx) as local names, and move with their sheet to another plan.
 - **Defined names in task-sheet formula columns:** `=[Cost]*(1+VAT)`, lookups into named sheet ranges and the plan's own figures, worked out per task.
 - **Elapsed lags on links to other plans** (FS +7ed) in the Link to Plan dialog, scheduled in calendar time. Links to other plans now show their lags as the task sheet does (FS+5d, +4h).
 
@@ -150,7 +183,7 @@ Sheets that work like a full spreadsheet, a simpler ribbon, and a night of bug f
   - amounts typed with €, £ or the plan's currency are numbers;
   - money rounds halves up;
   - very deeply nested formulas show #VALUE! instead of closing the app;
-  - Save as Excel keeps the same results and formats when the workbook is recalculated;
+  - Save as Workbook keeps the same results and formats when the workbook is recalculated;
   - imported formulas follow renamed tabs;
   - the fill handle keeps thousands separators and continues day and month names.
 - **Fixed, in dashboards and reports** (18):
@@ -165,7 +198,7 @@ Sheets that work like a full spreadsheet, a simpler ribbon, and a night of bug f
   - progress and scheduling-mode buttons work when a summary is selected; Insert Summary Task and Paste undo in one step;
   - percent lags in the task details; Calendar and Team Planner show collapsed tasks; renaming a calendar keeps people on it;
   - typing a start or finish on a task under way sets its actual dates; a finish typed on a milestone keeps it a milestone; daily recurring tasks skip non-working days;
-  - XER: elapsed durations, row order, task calendars and % complete; Project XML: elapsed lags; CSV/Excel import: progress set after the links.
+  - XER: elapsed durations, row order, task calendars and % complete; Project XML: elapsed lags; CSV/spreadsheet import: progress set after the links.
 
 ## 0.5.24 — 2026-11-04
 
@@ -207,15 +240,15 @@ The open Sheets items closed, and a hardening pass.
 - **Hide and unhide rows and columns:** right-click, or Rows & Columns › Size.
   - A double line marks where something is hidden.
   - Arrow keys step over hidden rows and columns.
-  - Hidden rows and columns don't print, and stay hidden in Excel, both ways.
-- **Fixed, from a hardening pass over Sheets and Excel** (28 new tests):
+  - Hidden rows and columns don't print, and stay hidden in a spreadsheet program, both ways.
+- **Fixed, from a hardening pass over Sheets and workbooks** (28 new tests):
   - **Bringing in a workbook:**
     - a workbook with cells far apart (A1 and the last cell) could stop the app; it is now refused with a message;
     - text starting with "=" or that looks like a number, date or percentage stays text;
     - formulas from .ods files work;
     - pictures saved by spreadsheet programs come in at their real size.
-  - **Sheet names and Save as Excel:**
-    - Save as Excel no longer fails on sheet names that are too long, end in an apostrophe, or are called Tasks or DatumPlan;
+  - **Sheet names and Save as Workbook:**
+    - Save as Workbook no longer fails on sheet names that are too long, end in an apostrophe, or are called Tasks or DatumPlan;
     - names are fitted for the workbook, and formulas that point to them follow;
     - copies of long sheet names stay within 31 characters.
   - **Conditional formatting:**
@@ -249,32 +282,32 @@ Conditional formatting, Find and Replace, and more Sheets fixes.
 
 ## 0.5.20 — 2026-11-03
 
-Sheets and Excel, both ways.
+Sheets and workbooks, both ways.
 
-- **Bring an Excel workbook into Sheets:** Sheet Tools › Cells › **Excel Workbook…** opens .xlsx, .xlsm, .xls, .xlsb and .ods files. Every sheet becomes a tab with:
+- **Bring a workbook (.xlsx) into Sheets:** Sheet Tools › Cells › **Workbook…** opens .xlsx, .xlsm, .xls, .xlsb and .ods files. Every sheet becomes a tab with:
   - values, formulas and number formats;
   - fonts, fills, borders and alignment;
   - merged cells, column widths and row heights;
   - frozen panes, tab colour, page setup and pictures.
 
   One Undo takes the whole import back.
-- **Save the sheets as an Excel workbook to share:** Sheet Tools › Page › **Save as Excel**. The workbook carries:
+- **Save the sheets as a workbook (.xlsx) to share:** Sheet Tools › Page › **Save as Workbook**. The workbook carries:
   - real numbers and dates, formulas with their results, and number formats;
   - styles, merged cells, sizes, pictures, frozen panes, tab colours and page setup.
 
   Formulas that read the plan keep working, from the plan's data on hidden sheets.
-- **Excel export, improved** (also File › Export › Excel workbook):
+- **Workbook export, improved** (also File › Export › Workbook (.xlsx)):
   - number formats (currency, dates, percentages, Text) are kept;
   - typed dates are real dates;
   - formulas carry their last results, so the values show at once;
   - frozen panes, tab colours and hidden tabs are kept.
-- **Country flags survive a round trip:** Excel shows the country's name, and a hidden sheet lets Datum Plan bring the flags back.
+- **Country flags survive a round trip:** a spreadsheet program shows the country's name, and a hidden sheet lets Datum Plan bring the flags back.
 - **The ribbon shows Gantt Chart Tools first, then Sheet Tools** (Cells, Page).
 - **Sheets:**
   - Backspace on a cell clears it and starts typing there;
   - a leading + or − before a cell or function starts a formula;
   - Increase and Decrease Decimal work on Currency.
-- The guide describes sheets and Excel workbooks, in English and Chinese.
+- The guide describes sheets and workbooks (.xlsx), in English and Chinese.
 
 ## 0.5.19 — 2026-11-03
 
@@ -649,7 +682,7 @@ Sheets that work like a spreadsheet and read the plan live: your own reports and
 - `Tasks[column]` has one row per task (Name, Start, Finish, % Complete, baseline dates and cost, float, Critical, Late, Milestone, Resources, earned value, custom fields…); `Resources[column]` has Name, Group, Country, Rate, Work, Cost….
 - Names for the plan's numbers: `ProjectFinish`, `BaselineFinish`, `FinishVariance`, `PercentComplete`, `SPI`, `CPI`, `TotalCost`, `TasksLate`, `CriticalCount` and more.
 - **Plan Data…** puts a live list at the selected cell: milestones, critical, late, unfinished or in-progress tasks, or those starting in the next four weeks, with the columns, order and number of rows you choose. One formula fills the rows and follows the plan.
-- Older formulas such as `=SUM(Plan!M2:M200)` keep working. Excel export adds the Tasks and Resources tables and the names, so the workbook works in other spreadsheet programs too.
+- Older formulas such as `=SUM(Plan!M2:M200)` keep working. Workbook export adds the Tasks and Resources tables and the names, so the workbook works in other spreadsheet programs too.
 
 **Country flags**
 - A **Country with flag** number format shows a country's flag and name: type a code (DE, cn) or a name (Germany, UK).
@@ -760,7 +793,7 @@ Trust in the dates: the scheduling engine is now checked against worked examples
 **Under the hood**
 - 47 hand-worked scheduling cases (over 90 task dates checked to the minute): every link type with leads and lags in days, hours and percent, every constraint, deadlines, holidays, part days, task calendars, elapsed durations, splits, summaries, progress with retained logic and override, scheduling from the finish, levelling, critical tasks and man-hours.
 - Plan files that carry their own dates (Project XML and XER, in `crates/core/tests/parity`) are opened, rescheduled and compared task by task. Exports from other scheduling tools can be dropped into the same folder.
-- Random-plan checks now include constraints, calendars, splits and elapsed tasks: every link must hold, no task may start later than its links need, and the dates must not depend on the row order. Random sequences of edits must never break a plan, and damaged CSV and Excel files must never crash the app.
+- Random-plan checks now include constraints, calendars, splits and elapsed tasks: every link must hold, no task may start later than its links need, and the dates must not depend on the row order. Random sequences of edits must never break a plan, and damaged CSV and workbook (.xlsx) files must never crash the app.
 
 ## 0.3.11 — 2026-10-27
 
@@ -876,7 +909,7 @@ Every view prints properly, a complete Network Diagram, a zoom box on the timeli
 - Dashboard, Progress, S-curves, Report Builder, reports and other pages: as shown, with your header and footer on every page and page numbers.
 - All views use the same paper, margins, scaling, headers, footers and logos.
 
-**Excel export keeps formatting**
+**Workbook export keeps formatting**
 - Bold, italic, underline, strikethrough, font, size, colours, fill and alignment are kept for tasks and sheet cells, along with sheet column widths.
 
 **Help and links**
@@ -966,7 +999,7 @@ Progress updating, a report builder and power tools, plus the fixes from your 0.
 - Global Change (Task tab or a heading's menu): set one field to a value for every selected task or every task in the view, as one undo step.
 - Conditional formatting per column: colour cells by rules (font colour, fill and bold), e.g. negative float in red.
 - Portfolio shows plans in subfolders as an EPS tree.
-- Excel export keeps formulas: formula columns stay live formulas in the workbook, dates and durations are typed, sheet tabs and a Plan sheet are included.
+- Workbook export keeps formulas: formula columns stay live formulas in the workbook, dates and durations are typed, sheet tabs and a Plan sheet are included.
 - Automated UI tests run on every build.
 
 ## 0.3.1 — 2026-10-24
@@ -1065,7 +1098,7 @@ The biggest release so far: a familiar ribbon layout with advanced scheduling, r
 - Change Working Time, Project Information (with statistics), Resource Information (costs, availability, notes) and Task Information dialogs.
 
 **Files**
-- New export formats: PMXML (.xml), MPX, iCalendar (.ics), HTML and JSON. Excel and CSV export the current table's columns.
+- New export formats: PMXML (.xml), MPX, iCalendar (.ics), HTML and JSON. Workbooks (.xlsx) and CSV export the current table's columns.
 - JSON import. Plans from 0.2 open as before; a copy is kept as `name.backup.dplan` before they are upgraded.
 
 **Updates**
@@ -1120,8 +1153,8 @@ A big step for the scheduling engine: real calendars, constraints, resources, pr
 
 **Import and export**
 - Import project XML and XER files, including calendars, WBS, relationships, resources, actual dates and baselines.
-- Import Excel (.xlsx/.xls) or CSV task lists, with a step to match columns. Predecessors can refer to your own IDs, such as A10.
-- Export to Excel (.xlsx), CSV, project XML and XER.
+- Import workbooks (.xlsx, .xls) or CSV task lists, with a step to match columns. Predecessors can refer to your own IDs, such as A10.
+- Export to Workbook (.xlsx), CSV, project XML and XER.
 
 **Fixed**
 - Project Information now shows the start date, and dialogs keep what you typed when you press OK.
@@ -1193,4 +1226,4 @@ The first version: the application shell, the scheduling engine and automatic up
 **Known limits in 0.1**
 - Durations are whole working days on a single Monday–Friday calendar; hours and holidays arrive in 0.2.
 - Summary tasks cannot be linked. Indenting a task under a linked task removes that task's links.
-- Excel, CSV, Project XML and XER import and export are planned for 0.3.
+- Workbooks (.xlsx), CSV, Project XML and XER import and export are planned for 0.3.
