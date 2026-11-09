@@ -579,7 +579,12 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.mouse.click(700, 450); await p.waitForTimeout(150);
   check("…closing again on a click elsewhere", !(await p.$(".ribbon .grp.open")));
   const dh = await p.evaluate(() => { const d = document.querySelector(".dsplit")?.nextElementSibling; return d ? d.getBoundingClientRect().height : 0; });
-  check("on a short window the details pane leaves room for the task rows", dh <= 589 * 0.34 + 1, String(dh));
+  check("on a short window the details pane is shown and leaves room for the task rows", dh > 50 && dh <= 589 * 0.34 + 1, String(dh));
+  await p.click(".tabs > button:text-is('View')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Details')"); await p.waitForTimeout(150);
+  check("…and hiding it is remembered for the next start", !(await p.$(".dsplit")) && (await p.evaluate(() => localStorage.getItem("pane-details"))) === "0");
+  await p.click(".ribbon button:has-text('Details')"); await p.waitForTimeout(150);
+  check("…as is showing it again", !!(await p.$(".dsplit")) && (await p.evaluate(() => localStorage.getItem("pane-details"))) === "1");
   await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
   // 0.7.4: Copy Picture (Gantt and charts) and OpenDocument spreadsheet export.
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300);

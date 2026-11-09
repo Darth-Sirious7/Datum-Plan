@@ -102,11 +102,17 @@ export const curRow = () => grid().rows[cur().row];
 export const curUid = () => curRow()?.uid ?? 0;
 
 // ---------- layout ----------
-/** On a short window (a laptop at 125 %) the details pane and the timeline start closed, so the task rows have room. */
-const tall = typeof innerHeight !== "number" || innerHeight >= 700;
-export const [details, setDetails] = createSignal(tall);
+/** A pane shown or hidden as the user last left it. The details pane starts shown (it takes at most a third of
+ *  the height); the timeline starts closed on a short window (a laptop at 125 %), so the task rows have room. */
+const pane = (key: string, first: boolean) => {
+  let v = first;
+  try { const s = localStorage.getItem(key); if (s !== null) v = s === "1"; } catch { /* no storage */ }
+  const [get, put] = createSignal(v);
+  return [get, (x: boolean) => { put(x); try { localStorage.setItem(key, x ? "1" : "0"); } catch { /* no storage */ } }] as const;
+};
+export const [details, setDetails] = pane("pane-details", true);
 export const [detailsTab, setDetailsTab] = createSignal("general");
-export const [timeline, setTimeline] = createSignal(tall);
+export const [timeline, setTimeline] = pane("pane-timeline", typeof innerHeight !== "number" || innerHeight >= 700);
 export const [zoom, setZoom] = createSignal(24);
 /** Project Setup is a page (sidebar › Setup). */
 export const setupOpen = () => view() === "setup";

@@ -81,7 +81,7 @@ When you start a new plan, **Project Setup** walks you through the basics. You c
 
 The status bar at the bottom shows the number of tasks, the start and finish, the duration, % complete and the cost.
 
-On a small screen, ribbon groups that do not fit fold into one button with the group's name (**EDITING ▾**): click it for the group's commands. On a short window the details pane and the timeline start closed (View › Split View turns them on). Dialogs can be moved by dragging their title bar.
+On a small screen, ribbon groups that do not fit fold into one button with the group's name (**EDITING ▾**): click it for the group's commands. The details pane and the timeline open as you last left them; **View › Split View** shows or hides them (on a short window the timeline starts closed). Dialogs can be moved by dragging their title bar.
 
 ## Build your plan
 

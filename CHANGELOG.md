@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5 — 2026-11-09
+
+The details pane is back.
+
+- The details pane (below the task sheet) starts shown again on every screen. In 0.7.2 it started closed on shorter windows, which with Windows display scaling meant most laptops. It still takes at most about a third of the window.
+- The details pane and the timeline open as you last left them: hide one (View › Split View) and it stays hidden at the next start.
+
 ## 0.7.4 — 2026-11-09
 
 Copy Picture, and OpenDocument spreadsheets.
