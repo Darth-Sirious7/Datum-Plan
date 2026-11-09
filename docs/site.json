@@ -8,7 +8,7 @@
   "for": "Project managers, planners, engineers and contractors.",
   "about": [
     "Datum Plan is a desktop scheduler for project managers, planners, engineers and contractors. You enter tasks in a sheet that works like a spreadsheet, link them, and the engine works out the critical path to the minute, with working calendars, constraints, every link type and resource levelling.",
-    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like a spreadsheet and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF."
+    "As the work goes on, you record progress and actuals against up to 11 baselines and see where the project stands: a tracking Gantt, earned value and earned schedule, S-curves built from each period's progress, manpower by trade, a look-ahead with a constraint log, a dashboard and progress reports. A schedule risk analysis runs the plan a thousand times to show how likely each finish date is and which tasks drive it. Sheets inside the plan work like a spreadsheet and read the schedule live by name, for your own reports and vendor lists (with country flags), and dashboards of your own lay them out on one page, so nothing is copied by hand. Plans open from common scheduling files (XML and XER) or from Excel and CSV sheets, export to Excel with formulas as well as XML, XER and MPX, and every view prints to PDF. A plan from another scheduler's XML can keep its dates: the status date then measures progress without moving unfinished work."
   ],
   "steps": [
     {
@@ -69,7 +69,8 @@
         "One resource pool shared by several plans, a portfolio dashboard (0.7.0).",
         "A schedule health score with its trend, ghost bars and a log of logic changes.",
         "What-if scenarios and delay analysis: as-planned against as-built, time impact, windows.",
-        "Smooth with 100,000 tasks (0.7.1); a signed installer (no Windows warning) before 1.0."
+        "Smooth with 100,000 tasks (0.7.1); a signed installer (no Windows warning) before 1.0.",
+        "A status date that measures progress only, so imported XML plans keep their dates, and work with no resource kept both ways (0.7.2, 0.7.3)."
       ]
     },
     {
