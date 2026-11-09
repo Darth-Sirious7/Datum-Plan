@@ -183,7 +183,8 @@ pub fn schedule(p: &Project) -> Result<Sched, String> {
         match x.kind { LinkType::FS | LinkType::SS => y, _ => c.sub(y, sp) }
     }).max();
     let start = pc.next_start(at(p.start));
-    let data = p.status.map(|d| at(d) + DAY);
+    // Microsoft Project style: the status date measures progress but does not move work.
+    let data = if o.msp_status { None } else { p.status.map(|d| at(d) + DAY) };
     let (mut es, mut ef) = (vec![start; n], vec![start; n]);
     let mut fixed = vec![false; n];
     let mut rs = vec![i64::MIN; n];

@@ -24,7 +24,7 @@ export interface CodeDef { name: string; scope: string; values: { value: string;
 export interface Risk { id: number; name: string; cause: string; prob: number; impact: number; owner: string; response: string; status: string; tasks: number[]; kind: string; days: number }
 export interface SchedOpts {
   retained: boolean; critical_float: number; longest_path: boolean; lag_cal: string; float_paths: number; open_ends_critical: boolean;
-  level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null; res_cals?: boolean;
+  level_within_slack: boolean; level_split: boolean; level_order: string; effort_default: boolean; task_type_default: string; from_finish: boolean; finish_date: string | null; res_cals?: boolean; msp_status?: boolean;
 }
 export interface ContractDate { id: number; name: string; task: number; date: string | null; value: number; ld_rate: number; ld_cap: number; grace: number; note: string }
 export interface Payment { id: number; name: string; pct: number; amount: number; task: number; terms: number; invoiced: string | null; paid: string | null }

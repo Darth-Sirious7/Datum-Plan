@@ -186,6 +186,7 @@ export const scheduleOptions = () => openDialog(() => {
   return (
     <Dialog title="Schedule Options" help="change" ok={() => act({ ProjectSet: { field: "opts", value: { ...o, critical_float: Math.round(+o.critical_float) } } })}>
       <div class="form">
+        <Row label="Status date"><Pick value={o.msp_status ? "m" : "d"} set={x => setO("msp_status", x === "m")} options={[["d", "Moves unfinished work after it"], ["m", "Measures progress only (as in MS Project)"]]} /></Row>
         <Row label="Out-of-sequence progress"><Pick value={o.retained ? "r" : "p"} set={x => setO("retained", x === "r")} options={[["r", "Retained logic"], ["p", "Progress override"]]} /></Row>
         <Row label="Critical tasks"><Pick value={o.longest_path ? "lp" : "tf"} set={x => setO("longest_path", x === "lp")} options={[["tf", "Total float ≤ limit"], ["lp", "Longest path"]]} /></Row>
         <Row label="Critical when float ≤ (days)"><Text type="number" value={o.critical_float / P().day_min} set={x => setO("critical_float", +x * P().day_min)} /></Row>

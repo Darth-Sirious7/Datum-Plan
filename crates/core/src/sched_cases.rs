@@ -283,3 +283,15 @@ fn update_links_keeps_an_elapsed_lag() {
     assert!(plans[0].1.tasks[0].ext[0].elapsed);
     assert_eq!(dates(&plans[0].1)[0], "Nov17 08:00 Nov18 17:00 0");
 }
+
+#[test]
+fn status_date_as_in_ms_project_keeps_dates() {
+    // Status Wed 4. Datum style: the unstarted 3d task waits until Thu 5 and the 40 % task's rest
+    // starts Thu 5 too. MS Project style: both keep their dates and only show late.
+    let rows = ["3d||", "5d||astart=02-Nov-26; pct=40"];
+    let p = build(&rows, |p| p.status = Some(d(2026, 11, 4)));
+    assert_eq!(dates(&p)[0], "Nov05 08:00 Nov09 17:00 0");
+    let p = build(&rows, |p| { p.status = Some(d(2026, 11, 4)); p.opts.msp_status = true });
+    assert_eq!(dates(&p)[0], "Nov02 08:00 Nov04 17:00 2");
+    assert_eq!(&dates(&p)[1][..23], "Nov02 08:00 Nov06 17:00");
+}

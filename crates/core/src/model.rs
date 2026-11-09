@@ -386,6 +386,9 @@ pub struct SchedOpts {
     /// Resource calendars drive task dates: each assigned person works on their own calendar
     /// (base calendar plus their leave) and the task finishes when the last of them does.
     pub res_cals: bool,
+    /// The status date only measures progress, as in Microsoft Project: work not done by then
+    /// stays on its scheduled dates (shown late against the baseline) instead of moving after it.
+    pub msp_status: bool,
 }
 
 impl Default for SchedOpts {
@@ -393,7 +396,7 @@ impl Default for SchedOpts {
         Self {
             retained: true, critical_float: 0, longest_path: false, lag_cal: LagCal::Successor, float_paths: 0, open_ends_critical: false,
             level_within_slack: false, level_split: false, level_order: LevelOrder::Standard, effort_default: false,
-            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None, res_cals: false,
+            task_type_default: TaskType::FixedDuration, from_finish: false, finish_date: None, res_cals: false, msp_status: false,
         }
     }
 }

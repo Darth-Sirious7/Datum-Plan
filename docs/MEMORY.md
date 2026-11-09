@@ -649,6 +649,9 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 - Waiting on Datum Plot: Plot cannot read dates yet. The hub's `briefs/PLOT-DATES.md` asks Plot's chat for optional date columns (days since 1970-01-01, `Table.xFormat = "date"`). When a Plot release has it: change `io/dplot.rs` to write X as days since 1970 with `xFormat: "date"` and `xTitle: "Date"` (instead of days from the first date), and name the minimum Plot version in the guide.
 - Next (from the agreed list): all done. Then schedule quality (health trend, ghost bars, logic change log, milestone trend), a shared resource pool, a portfolio dashboard.
 
+### 2026-11-09: Session (0.7.2, MS Project status date)
+- `SchedOpts.msp_status`: `sched.rs` leaves `data` unset, so the status date measures progress only. Schedule Options › Status date. MSPDI import sets it unless `MoveRemainingStartsForward` = 1 (the writer emits that flag); work on Project's unassigned resource (-65535, capped by the task's own Work) becomes a "Project work" resource. Test `status_date_as_in_ms_project_keeps_dates`. Checked against a real 40-task Project file: 0 date differences, 3,095 h of work.
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the review of another Rust scheduler, 2026-10-27; not started)

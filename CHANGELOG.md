@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2 — 2026-11-09
+
+Microsoft Project files keep their dates.
+
+- **Status date as in MS Project** (Schedule Options › Status date › *Measures progress only*): the status date measures progress (late tasks, planned % complete, S-curves) without moving unfinished work after it, so a plan keeps the dates Project gave it and shows its delay against the baseline. *Moves unfinished work after it* is the Datum style, as before.
+- **Project XML import:** a file from Microsoft Project opens in that mode, unless it was saved with Project's "move start of remaining parts forward to the status date" (Datum Plan's own XML export writes that flag, so its round trip is unchanged).
+- **Work with no resource is kept:** hours typed on tasks without a resource come in on a work resource named "Project work", with units that give each task its hours back, so work, S-curves weighted by hours and manpower match Project.
+
 ## 0.7.1 — 2026-11-07
 
 Hardening: very large plans, measured at 100,000 tasks.

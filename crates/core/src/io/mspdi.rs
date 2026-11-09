@@ -60,6 +60,8 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     if let Some(st) = p.status {
         let _ = write!(o, "<StatusDate>{}</StatusDate>", dt(at(st) + 17 * 60));
     }
+    // Project's "move start of remaining parts before the status date forward": Datum style when on.
+    let _ = write!(o, "<MoveRemainingStartsForward>{}</MoveRemainingStartsForward>", !p.opts.msp_status as u8);
     o.push_str("\n<Calendars>");
     for (k, c) in p.calendars.iter().enumerate() {
         let _ = write!(o, "<Calendar><UID>{}</UID><Name>{}</Name><IsBaseCalendar>1</IsBaseCalendar><BaseCalendarUID>-1</BaseCalendarUID><WeekDays>", k + 1, esc(&c.name));
@@ -249,6 +251,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
     }
     let unit = |c: &str| match c { "3" | "4" => Unit::M, "5" | "6" => Unit::H, "9" | "10" => Unit::W, "11" | "12" => Unit::Mo, _ => Unit::D };
     let mut tasks: Vec<(i64, Task)> = vec![];
+    let mut task_work: HashMap<u32, i64> = HashMap::new();
     for t in root.get("Tasks").into_iter().flat_map(|x| x.all("Task")) {
         let uid: u32 = t.val("UID").parse().unwrap_or(0);
         if uid == 0 || t.val("IsNull") == "1" || t.val("OutlineLevel") == "0" {
@@ -292,6 +295,7 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
                 k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0), work: (!b.val("Work").is_empty()).then(|| read_dur(b.val("Work")) as f64) });
             }
         }
+        task_work.insert(k.uid, read_dur(t.val("Work")));
         tasks.push((t.val("ID").parse().unwrap_or(i64::MAX), k));
     }
     tasks.sort_by_key(|(id, _)| *id);
@@ -316,11 +320,32 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         p.opts.res_cals = true;
     }
     let idx: std::collections::HashMap<u32, usize> = p.tasks.iter().enumerate().rev().map(|(i, t)| (t.uid, i)).collect();
+    // Work typed on a task with no resource is assigned to Project's "unassigned" resource (-65535).
+    let mut loose: Vec<(usize, i64)> = vec![];
     for a in root.get("Assignments").into_iter().flat_map(|x| x.all("Assignment")) {
-        let (tu, ru): (u32, u32) = (a.val("TaskUID").parse().unwrap_or(0), a.val("ResourceUID").parse().unwrap_or(0));
-        if let Some(t) = idx.get(&tu).map(|&i| &mut p.tasks[i]) {
-            t.res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 });
+        let tu: u32 = a.val("TaskUID").parse().unwrap_or(0);
+        let Some(&i) = idx.get(&tu) else { continue };
+        match a.val("ResourceUID").parse::<u32>() {
+            Ok(ru) if p.resources.iter().any(|r| r.uid == ru) => p.tasks[i].res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 }),
+            // Project also writes one for a task with no work; the task's own Work is the truth.
+            _ => loose.push((i, read_dur(a.val("Work")).min(task_work.get(&tu).copied().unwrap_or(0)))),
         }
+    }
+    // Keep those hours: one work resource whose units on each task give the task's work back.
+    let loose: Vec<(usize, f64)> = loose.into_iter().filter(|&(i, w)| w > 0 && p.tasks[i].dur > 0).map(|(i, w)| (i, w as f64 / p.tasks[i].dur as f64)).collect();
+    if !loose.is_empty() {
+        let uid = p.resources.iter().map(|r| r.uid).max().unwrap_or(0) + 1;
+        p.resources.push(Resource { uid, name: "Project work".into(), kind: ResKind::Work, max: 100.0, ..Default::default() });
+        for &(i, u) in &loose {
+            p.tasks[i].res.push(Assign { res: uid, units: (u * 10_000.0).round() / 10_000.0, table: 0 });
+        }
+        notes.push(format!("{} tasks have work with no resource; it is kept on a work resource named \"Project work\".", loose.len()));
+    }
+    // Unless the file asks for remaining work to move forward to the status date (Project's
+    // calculation option, which Datum Plan writes), the status date measures progress only.
+    p.opts.msp_status = root.val("MoveRemainingStartsForward") != "1";
+    if p.status.is_some() && p.opts.msp_status {
+        notes.push("The status date measures progress as in Microsoft Project; work not done by then stays on its dates. Schedule Options switches this off.".into());
     }
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();
     let missing: usize = p.tasks.iter_mut().map(|t| { let n = t.preds.len(); t.preds.retain(|l| uids.contains(&l.pred)); n - t.preds.len() }).sum();
