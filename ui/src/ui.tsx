@@ -62,7 +62,18 @@ export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element
   const done = async () => { if (!p.ok || (await p.ok()) !== false) closeDialog(); };
   const key = (e: KeyboardEvent) => {
     if (e.key === "Escape") { e.stopPropagation(); closeDialog(); }
-    if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); done(); }
+    // Enter: the box being typed in first keeps its value (its change runs on blur), then OK.
+    if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); (e.target as HTMLElement)?.blur?.(); done(); }
+  };
+  // Drag the title bar to move the dialog off what it covers.
+  const [at, setAt] = createSignal<[number, number]>([0, 0]);
+  const move = (e: MouseEvent) => {
+    if ((e.target as Element).closest("button, a, .help") || e.button !== 0) return;
+    e.preventDefault();
+    const [x0, y0] = at(), sx = e.clientX, sy = e.clientY;
+    const mv = (m: MouseEvent) => setAt([x0 + m.clientX - sx, Math.max(-innerHeight / 2 + 40, y0 + m.clientY - sy)]);
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
   };
   let el!: HTMLDivElement;
   onMount(() => ((el.querySelector("input:not([type=checkbox]),textarea") ?? el.querySelector(".btn.pri") ?? el.querySelector("footer .btn")) as HTMLElement | null)?.focus());
@@ -71,8 +82,8 @@ export const Dialog = (p: { title: string; wide?: boolean; children: JSX.Element
   document.addEventListener("keydown", away); onCleanup(() => document.removeEventListener("keydown", away));
   return (
     <div class="ov" onKeyDown={key}>
-      <div class="dlg" classList={{ wide: p.wide }} ref={el}>
-        <header>{p.title}{p.help && <Help k={p.help} />}<button class="x" onClick={closeDialog}>×</button></header>
+      <div class="dlg" classList={{ wide: p.wide }} ref={el} style={at()[0] || at()[1] ? { transform: `translate(${at()[0]}px, ${at()[1]}px)` } : undefined}>
+        <header onMouseDown={move} title="Drag to move">{p.title}{p.help && <Help k={p.help} />}<button class="x" onClick={closeDialog}>×</button></header>
         <div class="bd">{p.children}</div>
         <footer>{p.extra}<span class="grow" />{p.ok && <button class="btn pri" onClick={done}>{p.okText ?? "OK"}</button>}<button class="btn" onClick={closeDialog}>{p.cancel ?? (p.ok ? "Cancel" : "Close")}</button></footer>
       </div>

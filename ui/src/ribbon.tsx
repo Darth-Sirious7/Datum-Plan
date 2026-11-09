@@ -53,7 +53,23 @@ const B = (p: { i: string; l: string; run?: (e: MouseEvent) => void; big?: boole
     {p.run && p.dd && <button class="rb sarr" title={`${p.l} options`} onClick={e => p.dd!(e)}>▾</button>}
   </div>
 );
-const G = (p: { l: string; h?: string; children: JSX.Element }) => <div class="grp"><div class="items">{p.children}</div><div class="cap">{p.l}{p.h && <Help k={p.h} />}</div></div>;
+const G = (p: { l: string; h?: string; children: JSX.Element }) => {
+  let g!: HTMLDivElement;
+  // Folded (a narrow window): one button with the group's name opens its commands, named, below it.
+  const open = (e: MouseEvent) => {
+    const was = g.classList.contains("open");
+    document.querySelectorAll(".ribbon .grp.open").forEach(x => x.classList.remove("open"));
+    if (was) return;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect(), items = g.querySelector<HTMLElement>(".items")!;
+    g.classList.add("open");
+    items.style.left = `${Math.max(4, Math.min(r.left, innerWidth - items.offsetWidth - 8))}px`;
+    items.style.top = `${r.bottom + 2}px`;
+    const close = (ev: MouseEvent) => { if (!items.contains(ev.target as Node) && ev.target !== e.currentTarget) { g.classList.remove("open"); removeEventListener("mousedown", close, true); } };
+    addEventListener("mousedown", close, true);
+  };
+  const ran = (e: MouseEvent) => { if (g.classList.contains("open") && (e.target as Element).closest("button") && !(e.target as Element).closest(".dd")) setTimeout(() => g.classList.remove("open"), 0); };
+  return <div class="grp" ref={g}><div class="items" onClick={ran}>{p.children}</div><button class="gfold" title={p.l} onClick={open}><span>{p.l}</span> ▾</button><div class="cap">{p.l}{p.h && <Help k={p.h} />}</div></div>;
+};
 const S = (p: { children: JSX.Element }) => <div class="stack">{p.children}</div>;
 
 const views: [string, string, Parameters<typeof C.view>[0]][] = [
@@ -134,7 +150,7 @@ export const TitleBar = (p: { update: string | null }) => (void createEffect(fol
   </header>
 );
 
-/** Shrinks the ribbon in steps (labels of small buttons, then of big ones) instead of scrolling sideways. */
+/** Fits the ribbon to the window instead of scrolling sideways: tighter spacing, then groups folded from the right. */
 const fitRibbon = (el: HTMLElement) => {
   // Tighten everything first, then fold groups from the right: small-button labels, then big-button labels.
   const fit = () => {
@@ -143,7 +159,9 @@ const fitRibbon = (el: HTMLElement) => {
     const over = () => el.scrollWidth > el.clientWidth + 1;
     if (!over()) return;
     el.dataset.fit = "1";
-    for (const lvl of ["2", "3"]) for (let i = gs.length - 1; i >= 0 && over(); i--) gs[i].dataset.fit = lvl;
+    // Whole groups fold from the right into a button with the group's name, its commands named
+    // below it (never a row of icons without names).
+    for (let i = gs.length - 1; i >= 0 && over(); i--) gs[i].dataset.fit = "4";
   };
   new ResizeObserver(fit).observe(el);
   new MutationObserver(() => requestAnimationFrame(fit)).observe(el, { childList: true, subtree: false });

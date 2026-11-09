@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2 — 2026-11-09
+
+Fixes found by testing Datum Plot, the family's graphing app, that apply here too.
+
+- **Pressing Enter in a dialog keeps what you just typed.** Before, a value typed into a box and confirmed with Enter (instead of clicking OK) could be lost, because OK ran before the box had passed its value on.
+- **Dialogs move:** drag a dialog by its title bar to see what it covers.
+- **Small screens** (a laptop at 125 %, about 1090 × 590):
+  - Ribbon groups that do not fit fold, from the right, into one button with the group's name, such as **EDITING ▾**. Click it and the group's commands open below it, with their names. No more rows of icons without names.
+  - On a short window the details pane and the timeline start closed, so the task rows have room (turn them on in View › Split View); the details pane never takes more than about a third of the window.
+  - The File page's commands are compact, so more of them fit without scrolling.
+
 ## 0.7.1 — 2026-11-07
 
 Hardening: very large plans, measured at 100,000 tasks.

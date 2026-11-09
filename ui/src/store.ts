@@ -102,9 +102,11 @@ export const curRow = () => grid().rows[cur().row];
 export const curUid = () => curRow()?.uid ?? 0;
 
 // ---------- layout ----------
-export const [details, setDetails] = createSignal(true);
+/** On a short window (a laptop at 125 %) the details pane and the timeline start closed, so the task rows have room. */
+const tall = typeof innerHeight !== "number" || innerHeight >= 700;
+export const [details, setDetails] = createSignal(tall);
 export const [detailsTab, setDetailsTab] = createSignal("general");
-export const [timeline, setTimeline] = createSignal(true);
+export const [timeline, setTimeline] = createSignal(tall);
 export const [zoom, setZoom] = createSignal(24);
 /** Project Setup is a page (sidebar › Setup). */
 export const setupOpen = () => view() === "setup";

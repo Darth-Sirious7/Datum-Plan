@@ -42,6 +42,10 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   };
   await p.addInitScript(mock, fix);
   const bridge = mock;
+  /** Clicks a ribbon button, first opening its group when a narrow ribbon has folded it into a named button. */
+  const click0 = p.click.bind(p);
+  const rclick = async (sel, o) => { const h = await p.$(sel); if (h && !(await h.isVisible())) { await p.evaluate(el => el.closest(".grp")?.querySelector(".gfold")?.click(), h); await p.waitForTimeout(150); } return click0(sel, o); };
+  p.click = (sel, o) => (typeof sel === "string" && sel.startsWith(".ribbon ") ? rclick(sel, o) : click0(sel, o));
   await p.goto(url);
   await p.waitForTimeout(700);
   await p.click(".bs aside .back");
@@ -553,6 +557,30 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   check("Progress shows the weighted S-curve and orders by sub-vendor", !!(await p.$(".page canvas")) && (await p.textContent(".page")).includes("By sub-vendor"));
   if (process.env.SHOT) { await p.click(".dtabs button:has-text('Register')"); await p.waitForTimeout(200); await p.screenshot({ path: process.env.SHOT.replace(".png", "-proc.png") }); }
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
+  // 0.7.2 (from Datum Plot's testers): Enter keeps what was typed; dialogs move; small screens.
+  await p.click(".tabs > button:text-is('Project')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Project Information')"); await p.waitForTimeout(300);
+  const pin = ".dlg .bd input[type=text] >> nth=0";
+  await p.fill(pin, "Typed then Enter"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+  check("pressing Enter in a dialog keeps what was just typed in the box", !(await p.$(".dlg")) && JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "apply").slice(-3))).includes("Typed then Enter"));
+  await p.click(".ribbon button:has-text('Project Information')"); await p.waitForTimeout(300);
+  const b0 = await p.$eval(".dlg", d => d.getBoundingClientRect().left);
+  const hb = await p.$eval(".dlg header", h => { const r = h.getBoundingClientRect(); return [r.left + 60, r.top + 10]; });
+  await p.mouse.move(hb[0], hb[1]); await p.mouse.down(); await p.mouse.move(hb[0] - 200, hb[1] + 30, { steps: 5 }); await p.mouse.up();
+  check("a dialog moves when its title bar is dragged", Math.abs((await p.$eval(".dlg", d => d.getBoundingClientRect().left)) - (b0 - 200)) < 2);
+  await p.keyboard.press("Escape"); await p.waitForTimeout(150);
+  await p.setViewportSize({ width: 1092, height: 589 }); await p.waitForTimeout(400);
+  await p.click(".tabs > button:text-is('Home')"); await p.waitForTimeout(300);
+  const folded = await p.$$eval(".ribbon .grp", gs => gs.map(g => [g.dataset.fit ?? "", g.querySelector(".gfold")?.textContent ?? "", getComputedStyle(g.querySelector(".gfold")).display]));
+  check("on a small screen (1092 × 589) ribbon groups fold into buttons with their names, never icons without names", folded.some(g => g[0] === "4" && g[2] !== "none" && /\w/.test(g[1])) && folded.every(g => g[0] !== "3") && (await p.$eval(".ribbon", r => r.scrollWidth - r.clientWidth)) <= 1, JSON.stringify(folded));
+  const fb = await p.$(".ribbon .grp[data-fit='4'] .gfold"); await fb.click(); await p.waitForTimeout(200);
+  const pop = await p.$eval(".ribbon .grp.open .items", it => [getComputedStyle(it).display, [...it.querySelectorAll(".rb span")].filter(x => getComputedStyle(x).display !== "none" && x.textContent.trim()).length, it.getBoundingClientRect().top]);
+  check("…and a folded group opens its commands below it, with their names", pop[0] === "flex" && pop[1] > 0 && pop[2] > 60, JSON.stringify(pop));
+  await p.mouse.click(700, 450); await p.waitForTimeout(150);
+  check("…closing again on a click elsewhere", !(await p.$(".ribbon .grp.open")));
+  const dh = await p.evaluate(() => { const d = document.querySelector(".dsplit")?.nextElementSibling; return d ? d.getBoundingClientRect().height : 0; });
+  check("on a short window the details pane leaves room for the task rows", dh <= 589 * 0.34 + 1, String(dh));
+  await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
   // 0.7.0: Portfolio: plans with their modules, a timeline, and the shared resource pool.
   await p.click('.side button[title="Portfolio"]'); await p.waitForTimeout(400);
   const pk = await p.textContent(".kpis");
@@ -730,7 +758,7 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".ribbon button:has-text('Excel Workbook')"); await p.waitForTimeout(400);
   check("Insert › Excel Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
-  await p.click(".ribbon button:has-text('Save as Excel')"); await p.waitForTimeout(300);
+  await rclick(".ribbon button:has-text('Save as Excel')"); await p.waitForTimeout(300);
   check("Page › Save as Excel saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
