@@ -24,7 +24,7 @@ Gridcraft (storytold/gridcraft, MIT or Apache-2.0, pure Rust) is a complete spre
 | --- | --- | --- |
 | `formula` + `functions` + `calc` + `core` + `numfmt` | ~30k lines | Spreadsheet formulas (about 400 functions: IF, SUMIFS, XLOOKUP, NETWORKDAYS, WORKDAY, dates, statistics, LET/LAMBDA), dependency recalc, spreadsheet number formats |
 | `model` | 3.6k | A sheet model for free spreadsheet tabs |
-| `xlsx` | 25k | Real Excel (.xlsx) export and import with formulas, formats and outline (replaces our minimal xlsx writer) |
+| `xlsx` | 25k | Real workbook (.xlsx) export and import with formulas, formats and outline (replaces our minimal xlsx writer) |
 | `pdf`, `chart` | 1.3k / 4.4k | True PDF output for reports and server-side charts (later) |
 
 We **add these as Cargo dependencies pinned to a commit** (no copy-paste fork), with attribution in NOTICE. Our scheduling engine stays our own: Gridcraft does not schedule.
@@ -33,7 +33,7 @@ How the plan uses the spreadsheet engine:
 1. **Formula columns, spreadsheet style.** Type `=` in any custom column, e.g. `=[% Complete]-[Baseline % Complete]` or `=IF([Finish]>[Baseline Finish],"Late","OK")`. `[Field]` names map to task fields. All Gridcraft functions work. The classic formula syntax ([Field], IIf) still loads, translated on open.
 2. **A formula bar** above the grid shows and edits the current cell's value or formula.
 3. **Sheet tabs inside the plan** (workbook style): free spreadsheets for quantities, estimates, rate build-ups and progress measurement. Cells can reference plan data (`=TASK("A1040","Finish")`) and tasks can pull from sheets.
-4. **Excel (.xlsx) export with live formulas** (variance columns stay formulas in the file).
+4. **workbook (.xlsx) export with live formulas** (variance columns stay formulas in the file).
 
 ### B. A new grid, built like a spreadsheet
 One component used everywhere: the task sheet, resource sheet, usage, sheets and report tables.
@@ -69,7 +69,7 @@ Use the same look as Compressor Engineering Suite, so Datum Plan is clearly from
 - **Period comparison everywhere:** previous period, this period and variance for planned %, actual %, earned, cost, finish date, float and milestones.
 - **Report structure** (the user's order): 1. **Dashboard** (KPIs with arrows vs last period) → 2. **Charts** (S-curve planned/actual/forecast cumulative %, period progress bars, manpower histogram, cost and EV curves, milestone trend chart, float erosion) → 3. **Tables** (completed this period, started, slipped, critical changes, 2–4-week look-ahead, progress by WBS this vs last period) → 4. **Notes** (editable narrative sections: summary, issues, risks, actions, photos), saved per period with the plan.
 - **Report builder:** pick sections, reorder, brand them (logo, colours), save as templates (Weekly, Monthly, Client, Management).
-- **Output:** real PDF (Gridcraft pdf or the print engine), Excel (.xlsx) with formulas, HTML.
+- **Output:** real PDF (Gridcraft pdf or the print engine), workbook (.xlsx) with formulas, HTML.
 
 ### E. Python: recommendation
 Python libraries (pandas, matplotlib, reportlab, numpy) are excellent, but bundling Python in the app means:
@@ -97,7 +97,7 @@ The engine (scheduling, leveling, fields, EV, checks, network, IO), the shell co
 | Version | Contents |
 | --- | --- |
 | **0.3.1 Foundation** | CentriForge design system and shell (Launcher, Workspace, theme); Gridcraft engine integrated; new spreadsheet grid (ranges, fill, clipboard, alignment, formula bar, AutoFilter, aggregates); spreadsheet formula columns; fixes from your bug list; Playwright tests in CI |
-| **0.3.2 Progress & reporting** | Reporting periods, Update Progress workflow, automatic snapshots, period comparison, Dashboard → Charts → Tables → Notes reports, weekly/monthly templates, PDF and Excel (.xlsx) output |
+| **0.3.2 Progress & reporting** | Reporting periods, Update Progress workflow, automatic snapshots, period comparison, Dashboard → Charts → Tables → Notes reports, weekly/monthly templates, PDF and workbook (.xlsx) output |
 | **0.3.3 Builder & power** | Report builder with templates, sheet tabs in plans, xlsx with formulas, recurring tasks, relationship diagram, global change, EPS tree, conditional formatting |
 | 0.4 | Monte Carlo schedule risk, resource histograms by skill, multi-project resource pool |
 

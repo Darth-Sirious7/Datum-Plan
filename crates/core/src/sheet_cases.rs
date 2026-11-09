@@ -79,7 +79,7 @@ fn h_name_tasks_full_export() {
     let mut doc = base();
     doc.p.sheets.push(sheet("Tasks", &[("A1", "1")]));
     let r = export_full(&doc.p);
-    assert!(r.is_ok(), "a sheet called Tasks and Save as Excel: {r:?}");
+    assert!(r.is_ok(), "a sheet called Tasks and Save as Workbook: {r:?}");
 }
 
 #[test]

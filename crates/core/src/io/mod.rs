@@ -1,4 +1,4 @@
-//! File exchange: project XML, XER and PMXML, Excel (.xlsx), CSV, MPX, JSON, HTML and iCalendar.
+//! File exchange: project XML, XER and PMXML, workbook (.xlsx), CSV, MPX, JSON, HTML and iCalendar.
 pub mod sheetbook;
 pub mod formats;
 pub mod mspdi;
@@ -136,7 +136,7 @@ fn compare_dates(p: &Project, want: &std::collections::HashMap<u32, (String, Str
 }
 
 /// Writes the plan to `path` in the format its extension names. `cols` chooses the columns of
-/// table-like formats (CSV, Excel, JSON, HTML); empty means the standard set.
+/// table-like formats (CSV, workbooks (.xlsx), JSON, HTML); empty means the standard set.
 pub fn export(p: &Project, path: &Path, fmt: &str, today: NaiveDate, cols: &[String]) -> Result<(), String> {
     let s = sched::schedule(p)?;
     let write = |text: String| crate::doc::write_atomic(path, text.as_bytes());

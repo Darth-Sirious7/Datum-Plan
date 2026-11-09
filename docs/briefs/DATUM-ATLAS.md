@@ -84,7 +84,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
   - the result list.
 - **Results:** a ranked table of materials that pass, with which stages each passes or fails and why ("Failed: max service temperature 120 °C < 150 °C"), and the index value and ranking.
 - **Compare:** 2–6 materials side by side, with radar (spider) charts of normalised properties and differences highlighted.
-- **Report:** one click gives a selection report covering the requirements, stages, charts, the ranked shortlist and the datasheets. Print (family print engine) or Word/PDF via print.
+- **Report:** one click gives a selection report covering the requirements, stages, charts, the ranked shortlist and the datasheets. Print (family print engine) or a document (.docx) or PDF via print.
 
 ### 3.4 Index builder (makes the Ashby method easy)
 - A step-by-step guide:
@@ -103,7 +103,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
   - textbook-level typical ranges, rewritten as our own compilation.
 
   **Never copy proprietary or commercial databases.**
-- **User databases:** add your own materials and properties. Import from Excel (.xlsx)/CSV files with a mapping step (as in Datum Plan's import), and export the same.
+- **User databases:** add your own materials and properties. Import from workbook (.xlsx) or CSV files with a mapping step (as in Datum Plan's import), and export the same.
 - **Derived properties** via formulas (the GridCraft formula engine): specific stiffness, thermal diffusivity, indices, cost per volume.
 - **Units:** SI by default, with a metric/imperial switch; per-property unit choice; ranges converted exactly.
 - Uncertainty: low/high ranges, and an optional "typical" value. Missing values are shown as gaps, never as zero.
@@ -137,7 +137,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
 | Window | SolidJS + Vite + strict TS (`ui/src`), the family CSS tokens with the **Violet** accent |
 | Charts | Our own SVG chart engine (reuse Datum Plot's plotting code if it exists; otherwise build `ui/src/chart/`); Chart.js only for simple bar/radar charts |
 | Formulas | GridCraft crates (pinned git dependency, as in Datum Plan) for expressions and derived properties |
-| Excel (.xlsx) I/O | `calamine` (read) and `rust_xlsxwriter` (write), as in Datum Plan |
+| Workbook (.xlsx) I/O | `calamine` (read) and `rust_xlsxwriter` (write), as in Datum Plan |
 | Storage | The built-in database is a compressed JSON (or `bincode`) bundle embedded in the binary; user databases and projects are JSON files (`.datlas`, `.datdb`) |
 | Tests | Rust unit tests (units, ranges, index maths, hulls, selection); Playwright UI tests (`tests_ui/run.cjs`) |
 | Release | `release.yml` (workflow_dispatch), NSIS installer + SHA256SUMS, in-app updater (`update.rs`, `REPO = Edgar-Mendonca/Datum-Atlas`) |
@@ -150,7 +150,7 @@ In user-facing text (README, app, website), Atlas stands on its own. Never name 
 - `select.rs`: limit, chart (box/line/polygon in log space) and tree stages; combined pass/fail with reasons; ranking by index.
 - `index.rs`: the function/objective/constraint → index table, derivation text, slope for log–log charts.
 - `geometry.rs`: ellipses from ranges, convex hulls in log space with smoothing, label placement.
-- `io.rs`: Excel/CSV import with mapping, export, the project file.
+- `io.rs`: workbook (.xlsx) and CSV import with mapping, export, the project file.
 - `report.rs`: data for the selection report.
 
 **About Python:** the family rule is **no Python inside the apps**:
@@ -182,7 +182,7 @@ Starter property set (about 40): density, price, Young's modulus, shear modulus,
 | 0.2.0 | Selection: limit, chart (box + index line) and tree stages; Results with reasons; projects (`.datlas`) |
 | 0.2.1 | Index builder with ~40 indices; expression axes; derived properties (GridCraft) |
 | 0.3.0 | Compare and radar charts; the selection report; ~250 materials with references |
-| 0.3.x | User databases and Excel/CSV import with mapping; label collision avoidance; style presets |
+| 0.3.x | User databases and workbook/CSV import with mapping; label collision avoidance; style presets |
 | 0.4 | Eco audit |
 | 0.5 | Process selection |
 | 1.0 | ~1,000 materials, user guide, signed installer |

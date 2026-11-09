@@ -8,8 +8,13 @@ import { money } from "./api";
 
 Chart.register(...registerables);
 
-/** The chart colours: clear and easy to tell apart (also for most colour-blind readers). */
-export const COL = { blue: "#3B82F6", orange: "#F59E0B", green: "#10B981", red: "#EF4444", purple: "#8B5CF6", sky: "#38BDF8", yellow: "#EAB308", grey: "#A3ABB8", black: "#1F2937" };
+/** The chart colours: clear and easy to tell apart. With Options › Colour-blind safe colours they
+ * become the Okabe-Ito set, told apart with every common kind of colour-blindness. */
+const STD = { blue: "#3B82F6", orange: "#F59E0B", green: "#10B981", red: "#EF4444", purple: "#8B5CF6", sky: "#38BDF8", yellow: "#EAB308", grey: "#A3ABB8", black: "#1F2937" };
+const SAFE = { blue: "#0072B2", orange: "#E69F00", green: "#009E73", red: "#D55E00", purple: "#CC79A7", sky: "#56B4E9", yellow: "#C9B200", grey: "#A3ABB8", black: "#1F2937" };
+export const COL = { ...STD };
+/** Switches the chart and status colours (the page's `data-cb`) to the colour-blind safe set or back. */
+export const setColourSafe = (on: boolean) => { Object.assign(COL, on ? SAFE : STD); document.documentElement.dataset.cb = on ? "1" : "0"; };
 
 const cssv = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 

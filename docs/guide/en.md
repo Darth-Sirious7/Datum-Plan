@@ -36,7 +36,7 @@ Datum Plan checks for a new version when it starts. When one is ready, an amber 
 3. **About and updates.** The version, **Check again** for updates, links to GitHub, the release notes and **Report an issue**.
 4. **Recent plans.** Click one to open it.
 
-The left side of the File page also has **Open**, **Import**, **Save**, **Save As**, **Export**, **Print**, **Roadmap**, **Options** and **Updates**. The arrow at the top goes back to the plan.
+The left side of the File page also has **Open**, **Import**, **Save**, **Save As**, **Export**, **Print**, **Roadmap**, **Options** and **Updates**. The arrow at the top goes back to the plan. **Options › Colour-blind safe colours** switches charts and statuses to colours told apart with every common kind of colour-blindness.
 
 ### The tutorial: learn by looking
 
@@ -376,10 +376,10 @@ When you open **Sheets**, the ribbon opens on **Home**; **Sheet Tools › Format
 - **Look:** **Conditional** formatting and **Cell Styles**, the whole gallery: good, bad and neutral, data and checks, titles and headings, accents at 20, 40, 60 % and full, and number styles.
 - **Rows & Columns:** **Insert** and **Delete** (rows, columns, sheets, or cells shifted right, left, down or up); **Size** for row height, column width, AutoFit, **Hide** and **Unhide** rows or columns, **Format Cells…** and the tab. A double line marks where rows or columns are hidden. Hidden rows and columns don't print, and stay hidden in an exported workbook.
 - **Data:** **Filter**, **Drop-down List** and **Note** (below).
-- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; **AutoSum** (the arrow: Average, Count, Max and Min), Function, Plan Data and Excel Workbook….
+- **Insert:** **Picture** places a logo from the plan's pictures at the selected cell; **AutoSum** (the arrow: Average, Count, Max and Min), Function, Plan Data and Workbook….
 - **Views:** **Normal** (the cells), **Page Layout** (the pages exactly as they will print, with the header and footer) and **Page Breaks** (each printed page over the cells, with its number). The same three are at the bottom right, by the sheet tabs. **Freeze Panes** is here too.
 - **Page Setup:** size, orientation and margins (Normal, Narrow, Wide, None or your own); **Print Area** (only the selected cells print), **Titles** (the selected rows print at the top of every page, also when they are above the print area) and **Breaks** (**Insert Page Break** starts a new page above the selected cell's row and left of its column; or only at the row or the column; **Reset All Page Breaks**); fit to so many pages wide and tall, or a scale. Each sheet keeps its own setup; the plan's stays as it is.
-- **Print:** **Print Options** (header and footer, gridlines, row and column labels, centre on page), **Print Preview** (File › Print, where the same choices sit at the top) and **Save as Excel**.
+- **Print:** **Print Options** (header and footer, gridlines, row and column labels, centre on page), **Print Preview** (File › Print, where the same choices sit at the top) and **Save as Workbook**.
 
 **Zoom:** the slider at the bottom right, its **−** and **+**, View › Zoom or [[Ctrl]] with the mouse wheel show the sheet from 10 % to 400 %; click the percentage to go back to 100 %.
 
@@ -420,22 +420,22 @@ Select the cells, then Sheet Tools › Format › Look › **Conditional**:
 
 **Find and Replace:** [[Ctrl+F]] and [[Ctrl+H]] (or Home › Editing › Find) look in the values shown and in what was typed, formulas too.
 
-### Sheets and Excel workbooks
+### Sheets and workbooks (.xlsx)
 
-- **Bring a workbook in:** Sheet Tools › Format › Insert › **Excel Workbook…** (or **Bring in an Excel workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:
+- **Bring a workbook in:** Sheet Tools › Format › Insert › **Workbook…** (or **Bring in a workbook…** when the plan has no sheets yet). Every sheet of an .xlsx, .xlsm, .xls, .xlsb or .ods file becomes a sheet tab, with:
   - values, formulas and number formats;
   - fonts, fills, borders and alignment;
   - merged cells, column widths and row heights;
   - frozen panes, the tab colour, the page setup and the pictures.
 
   Tab names already in use get " (2)". One Undo takes the whole import back.
-- **Share the sheets:** Sheet Tools › Format › Print › **Save as Excel** writes the sheets as a workbook, with:
+- **Share the sheets:** Sheet Tools › Format › Print › **Save as Workbook** writes the sheets as a workbook, with:
   - real numbers and dates, formulas with their last results, and number formats;
   - styles, merged cells, sizes, pictures, frozen panes, tab colours and each sheet's page setup;
   - notes, filters and drop-down lists.
 
-  Formulas that read the plan (Tasks[Finish], ProjectFinish) keep working: the plan's data goes on hidden sheets in the same workbook. **File › Export › Excel workbook** writes the task table as well.
-- **Country flags** show in Excel as the country's name. A hidden "DatumPlan" sheet remembers which cells are flags (and which pictures are placed in cells), so the workbook opens in Datum Plan with its flags again.
+  Formulas that read the plan (Tasks[Finish], ProjectFinish) keep working: the plan's data goes on hidden sheets in the same workbook. **File › Export › Workbook (.xlsx)** writes the task table as well.
+- **Country flags** show in a spreadsheet program as the country's name. A hidden "DatumPlan" sheet remembers which cells are flags (and which pictures are placed in cells), so the workbook opens in Datum Plan with its flags again.
 
 ### Write formulas
 
@@ -457,7 +457,7 @@ What a formula can read from the plan:
 - Point at an error (#N/A, #NAME?, #SPILL!…) to see what it means.
 - Older formulas such as `=SUM(Plan!M2:M200)` keep working.
 
-> **Tip:** **File › Export** to Excel keeps the formulas and adds the Tasks and Resources tables and the names, so the workbook also works in other spreadsheet programs.
+> **Tip:** **File › Export** to a workbook (.xlsx) keeps the formulas and adds the Tasks and Resources tables and the names, so the workbook also works in other spreadsheet programs.
 
 ### Formula columns
 
@@ -572,10 +572,10 @@ On a master, a table at the bottom adds up the contract dates, damages and payme
 **Documents** (sidebar) keeps the vendor documents of a package and every submission of them.
 
 1. **Settings…** first: the **P date** (purchase order or kick-off; empty means the plan's start) and whether P + n counts in weeks or days; the client's **review** and our **turnaround** in working days. Each counts on **the plan's calendar** or **a calendar of its own**: pick one, or **New calendar…** to make one (the client's working week, or an engineering office abroad with its own holidays) and set its working time. Then the issue purposes of the cycle, the return codes (which accept a document, which ask for it again) and the progress weights of the six steps for each class (each class adds up to 100 %).
-2. **Import…** the register from Excel: choose the sheet; the heading row is found by itself; check what each column holds (document number, title, discipline, class, first issue P + n, MRB/VDB/IOM/PIM, …). Import again later to update documents with the same number. A transmittal log comes in the same way. Or add documents with **+ Document**.
+2. **Import…** the register from a workbook (.xlsx): choose the sheet; the heading row is found by itself; check what each column holds (document number, title, discipline, class, first issue P + n, MRB/VDB/IOM/PIM, …). Import again later to update documents with the same number. A transmittal log comes in the same way. Or add documents with **+ Document**.
 3. Each submission goes in the **Transmittal log**: **+ Sub** on a document adds its next one (next revision, the purpose its cycle needs, today's date). When the client answers, type the return date and pick the code.
 4. The **Register** shows, for every document, the planned and actual first issue, the latest submission, the review due date, the status, the earned progress, the **days the client kept it past the review period** and the forecast final issue. **Late for task** marks a document that will not be ready for the task that needs it.
-5. **Progress** draws the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export to Excel** writes the register and the log.
+5. **Progress** draws the weighted planned and actual S-curve by week or month, the first issues per period, and progress by vendor, discipline, type and class. **Export to Workbook** writes the register and the log.
 
 Classes 1 and 2 go first issue → approval issue → construction issue → final issue; class 3 goes construction issue → final issue. A recurring submission, such as a monthly report, is never counted in progress.
 
@@ -584,10 +584,10 @@ Classes 1 and 2 go first issue → approval issue → construction issue → fin
 **Procurement** (sidebar) follows each sub-order or equipment item from enquiry to delivery.
 
 1. **Settings…**: the milestone weights (balanced, more credit at the order, more credit at delivery, or your own), how orders weigh against each other (PO value, equally, or a typed weight), how many days before delivery the inspection release is planned, the days of float under which an order turns amber, and whether **orders link to the Document Register**.
-2. **Import…** a procurement status register from Excel (the heading row and the planned and actual columns are found by themselves), or add orders with **+ Order**. In each order (**✎**), choose the task for its manufacture and delivery (its planned manufacturing start and delivery come from it) and the task that needs it (the required date), or type dates of their own.
+2. **Import…** a procurement status register from a workbook (.xlsx) (the heading row and the planned and actual columns are found by themselves), or add orders with **+ Order**. In each order (**✎**), choose the task for its manufacture and delivery (its planned manufacturing start and delivery come from it) and the task that needs it (the required date), or type dates of their own.
 3. Keep it up to date in the register: the **manufacturing %**, the vendor's **promised** delivery, and **Done on** for the next milestone. **Float** is the required date less the forecast delivery: red when late for the plan.
 4. **Expediting log**: dated notes per order (**✉** on a row opens it for that order).
-5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export to Excel** writes the register and the log.
+5. **Progress**: the weighted planned and actual S-curve by week or month, and orders by sub-vendor and country. **Export to Workbook** writes the register and the log.
 
 With the link to the Document Register on, an order lists the vendor documents it waits for; the register shows how many are accepted and flags orders whose drawings hold up manufacturing. With it off, orders stand on their own.
 
@@ -604,8 +604,8 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
-- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from Excel (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
-- **Export** writes Excel (with formulas and formatting), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
+- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from workbook (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
+- **Export** writes workbooks (.xlsx, with formulas and formatting), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
 ## Command line and AI assistants

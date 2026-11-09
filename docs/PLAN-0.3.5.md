@@ -52,7 +52,7 @@ Heading right-click menu:
 - **Print preview:** fit to width, page navigation and a page count while editing settings. The setup can be saved as named page setups per view.
 
 ### E. Also from the 0.3.4 limits
-- Excel (.xlsx) export keeps cell formatting (bold, colours, fill, alignment, size) for tasks and sheets.
+- workbook (.xlsx) export keeps cell formatting (bold, colours, fill, alignment, size) for tasks and sheets.
 - One shared grid for Sheets and the task sheet. The fill handle continues series (dates +1 day/week, numbers, IDs). Paste Special (values only, formats only). Freeze panes in Sheets.
 - Update `docs/MEMORY.md` and add UI tests for each item: no horizontal ribbon scroll at 1280/1600/1920 px, column delete and unhide, every column printed, each view printable.
 

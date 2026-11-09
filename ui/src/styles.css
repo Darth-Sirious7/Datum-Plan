@@ -903,7 +903,7 @@ h4.sub .xin { color: #6D3FC8; } h4.sub .xout { color: #1E7D46; }
 .simg .corner { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: var(--blue); border: 1px solid #fff; cursor: nwse-resize; }
 .simg .x { position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; line-height: 17px; }
 @media print { .simg.on { outline: 0; } .simg .corner, .simg .x { display: none; } }
-/* 0.5.17 Sheet Tools: row heights, merged cells, cell styles, Excel-style tabs */
+/* 0.5.17 Sheet Tools: row heights, merged cells, cell styles, spreadsheet-style tabs */
 .sheetgrid .rowh { position: sticky; }
 .sheetgrid .rowh.on { background: var(--sel2); color: var(--navy); }
 .rowh .rszr { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: row-resize; z-index: 3; }
@@ -1140,3 +1140,12 @@ textarea.edit { resize: none; overflow: hidden; white-space: pre; font: inherit;
 .dlg header { cursor: move; user-select: none; }
 /* Short windows: a compact File page. */
 @media (max-height: 700px) { .bs aside button { padding: 6px 0; gap: 2px; font-size: 12px; } .bs aside .back { padding: 6px 0 8px; } }
+/* Colour-blind safe statuses (Options): blue for good, yellow-orange for warnings, vermillion for problems. */
+:root[data-cb="1"] .st.good { background: #DCEBF7; color: #0B4F7A; }
+:root[data-cb="1"] .st.warn { background: #FFF1C9; color: #6B5300; }
+:root[data-cb="1"] .st.bad { background: #FADCCB; color: #8A3300; }
+:root[data-cb="1"] .kpi.bad .v, :root[data-cb="1"] td.bad, :root[data-cb="1"] .late { color: #B34700; }
+:root[data-cb="1"] .kpi.good .v { color: #0B4F7A; }
+/* Over capacity: a dot as well as the colour. */
+.pool td.pc.ov { text-align: center; font-size: 10px; line-height: 1; color: #6E2A0C; }
+.pool td.pc.ov::after { content: "●"; }

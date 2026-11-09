@@ -410,7 +410,7 @@ fn pictures_are_kept_in_the_plan_and_placed_on_sheets() {
     assert!(doc.p.sheets[0].images.is_empty() && doc.p.pictures.len() == 1);
 }
 
-// A sheet's pictures go into the Excel (.xlsx) workbook at their cell.
+// A sheet's pictures go into the workbook (.xlsx) at their cell.
 #[test]
 fn sheet_pictures_go_into_the_workbook() {
     let mut doc = Doc::new(plan(&[(2, "")]));

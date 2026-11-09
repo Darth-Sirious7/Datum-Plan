@@ -179,7 +179,7 @@ pub fn clean(r: &mut ProcRegister) {
     }
 }
 
-/// The register as an Excel workbook: the orders and the expediting log.
+/// The register as a workbook (.xlsx): the orders and the expediting log.
 pub fn write_xlsx(p: &Project, o: &ProcOut, path: &std::path::Path) -> Result<(), String> {
     use rust_xlsxwriter::{Format, Workbook};
     let r = &p.procurement;

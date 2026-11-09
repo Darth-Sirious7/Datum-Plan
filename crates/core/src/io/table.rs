@@ -1,4 +1,4 @@
-//! Task lists in spreadsheets: CSV and Excel in, with a column mapping step; CSV and Excel out.
+//! Task lists in spreadsheets: CSV and workbook (.xlsx) in, with a column mapping step; CSV and workbook (.xlsx) out.
 use crate::{doc, fields::{Calc, Kind}, formula::F, model::Project};
 use calamine::{open_workbook_auto, Data, Reader};
 use chrono::NaiveDate;
@@ -319,9 +319,9 @@ pub fn write_csv(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
     crate::doc::write_atomic(path, out.as_bytes())
 }
 
-/// Excel workbook: the table with real numbers and dates, formula columns as live workbook formulas,
+/// Workbook (.xlsx): the table with real numbers and dates, formula columns as live workbook formulas,
 /// the plan's sheet tabs, and a Plan sheet those tabs can read.
-/// Applies a cell style (`b;i;u;s;c:#hex;f:#hex;z:12;a:c;n:Font`, see the UI's fmt.ts) to an Excel format.
+/// Applies a cell style (`b;i;u;s;c:#hex;f:#hex;z:12;a:c;n:Font`, see the UI's fmt.ts) to a workbook number format.
 fn styled(mut f: rust_xlsxwriter::Format, st: &str) -> rust_xlsxwriter::Format {
     use rust_xlsxwriter::{FormatAlign, FormatUnderline};
     let hex = |v: &str| u32::from_str_radix(v.trim_start_matches('#'), 16).ok();

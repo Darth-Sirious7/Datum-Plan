@@ -654,3 +654,28 @@ fn a_very_large_plan_keeps_fewer_undo_steps() {
     for k in 0..210 { d.apply(Op::QuickAdd { at: 0, text: format!("Task {k}") }, "%d/%m/%Y").unwrap(); }
     assert_eq!(d.undo_steps(), 200);
 }
+
+/// Public text names file types, never commercial products (the family rule): the window's
+/// strings, the guide, the changelog, the readme, the site text and the project memory.
+#[test]
+fn public_text_names_no_commercial_products() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files: Vec<std::path::PathBuf> = ["CHANGELOG.md", "README.md", "SECURITY.md", "docs/site.json", "docs/MEMORY.md", "docs/guide/en.md", "docs/guide/zh.md"].iter().map(|f| root.join(f)).collect();
+    if let Ok(rd) = std::fs::read_dir(root.join("ui/src")) { files.extend(rd.filter_map(|e| e.ok()).map(|e| e.path())) }
+    let banned = ["Excel", "Microsoft Project", "MS Project", "Primavera", "PowerPoint", "Microsoft Word"];
+    let mut found = vec![];
+    for f in files.iter().filter(|f| f.is_file()) {
+        let Ok(text) = std::fs::read_to_string(f) else { continue };
+        for (n, line) in text.lines().enumerate() {
+            for w in banned {
+                let hit = line.match_indices(w).any(|(i, _)| {
+                    let before = line[..i].chars().next_back().is_some_and(|c| c.is_alphanumeric());
+                    let after = line[i + w.len()..].chars().next().is_some_and(|c| c.is_alphanumeric());
+                    !before && !after
+                });
+                if hit { found.push(format!("{}:{}: {w}", f.display(), n + 1)) }
+            }
+        }
+    }
+    assert!(found.is_empty(), "product names in public text:\n{}", found.join("\n"));
+}

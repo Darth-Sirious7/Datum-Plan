@@ -597,6 +597,15 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.click(".page button:has-text('Take resources from the pool')"); await p.waitForTimeout(300);
   check("this plan takes its resources' rates, units and calendars from the pool", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "pool_take").pop()?.[1])) === '{"add":false}');
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace(".png", "-pool.png") });
+  check("periods over capacity carry a mark as well as a colour", (await p.$$(".pool td.pc.ov")).length === 1);
+  // 0.7.3: colour-blind safe colours (Options), statuses keep their words.
+  await p.click(".tabs .file"); await p.waitForTimeout(200); await p.click(".bs aside button:has-text('Options')"); await p.waitForTimeout(300);
+  await p.click(".opt:has-text('Colour-blind safe colours') input"); await p.waitForTimeout(150);
+  check("Options › Colour-blind safe colours switches the colours at once", await p.evaluate(() => document.documentElement.dataset.cb === "1"));
+  await p.click(".options button:has-text('Save')"); await p.waitForTimeout(300);
+  check("…and is kept with the options", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "set_options").pop()?.[1].opts.colourSafe)) === "true");
+  await p.click(".options .opt:has-text('Colour-blind safe colours') input"); await p.click(".options button:has-text('Save')"); await p.waitForTimeout(200);
+  await p.click(".bs aside .back"); await p.waitForTimeout(200);
   await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.5.28: the master gives its setup (ticked parts) to the ticked subplans; name and code stay theirs.
   await p.click(".plantabs .plantab >> nth=0", { button: "right" }); await p.waitForTimeout(200);
@@ -755,11 +764,11 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
   // 0.5.20: workbooks in and out; Backspace edits.
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(100);
-  await p.click(".ribbon button:has-text('Excel Workbook')"); await p.waitForTimeout(400);
-  check("Insert › Excel Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
+  await p.click(".ribbon button:has-text('Workbook')"); await p.waitForTimeout(400);
+  check("Insert › Workbook… brings a workbook's sheets in as tabs", (await p.textContent(".sheettabs")).includes("Vendors list") && (await p.textContent("#toast")).includes("Vendors list"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
-  await rclick(".ribbon button:has-text('Save as Excel')"); await p.waitForTimeout(300);
-  check("Page › Save as Excel saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
+  await rclick(".ribbon button:has-text('Save as Workbook')"); await p.waitForTimeout(300);
+  check("Page › Save as Workbook saves the sheets as a workbook", (await p.textContent("#toast")).includes("sheets.xlsx"));
   await p.click(".ctxgrp.sheetctx button"); await p.waitForTimeout(150);
   sq = await scell(1, 0); await p.mouse.click(sq.x, sq.y); await p.waitForTimeout(100);
   await p.keyboard.press("Backspace"); await p.waitForTimeout(150);

@@ -424,7 +424,8 @@ export const Portfolio = () => {
   const today = () => Math.floor(Date.now() / 864e5);
   const setPool = async (path: string) => { await call("set_pool", { path }); rePool(); };
   const take = async (add: boolean) => { const r = await call<[any, string]>("pool_take", { add }); if (r) { setOut(r[0]); toast(r[1], true); rePool(); } };
-  const heat = (load: number, cap: number) => { const r = cap > 0 ? load / cap : load > 0 ? 9 : 0; return r === 0 ? "#F3F5F8" : r <= 0.7 ? "#DDF2E5" : r <= 1.0001 ? "#A7DCB8" : r <= 1.3 ? "#FDE2A7" : "#F4A6A6"; };
+  // Load against capacity; the colour-blind safe scale runs pale blue → blue → orange → vermillion.
+  const heat = (load: number, cap: number) => { const r = cap > 0 ? load / cap : load > 0 ? 9 : 0, k = r === 0 ? 0 : r <= 0.7 ? 1 : r <= 1.0001 ? 2 : r <= 1.3 ? 3 : 4; return (document.documentElement.dataset.cb === "1" ? ["#F3F5F8", "#DCEBF7", "#9CC7E8", "#F5C78E", "#E8866A"] : ["#F3F5F8", "#DDF2E5", "#A7DCB8", "#FDE2A7", "#F4A6A6"])[k]; };
   return (
     <Page title="Portfolio" help="portfolio" tools={<><span class="muted">{data()?.[0] || "No workspace folder"}</span><button class="btn" onClick={() => setAgain(-Math.abs(again()) - 1)}><Icon n="folder" /> Choose folder…</button><button class="btn" onClick={() => { setAgain(Math.abs(again()) + 1); refetch(); }}>Refresh</button></>}>
       <Show when={cards().length}>
@@ -477,14 +478,14 @@ export const Portfolio = () => {
             <Seg value={unit()} set={setUnit} options={[["week", "Weeks"], ["month", "Months"]]} /><span class="grow" />
             <button class="btn sm" disabled={!opts().pool} title="This plan's resources with the same names take the pool's rates, units, availability and calendars" onClick={() => take(false)}>Take resources from the pool</button>
             <button class="btn sm" disabled={!opts().pool} title="…and add the pool's other resources to this plan" onClick={() => take(true)}>…and add the others</button></div>
-          <p class="muted">Every resource's work across the workspace's plans (matched by name) against its capacity. Green: within capacity; amber: up to 30 % over; red: more. Click a resource for its work by plan.</p>
+          <p class="muted">Every resource's work across the workspace's plans (matched by name) against its capacity. Green: within capacity; amber: up to 30 % over; red: more (blue, orange and vermillion with colour-blind safe colours); a dot marks every period over capacity. Click a resource for its work by plan.</p>
           <Show when={pool()} fallback={<p class="empty">{pool.error ? String(pool.error) : "Working out the pool…"}</p>}>{pv => <>
             <div class="pool"><table class="tbl"><thead><tr><th>Resource</th><th>Group</th><th class="r" title="Highest load against capacity">Peak</th><th class="r" title="Periods over capacity">Over</th>
               <For each={pv().view.buckets}>{b => <th class="pb" title={day(b)}>{unit() === "month" ? new Date(b * 864e5).toLocaleDateString("en-GB", { month: "short" }) : ""}</th>}</For></tr></thead>
               <tbody><For each={pv().view.rows}>{r => <>
                 <tr class="link" onClick={() => setOpen(open() === r.name ? "" : r.name)}><td><b>{r.name}</b>{r.in_pool && <span class="muted" title="Defined in the pool plan"> · pool</span>}</td><td class="muted">{r.group}</td>
                   <td class="r" classList={{ late: r.peak > 1.0001 }}>{(r.peak * 100).toFixed(0)} %</td><td class="r" classList={{ late: r.over > 0 }}>{r.over}</td>
-                  <For each={r.load}>{(v, j) => <td class="pc" style={{ background: heat(v, r.cap[j()]) }} title={`${day(pv().view.buckets[j()])}: ${v.toFixed(0)} h of ${r.cap[j()].toFixed(0)} h`} />}</For></tr>
+                  <For each={r.load}>{(v, j) => <td class="pc" classList={{ ov: v > r.cap[j()] + 0.01 }} style={{ background: heat(v, r.cap[j()]) }} title={`${day(pv().view.buckets[j()])}: ${v.toFixed(0)} h of ${r.cap[j()].toFixed(0)} h`} />}</For></tr>
                 <Show when={open() === r.name}><tr><td colspan={4 + pv().view.buckets.length}>
                   <ChartBox title={`${r.name}: hours by plan`} type="bar" stacked labels={pv().view.buckets.map(day)} datasets={[...r.plans.map((h, k) => bar(pv().view.plans[k], h, PCOL[k % PCOL.length], "p")).filter((_, k) => r.plans[k].some(x => x > 0)), line("Capacity", r.cap, "#C73B3B", [4, 3]) as any]} />
                 </td></tr></Show>

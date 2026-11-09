@@ -175,8 +175,8 @@
   - A page canvas with tables (any fields, filter, group, sort), charts (bar, column, line, area, pie, S-curve, histogram, Gantt snapshot), text boxes with live fields (`[Project Finish]`), images, KPI tiles and page headers/footers
   - Drag to place, plus Format tabs for each element
   - Saved in the plan, and as templates you can share
-- **Export** a report to PDF, PNG, Excel (.xlsx, data) and HTML. **Print** with page setup.
-- **Visual reports:** pivot-style timephased exports to Excel (.xlsx) files.
+- **Export** a report to PDF, PNG, spreadsheet (.xlsx, data) and HTML. **Print** with page setup.
+- **Visual reports:** pivot-style timephased exports to workbook (.xlsx) files.
 
 ### K. Analysis and quality
 - **Check Schedule (DCMA 14-point):** missing logic, leads, lags, relationship types, hard constraints, high float, negative float, high duration, invalid dates, resources, missed tasks, critical path test, CPLI, BEI. Each check gives pass/fail with the list of tasks.
@@ -204,7 +204,7 @@
 | XER `.xer` | ✓ | ✓ | Extended with activity codes, UDFs, expenses and steps |
 | **PMXML** `.xml` | ✓ | ✓ | New; detected automatically next to MSPDI |
 | **MPX** `.mpx` | ✓ | ✓ | New; older exchange format |
-| Excel `.xlsx` / CSV `.csv` | ✓ | ✓ | Choose a table or map columns |
+| spreadsheet `.xlsx` / CSV `.csv` | ✓ | ✓ | Choose a table or map columns |
 | **PDF** | | ✓ | Print/report output |
 | **PNG / SVG** | | ✓ | Copy Picture of a view |
 | **iCalendar** `.ics` | | ✓ | Milestones and tasks for Outlook/Google Calendar |
@@ -297,7 +297,7 @@ The **acceptance scenarios** become automated tests where the engine can check t
 | beta.3 | Engine: task types, effort-driven, elapsed and % lags, recurring and split tasks, resource calendars and rate tables, leveling, activity types and advanced options, longest path and float paths, Inspect and Task Path |
 | beta.4 | Task/Resource Usage, Resource Graph, Team Planner, Network Diagram, Relationship Diagram, better Calendar, split views, forms |
 | beta.5 | 11 baselines and interim plans, Update Tasks and Update Project, progress lines, earned value, costs (fixed, expenses, cost accounts, cash flow), period snapshots |
-| beta.6 | Reports: gallery, designer, charts, periodic reports, export to PDF/PNG/Excel (.xlsx)/HTML; Bar Styles, Timescale, Page Setup, print preview, Copy Picture |
+| beta.6 | Reports: gallery, designer, charts, periodic reports, export to PDF/PNG/workbook (.xlsx)/HTML; Bar Styles, Timescale, Page Setup, print preview, Copy Picture |
 | beta.7 | Analysis: Check Schedule (DCMA), schedule log, compare projects, what-if, risks and issues; EPS workspace, master/subprojects, resource pool, activity codes; new file formats (PMXML, MPX, ICS, HTML, JSON) |
 | **0.3.0** | Fixes from your beta feedback, performance pass (10k tasks), documentation |
 

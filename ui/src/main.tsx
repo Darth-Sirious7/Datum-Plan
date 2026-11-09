@@ -30,6 +30,7 @@ import { Lookahead, Manpower } from "./progress";
 import { TourCard } from "./tour";
 import { PlanTabs } from "./plans";
 import { ContractView, hasModule } from "./contract";
+import { setColourSafe } from "./charts";
 import { DocumentsView } from "./docreg";
 import { ProcurementView } from "./procure";
 
@@ -99,7 +100,7 @@ const App = () => {
   onMount(async () => {
     try {
       setFields(await invoke<FieldList>("field_list"));
-      const o = await invoke<Options>("options"); setOpts(o); setThemeRaw(o.theme || "auto"); applyTheme();
+      const o = await invoke<Options>("options"); setOpts(o); setThemeRaw(o.theme || "auto"); setColourSafe(!!o.colourSafe); applyTheme();
       setOut(await invoke<Out>("state"));
       useTable("Entry");
       const start = await invoke<string | null>("startup_file");

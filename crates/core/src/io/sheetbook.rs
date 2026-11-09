@@ -244,7 +244,7 @@ fn xml_parts(path: &Path) -> Result<Parts, String> {
         let el = &book[i..i + end];
         let (Some(n), Some(gt)) = (attr(el, "name"), el.find('>')) else { continue };
         let local: Option<usize> = attr(el, "localSheetId").and_then(|x| x.parse().ok());
-        // A workbook's or a sheet's name (Excel's own, _xlnm., are print settings; hidden ones are its machinery).
+        // A workbook's or a sheet's name (the workbook format's own, _xlnm., are print settings; hidden ones are its machinery).
         if !n.starts_with("_xlnm.") && attr(el, "hidden").as_deref() != Some("1") {
             let sheet = match local { Some(id) => match tabs.get(id) { Some(t) => t.clone(), None => continue }, None => String::new() };
             global.push(DefName { name: n.clone(), formula: format!("={}", unxml(&el[gt + 1..]).trim_start_matches('=')), comment: attr(el, "comment").unwrap_or_default(), sheet });

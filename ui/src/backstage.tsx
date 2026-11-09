@@ -1,4 +1,5 @@
 // File (backstage): home with templates and recent plans, export, print, options, updates.
+import { setColourSafe } from "./charts";
 import { For, Show, createSignal, createResource, onMount, JSX } from "solid-js";
 import { PAPERS, PrintPage } from "./print";
 import { RoadmapPage } from "./roadmap";
@@ -68,7 +69,7 @@ const Home = () => {
           <For each={tpls() ?? []}>{t => <button class="tile" onClick={() => neu(t.id)}><div class="pic"><Mini t={t} /><small>{t.tasks} tasks · {t.days} days</small></div><b>{t.name}</b><span>{t.desc}</span></button>}</For>
           <button class="tile" onClick={() => import("./tour").then(m => m.tutorial())}><div class="pic"><svg class="ic"><use href="#i-help" /></svg><small>Every view · notes on each</small></div><b>Tutorial (guided example)</b><span>An office fit-out in progress that uses every part of Datum Plan, with a note on each view saying how it was filled in.</span></button>
           <button class="tile" onClick={() => import("./plans").then(m => m.example())}><div class="pic"><svg class="ic"><use href="#i-link" /></svg><small>4 plans · 13 links</small></div><b>Linked plans (example)</b><span>A compressor station: a main schedule and engineering, procurement and construction plans linked to each other, opened in tabs.</span></button>
-          <button class="tile" onClick={() => C.importFile()}><div class="pic"><svg class="ic"><use href="#i-import" /></svg></div><b>Import</b><span>XML and XER project files, Excel, CSV or JSON.</span></button>
+          <button class="tile" onClick={() => C.importFile()}><div class="pic"><svg class="ic"><use href="#i-import" /></svg></div><b>Import</b><span>XML and XER project files, workbooks (.xlsx), CSV or JSON.</span></button>
           <button class="tile" onClick={() => D.guide()}><div class="pic"><svg class="ic"><use href="#i-pdf" /></svg></div><b>Guide</b><span>The step-by-step guide (PDF), in English or 中文.</span></button>
           <button class="tile" onClick={() => setBackstage("roadmap")}><div class="pic"><svg class="ic"><use href="#i-list" /></svg></div><b>Roadmap</b><span>Everything Datum Plan will do, and when.</span></button>
         </div>
@@ -106,7 +107,7 @@ const UpdateCard = () => {
 const Export = () => (
   <div><h1>Export</h1>
     <div class="tiles">
-      <For each={[["xlsx", "Excel workbook", "The current table's columns, with outline indent."], ["xml", "Project XML", "For scheduling programs that read project XML files."], ["xer", "XER", "For scheduling programs that read XER files."],
+      <For each={[["xlsx", "Workbook (.xlsx)", "The current table's columns, with outline indent."], ["xml", "Project XML", "For scheduling programs that read project XML files."], ["xer", "XER", "For scheduling programs that read XER files."],
         ["pmxml", "PMXML", "XML with WBS, activities, relationships and resources."], ["mpx", "MPX", "The classic exchange format."], ["csv", "CSV", "Plain text, the current table's columns."],
         ["html", "Web page", "A branded report of the current table."], ["ics", "iCalendar", "Tasks and milestones as calendar events."], ["json", "JSON", "For scripts and other tools."]]}>{([k, n, d]) =>
         <button class="tile" onClick={() => C.exportAs(k)}><div class="pic"><svg class="ic"><use href="#i-export" /></svg><small>.{k}</small></div><b>{n}</b><span>{d}</span></button>}</For>
@@ -141,6 +142,7 @@ const OptionsPage = () => {
       <p class="muted">Settings for Datum Plan on this computer. Defaults for new plans apply when a plan is created; change an open plan in Project › Project Setup.</p>
       <Sec t="General" about="How dates and the window look.">
         <Opt l="Date format" hint="Used in the task sheet, reports and printouts."><Pick value={o().dateFmt} set={v => put("dateFmt", v)} options={[["%d-%b-%y", "24-Oct-26"], ["%d/%m/%Y", "24/10/2026"], ["%m/%d/%Y", "10/24/2026"], ["%Y-%m-%d", "2026-10-24"], ["%d %b %Y", "24 Oct 2026"], ["%a %d-%b-%y", "Sat 24-Oct-26"]]} /></Opt>
+        <Opt l="Colour-blind safe colours" hint="Charts, statuses and the resource pool use colours told apart with every common kind of colour-blindness (blue, orange and vermillion instead of green and red). Statuses always carry a word too."><label class="chk"><input type="checkbox" checked={!!o().colourSafe} onChange={e => { put("colourSafe", e.currentTarget.checked); setColourSafe(e.currentTarget.checked); applyTheme(); }} /> Use them</label></Opt>
         <Opt l="Theme" hint="Auto follows the Windows light or dark setting."><Pick value={o().theme || "auto"} set={v => { put("theme", v); setThemeRaw(v); applyTheme(); }} options={[["auto", "Auto (follow Windows)"], ["light", "Light"], ["dark", "Dark"]]} /></Opt>
       </Sec>
       <Sec t="Start-up and saving" about="What happens when Datum Plan starts, and how your work is protected.">

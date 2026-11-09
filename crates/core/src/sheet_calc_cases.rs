@@ -376,7 +376,7 @@ fn number_formats_show_as_a_spreadsheet_shows_them() {
     assert!(bad.is_empty(), "{bad:?}");
 }
 
-// --- Excel round trip -----------------------------------------------------------------------------
+// --- workbook round trip -----------------------------------------------------------------------------
 
 fn export(doc: &Doc) -> std::path::PathBuf {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

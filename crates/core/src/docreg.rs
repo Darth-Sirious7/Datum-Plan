@@ -229,7 +229,7 @@ pub fn clean(r: &mut DocRegister) {
     }
 }
 
-/// The register and the transmittal log as an Excel workbook.
+/// The register and the transmittal log as a workbook (.xlsx).
 pub fn write_xlsx(p: &Project, o: &RegOut, path: &std::path::Path) -> Result<(), String> {
     use rust_xlsxwriter::{Format, Workbook};
     let r = &p.documents;

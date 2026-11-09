@@ -227,7 +227,7 @@ export const DocumentsView = () => {
   return (
     <Page title="Document Register" help="documents" tools={<>
       <button class="btn" onClick={docSettings}>Settings…</button><button class="btn" onClick={docImport}>Import…</button>
-      <button class="btn" onClick={async () => { const f = await call<string | null>("docs_export"); if (f) toast(`Saved ${f}`, true); }}>Export to Excel</button>
+      <button class="btn" onClick={async () => { const f = await call<string | null>("docs_export"); if (f) toast(`Saved ${f}`, true); }}>Export to Workbook</button>
       <button class="btn pri" onClick={() => { const id = next(reg().docs); save({ docs: [...reg().docs, blankDoc(id)] }).then(() => editDoc(reg().docs.find(d => d.id === id) ?? blankDoc(id))); }}>+ Document</button>
     </>}>
       <Show when={me()}>{o => <>
@@ -266,7 +266,7 @@ export const DocumentsView = () => {
                   <td class="acts"><button class="btn sm" title="Log a submission of this document" onClick={() => addSub(d)}>+ Sub</button><button class="x" title="Edit" onClick={() => editDoc(d)}>✎</button>
                     <button class="x" title="Remove the document and its submissions" onClick={() => save({ docs: reg().docs.filter(x => x.id !== d.id), log: reg().log.filter(s => s.doc !== d.id) })}>×</button></td>
                 </tr>); }}</For></tbody></table>
-            <Show when={!reg().docs.length}><p class="empty">No documents yet. <b>Import…</b> the vendor document register from Excel, or add them with <b>+ Document</b>. Set the P date and the review cycle in <b>Settings…</b>.</p></Show>
+            <Show when={!reg().docs.length}><p class="empty">No documents yet. <b>Import…</b> the vendor document register from a workbook (.xlsx), or add them with <b>+ Document</b>. Set the P date and the review cycle in <b>Settings…</b>.</p></Show>
           </div>
         </Show>
         <Show when={tab() === "log"}>
