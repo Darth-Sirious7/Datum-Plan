@@ -6,7 +6,7 @@
 | | |
 | --- | --- |
 | **Product** | Datum Plan: a Windows desktop scheduler with an easy ribbon layout (task sheet and Gantt chart) and advanced scheduling features |
-| **Current version** | **0.4.4** (released 2026-10-29). Earlier: 0.1.0 … 0.4.3 |
+| **Current version** | **0.7.3** (released 2026-11-09). Earlier: 0.1.0 … 0.7.2 |
 | **Repo** | `Edgar-Mendonca/Datum-Plan` · working branch `claude/fervent-keller-ddas5s` (currently also the default branch) |
 | **Stack** | Rust (engine + shell), Tauri 2, WebView2, SolidJS + Vite UI in strict TypeScript (TSX), plain CSS with light/dark tokens, Chart.js, IBM Plex fonts; spreadsheet formulas from the GridCraft crates (pinned git dependency, see NOTICE) |
 | **Code size** | About 9,300 lines: core 5,700 (with 460 lines of tests), shell 700, UI 2,900 TSX + CSS |
@@ -74,7 +74,7 @@ flowchart LR
   - Total float = working time between EF and LF.
   - A link to or from a summary applies to every leaf task under it.
   - `normalize()` drops links between a task and its own ancestors.
-- **Progress:** an actual finish fixes the task. An actual start with % < 100 puts the remaining work after the status date (status date + 1 day, 00:00). Unstarted tasks cannot start before the status date. Setting % fills in actual dates; 0% clears them.
+- **Progress:** an actual finish fixes the task. An actual start with % < 100 puts the remaining work after the status date (status date + 1 day, 00:00). Unstarted tasks cannot start before the status date. With `opts.msp_status` (since 0.7.2, as in MS Project) the status date measures progress only: no data date, so unfinished work keeps its dates. Setting % fills in actual dates; 0% clears them.
 
 ### Files
 
@@ -257,6 +257,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.5.13 | The tutorial is built by the engine from `today` (start five weeks back, status last Friday), so it always opens mid-way through the work | A fixed-date example would open finished or not started; the in-progress state is what shows tracking, S-curves and earned value. |
 | 0.5.14 | Plan tabs sit between the ribbon and the timeline and always show, even for one plan | The user: tabs belong with the plans they switch, and a visible ＋ lets you open the next plan and link to it straight away. |
 | 0.5.15 | No Python in Plan; charts stay Chart.js (sharper), and publication-quality graphs go to Datum Plot through a one-way .dplot copy | Python would add 80–150 MB, a second runtime and slower static charts for no new computation; Plot already has matplotlib. The user asked that nothing in Plot ever changes the plan. |
+| 0.7.3 | Project's unassigned work: the stand-in resource has `Resource.unassigned` and is named "Project work (no resource)"; the MSPDI writer leaves it and its calendar out and writes its assignments as resource -65535 with their hours. The import report asks the status-date mode when the plan has a status date (MS Project mode suggested for Project files). Check 9 does not count unstarted work before the status date when `msp_status` is on. | A round trip must not add a resource in Project; in MS Project mode late unstarted work is a delay, not an invalid date. |
+| 0.7.2 | Status date as in MS Project: `SchedOpts.msp_status` (Schedule Options › Status date: *Measures progress only* / *Moves unfinished work after it*, the default). On, `sched.rs` sets no data date; progress figures still use the status date. MSPDI import turns it on unless `MoveRemainingStartsForward` = 1, which our writer emits (as `!msp_status`), so Datum's own round trip is unchanged. Work on Project's unassigned resource (-65535, capped by the task's Work) comes in on a work resource with units that give each task its hours back. | Plans from Project kept moving after the status date and lost their unassigned hours; checked against a real 40-task file: 0 date differences, 3,095 h. |
 | 0.7.1 | Very large plans: undo keeps `undo_keep(tasks)` = (1,000,000 / tasks) clamped 10–200 steps (a copy is ~33 MB at 100k tasks); `Project::head()` (no tasks, snapshot rows dropped) is what `out()` serialises; grid rows skip false flags and round bar days to 5 decimals (UI reads missing flags as false; baseline/deadline stay null, compared with `!== null`); the Gantt keeps a `rowAt` memo. `tests_ui/perf.cjs` copies the fixture rows to N (the timeline query answers empty) and fails when the first paint > 15 s or a scroll frame > 120 ms. | Measured at 100k: schedule 0.12 s, calc 0.15 s, grid 0.3 s, edit 0.2 s, save 0.1 s, open 0.4 s; window first paint 75 ms, scroll at frame rate. |
 | 0.7.0 | Portfolio: `portfolio.rs` (`card` with module roll-ups, `pool` matching resources by trimmed lowercase name, capacity from the pool plan or the most any plan gives, `take` copying kind/group/units/rates/tables/availability/calendar/exceptions and the calendar) + `Op::PoolTake`; shell `workspace_plans` reads open tabs (unsaved) before files, options `pool` = the pool plan's path, commands `pool_view`/`set_pool`/`pool_take`. | The roadmap's portfolio and shared resource pool, kept file-based (no server). |
 | 0.6.2 | Procurement Register: `Project.procurement` (`ProcRegister`: preset balanced/order/delivery/own + weights, weighting value/equal/manual, irn_days, warn_days, `link_docs`, `items: PItem` with planned/actual [5], task (manufacture & delivery: planned mfg start = its start, delivery = its finish), need (required = its start) or required date, mfg %, promised, log, docs). `procure::status`: forecast = actual delivery, else promised, else planned; float = required − forecast; earned with manufacturing pro rata; planned with manufacturing straight-line from start to IRN; the document link only counts when the user ticks it AND the documents module is on (user: linking is an option). Import guess: planned and actual columns sharing a heading → the first is planned. | The user's own procurement status register rules; every rule is a setting. |
@@ -403,6 +405,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 | 0.6.2 | Procurement Register (module) | Sub-orders with RFQ/PO/mfg/IRN/delivery planned (typed or from a task) vs actual, promised vs required (float, RAG), expediting log, weight presets, PO-value weighting, S-curves, optional link to vendor documents, Excel in/out | ✅ |
 | 0.7.0 | Portfolio | Portfolio totals, Plans (with module figures), Timeline, Resource Pool across plans (heat strip, hours by plan), a pool plan and Take resources from the pool | ✅ |
 | 0.7.1 | Hardening | 100k tasks measured and fixed (undo memory budget, no task copy per edit, smaller grid rows, Gantt row map cached), `npm run bench` + `npm run perf:ui`; code signing and the signed updater still deferred by the user | ✅ |
+| 0.7.2 | MS Project status date | Status date that measures progress only (Schedule Options); Project XML opens in that mode unless it moves remaining work forward; work with no resource kept | ✅ |
+| 0.7.3 | MS Project polish | Import report asks the status-date mode; no-resource work goes back to Project unassigned; check 9 respects the mode; guide en/zh | ✅ |
 | 1.0.0 | Stable | — | ⬜ |
 
 ### Features that go beyond the usual scheduler
@@ -652,7 +656,11 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 ### 2026-11-09: Session (0.7.2, MS Project status date)
 - `SchedOpts.msp_status`: `sched.rs` leaves `data` unset, so the status date measures progress only. Schedule Options › Status date. MSPDI import sets it unless `MoveRemainingStartsForward` = 1 (the writer emits that flag); work on Project's unassigned resource (-65535, capped by the task's own Work) becomes a "Project work" resource. Test `status_date_as_in_ms_project_keeps_dates`. Checked against a real 40-task Project file: 0 date differences, 3,095 h of work.
 
-- 0.7.3: `Resource.unassigned` (the stand-in for Project's resource -65535; MSPDI writer leaves it and its calendar out and writes its assignments as -65535 with the hours); import report asks the status-date mode when the plan has a status date; check 9 skips unstarted-before-status when `msp_status`; guide en/zh. Test `project_work_with_no_resource_goes_back_unassigned`.
+### 2026-11-09: Session, continued (0.7.3, MS Project polish)
+- `Resource.unassigned` (the stand-in for Project's resource -65535; MSPDI writer leaves it and its calendar out and writes its assignments as -65535 with the hours); import report asks the status-date mode when the plan has a status date; check 9 skips unstarted-before-status when `msp_status`; guide en/zh. Test `project_work_with_no_resource_goes_back_unassigned`.
+
+### 2026-11-09: Session, continued (docs for 0.7.2 and 0.7.3)
+- Documentation only, no release: header version, time model (`msp_status`), decisions and roadmap rows for 0.7.2 and 0.7.3, split session log, `docs/site.json` (about and the 0.7 roadmap). The header keeps the repo `Edgar-Mendonca/Datum-Plan` (the user's fork `Darth-Sirious7/Datum-Plan` syncs with it). Tags v0.7.2 and v0.7.3 were already published.
 
 ## 5. Known limits and next steps
 
