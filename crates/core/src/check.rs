@@ -72,9 +72,9 @@ pub fn run(c: &Calc, lim: &Limits) -> Vec<Check> {
     let invalid: Vec<usize> = all.iter().copied().filter(|&i| {
         let t = &p.tasks[i];
         let future = |d: Option<chrono::NaiveDate>| d.is_some_and(|d| at(d) >= dd);
-        future(t.act_start) || future(t.act_finish) || (p.status.is_some() && c.pct[i] == 0 && t.act_start.is_none() && !t.manual && s.ef[i] <= dd - DAY)
+        future(t.act_start) || future(t.act_finish) || (p.status.is_some() && !p.opts.msp_status && c.pct[i] == 0 && t.act_start.is_none() && !t.manual && s.ef[i] <= dd - DAY)
     }).collect();
-    ratio(&mut out, p, "dates", "9. Invalid dates", "Actual dates after the status date, or unstarted work left before it.", &all, invalid, 0.0);
+    ratio(&mut out, p, "dates", "9. Invalid dates", if p.opts.msp_status { "Actual dates after the status date." } else { "Actual dates after the status date, or unstarted work left before it." }, &all, invalid, 0.0);
     ratio(&mut out, p, "resources", "10. Resources", "Tasks with duration but no resource or cost assigned.", &open,
         open.iter().copied().filter(|&i| p.tasks[i].dur > 0 && p.tasks[i].res.is_empty() && p.tasks[i].fixed_cost == 0.0).collect(), lim.pct);
     let base: Vec<usize> = all.iter().copied().filter(|&i| p.tasks[i].bls.get(&0).is_some_and(|b| b.finish <= dd)).collect();

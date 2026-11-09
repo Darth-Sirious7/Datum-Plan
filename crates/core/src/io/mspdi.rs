@@ -85,7 +85,7 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     }
     // Each person with their own working time: a resource calendar on their base calendar, with their leave.
     let base_uid = |r: &Resource| p.calendars.iter().position(|c| Some(&c.name) == r.cal.as_ref()).or_else(|| p.calendars.iter().position(|c| c.name == p.calendar)).unwrap_or(0) + 1;
-    for (k, r) in p.resources.iter().enumerate().filter(|(_, r)| r.kind == ResKind::Work) {
+    for (k, r) in p.resources.iter().enumerate().filter(|(_, r)| r.kind == ResKind::Work && !r.unassigned) {
         let _ = write!(o, "<Calendar><UID>{}</UID><Name>{}</Name><IsBaseCalendar>0</IsBaseCalendar><BaseCalendarUID>{}</BaseCalendarUID><Exceptions>", 1000 + k, esc(&r.name), base_uid(r));
         for e in &r.exceptions {
             let _ = write!(o, "<Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>{}T00:00:00</FromDate><ToDate>{}T23:59:00</ToDate></TimePeriod>\
@@ -144,7 +144,8 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
         o.push_str("</Task>\n");
     }
     o.push_str("</Tasks>\n<Resources>");
-    for (k, r) in p.resources.iter().enumerate() {
+    // Project's own unassigned resource (UID -65535) is implied: it is not written.
+    for (k, r) in p.resources.iter().enumerate().filter(|(_, r)| !r.unassigned) {
         let ty = match r.kind { ResKind::Work => 1, ResKind::Material => 0, ResKind::Cost => 2 };
         let _ = write!(o, "<Resource><UID>{}</UID><ID>{}</ID><Name>{}</Name><Type>{ty}</Type><IsNull>0</IsNull><Group>{}</Group><MaterialLabel>{}</MaterialLabel>\
 <MaxUnits>{:.2}</MaxUnits><StandardRate>{}</StandardRate><StandardRateFormat>2</StandardRateFormat><CostPerUse>{}</CostPerUse>{}</Resource>",
@@ -154,8 +155,9 @@ pub fn write(p: &Project, s: &Sched, cost: &[f64]) -> String {
     let mut n = 1;
     for t in &p.tasks {
         for a in &t.res {
+            let none = p.res_idx(a.res).is_some_and(|k| p.resources[k].unassigned);
             let _ = write!(o, "<Assignment><UID>{n}</UID><TaskUID>{}</TaskUID><ResourceUID>{}</ResourceUID><Units>{}</Units><Work>{}</Work></Assignment>",
-                t.uid, a.res, a.units, dur((t.dur as f64 * a.units) as i64));
+                t.uid, if none { "-65535".to_string() } else { a.res.to_string() }, if none { 1.0 } else { a.units }, dur((t.dur as f64 * a.units).round() as i64));
             n += 1;
         }
     }
@@ -295,7 +297,9 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
                 k.bls.insert(n, Baseline { start: at(bs) + tm(b.val("Start")), finish: at(bf) + tm(b.val("Finish")), dur: read_dur(b.val("Duration")), cost: b.val("Cost").parse().unwrap_or(0.0), work: (!b.val("Work").is_empty()).then(|| read_dur(b.val("Work")) as f64) });
             }
         }
-        task_work.insert(k.uid, read_dur(t.val("Work")));
+        if !t.val("Work").is_empty() {
+            task_work.insert(k.uid, read_dur(t.val("Work")));
+        }
         tasks.push((t.val("ID").parse().unwrap_or(i64::MAX), k));
     }
     tasks.sort_by_key(|(id, _)| *id);
@@ -328,25 +332,24 @@ pub fn read_notes(text: &str) -> Result<(Project, Vec<String>), String> {
         match a.val("ResourceUID").parse::<u32>() {
             Ok(ru) if p.resources.iter().any(|r| r.uid == ru) => p.tasks[i].res.push(Assign { res: ru, units: a.val("Units").parse().unwrap_or(1.0), table: 0 }),
             // Project also writes one for a task with no work; the task's own Work is the truth.
-            _ => loose.push((i, read_dur(a.val("Work")).min(task_work.get(&tu).copied().unwrap_or(0)))),
+            _ => loose.push((i, read_dur(a.val("Work")).min(task_work.get(&tu).copied().unwrap_or(i64::MAX)))),
         }
     }
     // Keep those hours: one work resource whose units on each task give the task's work back.
     let loose: Vec<(usize, f64)> = loose.into_iter().filter(|&(i, w)| w > 0 && p.tasks[i].dur > 0).map(|(i, w)| (i, w as f64 / p.tasks[i].dur as f64)).collect();
     if !loose.is_empty() {
         let uid = p.resources.iter().map(|r| r.uid).max().unwrap_or(0) + 1;
-        p.resources.push(Resource { uid, name: "Project work".into(), kind: ResKind::Work, max: 100.0, ..Default::default() });
+        p.resources.push(Resource { uid, name: "Project work (no resource)".into(), kind: ResKind::Work, max: 100.0, unassigned: true, ..Default::default() });
         for &(i, u) in &loose {
             p.tasks[i].res.push(Assign { res: uid, units: (u * 10_000.0).round() / 10_000.0, table: 0 });
         }
-        notes.push(format!("{} tasks have work with no resource; it is kept on a work resource named \"Project work\".", loose.len()));
+        notes.push(format!("{} tasks have work with no resource; it is kept on the work resource \"Project work (no resource)\", which goes back to Project as work with no resource.", loose.len()));
     }
     // Unless the file asks for remaining work to move forward to the status date (Project's
     // calculation option, which Datum Plan writes), the status date measures progress only.
     p.opts.msp_status = root.val("MoveRemainingStartsForward") != "1";
-    if p.status.is_some() && p.opts.msp_status {
-        notes.push("The status date measures progress as in Microsoft Project; work not done by then stays on its dates. Schedule Options switches this off.".into());
-    }
+    // Project's flag moves only the remaining parts of tasks under way; Datum style also holds
+    // unstarted work back, so the two match when the flag is off and differ a little when on.
     let uids: std::collections::HashSet<u32> = p.tasks.iter().map(|t| t.uid).collect();
     let missing: usize = p.tasks.iter_mut().map(|t| { let n = t.preds.len(); t.preds.retain(|l| uids.contains(&l.pred)); n - t.preds.len() }).sum();
     if missing > 0 { notes.push(format!("{missing} links point to tasks that are not in the file; they were left out.")) }

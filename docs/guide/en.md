@@ -192,6 +192,13 @@ When the plan is agreed, click **Progress › Set Baseline**. A baseline is a co
 
 The status date is the day your progress is measured to, for example the last Friday. Set it with **Progress › Status Date**. Work after the status date is planned; work before it should be done.
 
+**Project › Schedule Options › Status date** chooses what the status date does to work that is not done by then:
+
+- **Moves unfinished work after it** (the Datum style, and the default for new plans): unstarted tasks and the rest of tasks under way start after the status date, so the dates show when the work can still happen.
+- **Measures progress only (as in MS Project):** late work keeps its dates, as in Microsoft Project. Late tasks, planned % complete and the S-curves still measure to the status date; compare with the baseline to see the delay.
+
+Plans imported from Microsoft Project ask which one to use and suggest the second, so they keep the dates Project gave them. (Project's own option "move start of remaining parts forward to the status date" in the file picks the first.)
+
 ### Update progress each week
 
 ![The Update Progress page.](img/update.png)
@@ -602,7 +609,7 @@ To share resources between plans, keep one plan whose Resource Sheet lists them 
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
-- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from Excel (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
+- **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from Excel (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file. For a plan with a status date it also asks how the status date should work (see *The status date*). Hours typed on tasks with no resource in Project come in on the resource **Project work (no resource)** and go back to Project as work with no resource.
 - **Export** writes Excel (with formulas and formatting), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 

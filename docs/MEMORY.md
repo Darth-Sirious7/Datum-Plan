@@ -652,6 +652,8 @@ Releases so far: 0.1.0, 0.1.1, 0.2.0, 0.3.0 (ribbon layout + advanced scheduling
 ### 2026-11-09: Session (0.7.2, MS Project status date)
 - `SchedOpts.msp_status`: `sched.rs` leaves `data` unset, so the status date measures progress only. Schedule Options › Status date. MSPDI import sets it unless `MoveRemainingStartsForward` = 1 (the writer emits that flag); work on Project's unassigned resource (-65535, capped by the task's own Work) becomes a "Project work" resource. Test `status_date_as_in_ms_project_keeps_dates`. Checked against a real 40-task Project file: 0 date differences, 3,095 h of work.
 
+- 0.7.3: `Resource.unassigned` (the stand-in for Project's resource -65535; MSPDI writer leaves it and its calendar out and writes its assignments as -65535 with the hours); import report asks the status-date mode when the plan has a status date; check 9 skips unstarted-before-status when `msp_status`; guide en/zh. Test `project_work_with_no_resource_goes_back_unassigned`.
+
 ## 5. Known limits and next steps
 
 ### Hardening plan (from the review of another Rust scheduler, 2026-10-27; not started)

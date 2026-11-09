@@ -192,6 +192,13 @@ Datum Plan 自动排程：修改工期或逻辑关系后，所有相关的日期
 
 状态日期（数据日期）是进度测量截止的那一天，例如上周五。用 **Progress › Status Date** 设置。状态日期之后的工作是计划，之前的工作应当已经完成。
 
+**Project › Schedule Options › Status date**（状态日期）决定到状态日期仍未完成的工作如何处理：
+
+- **Moves unfinished work after it**（移到状态日期之后；Datum 方式，新计划的默认值）：未开始的任务以及进行中任务的剩余工作从状态日期之后开始，日期显示工作仍可完成的时间。
+- **Measures progress only (as in MS Project)**（仅测量进度，与 MS Project 相同）：延误的工作保留原日期，与 Microsoft Project 一致。延误任务、计划完成百分比和 S 曲线仍按状态日期测量；与基准计划比较即可看到延误。
+
+从 Microsoft Project 导入的计划会询问使用哪一种，并建议第二种，以保留 Project 给出的日期。（文件中 Project 自身的选项“将剩余部分的开始时间前移到状态日期”会选择第一种。）
+
 ### 每周更新进度
 
 ![Update Progress（进度更新）页面。](img/update.png)
@@ -602,7 +609,7 @@ S 曲线显示累计进度：灰色虚线是基准计划，蓝线是实际进度
 ## 文件：保存、导入与导出
 
 - **Save**（保存，[[Ctrl+S]]）把计划保存为电脑上的 `.dplan` 文件。保存是安全的：只有新文件完整写好后才会替换旧文件。
-- **Import**（导入）可以打开其他进度计划软件的计划（Project XML 和 XER 文件），以及 Excel（.xlsx）或 CSV 表格文件（由您指定每一列的含义）。导入后会显示一份简短的**导入报告**，列出 Datum Plan 修改或略去的内容，以及每个任务的日期是否与原文件一致。
+- **Import**（导入）可以打开其他进度计划软件的计划（Project XML 和 XER 文件），以及 Excel（.xlsx）或 CSV 表格文件（由您指定每一列的含义）。导入后会显示一份简短的**导入报告**，列出 Datum Plan 修改或略去的内容，以及每个任务的日期是否与原文件一致。对设有状态日期的计划，还会询问状态日期的处理方式（见“状态日期”）。在 Project 中未分配资源而直接填写在任务上的工时，会导入到资源 **Project work (no resource)**，导出回 Project 时仍为未分配资源的工时。
 - **Export**（导出）可导出为 Excel（保留公式和格式）、CSV、Project XML、XER、PMXML、MPX、HTML、iCalendar 和 JSON。
 - **恢复。** Datum Plan 在您工作时会自动保存恢复副本（在 **File › Options** 中设置频率）。如果软件在保存前意外关闭，下次启动时会提示恢复您的工作。
 

@@ -454,13 +454,21 @@ export const importFile = async () => {
   if (!r) return;
   if (r.plan) {
     setOut(r.plan); setBackstage(null);
-    if (!r.notes.length) { toast("Imported. Save it as a .dplan file to keep it.", true); return; }
-    openDialog(() => (
-      <Dialog title="Import report" wide help="importReport">
-        <p>The plan is open. Save it as a .dplan file to keep it. What Datum Plan noticed on the way in:</p>
-        <ul class="notes"><For each={r.notes}>{n => <li classList={{ sub: n.startsWith("  ") }}>{n.trim()}</li>}</For></ul>
-      </Dialog>
-    ));
+    // A plan with a status date: ask how the status date should work (Project files default to measuring only).
+    const ask = !!P().status;
+    if (!r.notes.length && !ask) { toast("Imported. Save it as a .dplan file to keep it.", true); return; }
+    openDialog(() => {
+      const [msp, setMsp] = createSignal(!!P().opts.msp_status);
+      const apply = () => msp() === !!P().opts.msp_status || act({ ProjectSet: { field: "opts", value: { ...P().opts, msp_status: msp() } } });
+      return (
+        <Dialog title="Import report" wide help="importReport" ok={ask ? apply : undefined}>
+          <p>The plan is open. Save it as a .dplan file to keep it.{r.notes.length ? " What Datum Plan noticed on the way in:" : ""}</p>
+          <Show when={r.notes.length}><ul class="notes"><For each={r.notes}>{n => <li classList={{ sub: n.startsWith("  ") }}>{n.trim()}</li>}</For></ul></Show>
+          <Show when={ask}><div class="form"><Row label="Status date"><Pick value={msp() ? "m" : "d"} set={x => setMsp(x === "m")} options={[["m", "Measures progress only (as in MS Project): late work keeps its dates"], ["d", "Moves unfinished work after it (Datum style)"]]} /></Row></div>
+            <p class="muted">The dates compared above use the first choice when the file comes from Microsoft Project. You can change this later in Project › Schedule Options.</p></Show>
+        </Dialog>
+      );
+    });
     return;
   }
   const t = r.table!;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.3 — 2026-11-09
+
+Polish for plans from Microsoft Project.
+
+- **The import report asks how the status date should work** for a plan with one: *Measures progress only (as in MS Project)*, suggested for files from Project, or *Moves unfinished work after it*.
+- **Work with no resource goes back to Project as it came:** the stand-in resource is now **Project work (no resource)**; Project XML export writes its hours as unassigned work and leaves the resource out, so a round trip adds no resource in Project.
+- **Schedule check 9 (Invalid dates)** no longer counts late, unstarted work as invalid when the status date only measures progress.
+- The guide (English and Chinese) explains both status-date modes.
+
 ## 0.7.2 — 2026-11-09
 
 Microsoft Project files keep their dates.

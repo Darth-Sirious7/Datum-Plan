@@ -573,3 +573,28 @@ fn elapsed_lags_in_files() {
     let (q, bad) = crate::io::table::to_project(&t, &t.guess, "Q", d(2026, 11, 2), "%d-%b-%y").unwrap();
     assert_eq!((bad, lags(&q)), (0, lags(&p)));
 }
+
+#[test]
+fn project_work_with_no_resource_goes_back_unassigned() {
+    // As Microsoft Project writes it: 40 h on a 2-day task, 0 h on another, both on resource -65535.
+    let xml = r#"<Project xmlns="http://schemas.microsoft.com/project"><StartDate>2026-11-02T08:00:00</StartDate><StatusDate>2026-11-04T17:00:00</StatusDate>
+<MoveRemainingStartsForward>0</MoveRemainingStartsForward><Tasks>
+<Task><UID>1</UID><ID>1</ID><Name>A</Name><OutlineLevel>1</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat><Work>PT40H0M0S</Work></Task>
+<Task><UID>2</UID><ID>2</ID><Name>B</Name><OutlineLevel>1</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat><Work>PT0H0M0S</Work></Task></Tasks>
+<Resources><Resource><UID>0</UID><ID>0</ID><IsNull>0</IsNull></Resource></Resources><Assignments>
+<Assignment><UID>1</UID><TaskUID>1</TaskUID><ResourceUID>-65535</ResourceUID><Units>1</Units><Work>PT40H0M0S</Work></Assignment>
+<Assignment><UID>2</UID><TaskUID>2</TaskUID><ResourceUID>-65535</ResourceUID><Units>1</Units><Work>PT16H0M0S</Work></Assignment></Assignments></Project>"#;
+    let (p, _) = io::mspdi::read_notes(xml).unwrap();
+    assert!(p.opts.msp_status, "a Project file measures progress only");
+    assert_eq!(p.resources.len(), 1);
+    assert!(p.resources[0].unassigned);
+    assert_eq!(p.tasks[0].res[0].units, 2.5);
+    assert!(p.tasks[1].res.is_empty(), "no work, no assignment");
+    let s = schedule(&p).unwrap();
+    let out = io::mspdi::write(&p, &s, &vec![0.0; p.tasks.len()]);
+    assert!(out.contains("<ResourceUID>-65535</ResourceUID>") && out.contains("<Work>PT40H0M0S</Work>"));
+    assert!(!out.contains("Project work"), "the stand-in resource is not written");
+    assert!(out.contains("<MoveRemainingStartsForward>0</MoveRemainingStartsForward>"));
+    let (q, _) = io::mspdi::read_notes(&out).unwrap();
+    assert_eq!((q.resources.len(), q.tasks[0].res[0].units, q.opts.msp_status), (1, 2.5, true));
+}
