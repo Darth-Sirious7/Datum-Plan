@@ -20,7 +20,7 @@ export const checkUpdate = async (quiet: boolean) => {
   catch (e) { if (!quiet) toast(`Could not check for updates: ${e}`); }
   finally { setChecking(false); }
 };
-const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
+const GH = "https://github.com/Darth-Sirious7/Datum-Plan";
 /** Links to the project on GitHub: code, releases (change log) and issues (report a problem). */
 export const GitHubLinks = () => (
   <div class="ghlinks">

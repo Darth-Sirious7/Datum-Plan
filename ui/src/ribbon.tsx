@@ -20,7 +20,7 @@ import type { SheetPage } from "./api";
 import { askText } from "./ui";
 import { colorPalette } from "./colors";
 
-const GH = "https://github.com/Edgar-Mendonca/Datum-Plan";
+const GH = "https://github.com/Darth-Sirious7/Datum-Plan";
 export const FONTS = ["Aptos", "Calibri", "Arial", "Segoe UI", "Tahoma", "Verdana", "Times New Roman", "Cambria", "Georgia", "Garamond", "Consolas", "IBM Plex Sans"];
 /** Spreadsheet-style Font and Alignment controls; they act on the selected cells of the task sheet or a sheet tab. */
 const SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48];

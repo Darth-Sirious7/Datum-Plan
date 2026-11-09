@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased (fork): schedules as in Project
+## 0.7.5-1 — 2026-11-10
 
-The same values as Project for plans from Project XML: dates, float, critical tasks, % complete.
+The author's 0.7.5 with schedules as in Project: the same dates, float, critical tasks and % complete for plans from Project XML.
 
+- **Versions of this fork** are the author's release plus a build number (0.7.5-1, 0.7.5-2, then 0.7.6-1…). Help › Check for updates, the releases page and the issue links go to this fork (Darth-Sirious7/Datum-Plan).
 - **Task types** (fixed units, fixed work, fixed duration) and effort driven come in and go out with Project XML; new plans are fixed units. Changing a duration, work or units follows the task type; work with no resource stays as typed; more duration reopens a finished task.
 - **Several critical paths** (Schedule Options): the end of each chain is critical. Inactive tasks are scheduled but drive nothing; a manual milestone sits at the end of its day; a start-no-earlier-than before the plan start holds; constraints keep their time of day.
 - **Float of summaries** and summary **% complete** as Project (99 % until every task is done); a summary of finished tasks is not critical.

@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use tauri::{AppHandle, Emitter};
 
-const REPO: &str = "Edgar-Mendonca/Datum-Plan";
+const REPO: &str = "Darth-Sirious7/Datum-Plan";
 /// No installer is anywhere near this size (they are about 4 MB).
 const MAX_INSTALLER: u64 = 200 * 1024 * 1024;
 /// The guides are a few megabytes.
@@ -35,14 +35,23 @@ fn agent() -> ureq::Agent {
 }
 
 /// 0.3.0-beta.2 → [0, 3, 0, 0, 2]; 0.3.0 → [0, 3, 0, 1, 0], so a release beats its betas.
+/// A plain number after the dash is the fork's build on top of that release: 0.7.5-1 → [0, 7, 5, 2, 1].
 fn parts(v: &str) -> Vec<u64> {
     let v = v.trim_start_matches('v');
     let (main, pre) = v.split_once('-').unwrap_or((v, ""));
     let mut out: Vec<u64> = main.split('.').map(|p| p.parse().unwrap_or(0)).collect();
     out.resize(3, 0);
-    out.push(pre.is_empty() as u64);
+    let fork = !pre.is_empty() && pre.chars().all(|c| c.is_ascii_digit());
+    out.push(if fork { 2 } else { pre.is_empty() as u64 });
     out.push(pre.rsplit('.').next().and_then(|n| n.parse().ok()).unwrap_or(0));
     out
+}
+
+#[cfg(test)]
+#[test]
+fn fork_builds_sit_between_releases() {
+    let order = ["0.7.5-beta.1", "0.7.5", "0.7.5-1", "0.7.5-2", "0.7.6", "0.7.6-1"];
+    assert!(order.windows(2).all(|w| parts(w[0]) < parts(w[1])), "{order:?}");
 }
 
 /// The newest release; with `beta`, pre-releases count too.

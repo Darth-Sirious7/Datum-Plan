@@ -1569,7 +1569,7 @@ fn startup_file(app: AppHandle, st: State<St>) -> Option<String> {
 
 /// Only the project's own GitHub pages, with plain URL characters.
 fn allowed_url(url: &str) -> bool {
-    const HOME: &str = "https://github.com/Edgar-Mendonca/Datum-Plan";
+    const HOME: &str = "https://github.com/Darth-Sirious7/Datum-Plan";
     let rest = url.strip_prefix(HOME).unwrap_or("x");
     (rest.is_empty() || rest.starts_with(['/', '?', '#'])) && rest.len() < 300 && rest.chars().all(|c| c.is_ascii_alphanumeric() || "-._~/?#&=%+".contains(c))
 }
@@ -1705,10 +1705,10 @@ fn main() {
 mod tests {
     #[test]
     fn only_the_projects_own_pages_open() {
-        for ok in ["https://github.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/issues/new", "https://github.com/Edgar-Mendonca/Datum-Plan/releases"] {
+        for ok in ["https://github.com/Darth-Sirious7/Datum-Plan", "https://github.com/Darth-Sirious7/Datum-Plan/issues/new", "https://github.com/Darth-Sirious7/Datum-Plan/releases"] {
             assert!(super::allowed_url(ok), "{ok}");
         }
-        for bad in ["https://github.com/Edgar-Mendonca/Datum-PlanX", "https://evil.com/Edgar-Mendonca/Datum-Plan", "https://github.com/Edgar-Mendonca/Datum-Plan/\"&calc.exe", "https://github.com/Edgar-Mendonca/Datum-Plan/ x", "file:///C:/Windows", "javascript:alert(1)"] {
+        for bad in ["https://github.com/Darth-Sirious7/Datum-PlanX", "https://evil.com/Darth-Sirious7/Datum-Plan", "https://github.com/Darth-Sirious7/Datum-Plan/\"&calc.exe", "https://github.com/Darth-Sirious7/Datum-Plan/ x", "file:///C:/Windows", "javascript:alert(1)"] {
             assert!(!super::allowed_url(bad), "{bad}");
         }
     }

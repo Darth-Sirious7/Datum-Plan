@@ -13,8 +13,8 @@ export const RoadmapPage = () => (
   <div class="roadmap">
     <h1>Roadmap</h1>
     <p class="muted">What Datum Plan will do, and when. Releases are small and arrive through File › Updates. Ideas and bug reports are welcome on GitHub.</p>
-    <p><button class="btn" onClick={() => call("open_url", { url: "https://github.com/Edgar-Mendonca/Datum-Plan/issues/new" })}>Suggest a feature or report an issue</button>
-      <button class="btn" onClick={() => call("open_url", { url: "https://github.com/Edgar-Mendonca/Datum-Plan/releases" })}>Every release so far</button></p>
+    <p><button class="btn" onClick={() => call("open_url", { url: "https://github.com/Darth-Sirious7/Datum-Plan/issues/new" })}>Suggest a feature or report an issue</button>
+      <button class="btn" onClick={() => call("open_url", { url: "https://github.com/Darth-Sirious7/Datum-Plan/releases" })}>Every release so far</button></p>
     <div class="rmlist">
       <For each={ROADMAP}>{s => (
         <section class="rmstage" classList={{ next: s.when === "Next" }}>
