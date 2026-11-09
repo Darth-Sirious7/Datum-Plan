@@ -227,7 +227,7 @@ export const DocumentsView = () => {
   return (
     <Page title="Document Register" help="documents" tools={<>
       <button class="btn" onClick={docSettings}>Settings…</button><button class="btn" onClick={docImport}>Import…</button>
-      <button class="btn" onClick={async () => { const f = await call<string | null>("docs_export"); if (f) toast(`Saved ${f}`, true); }}>Export to Workbook</button>
+      <button class="btn" onClick={async () => { const f = await call<string | null>("docs_export"); if (f) toast(`Saved ${f}`, true); }} title="A workbook (.xlsx) or an OpenDocument spreadsheet (.ods): choose the type in the Save window">Export…</button>
       <button class="btn pri" onClick={() => { const id = next(reg().docs); save({ docs: [...reg().docs, blankDoc(id)] }).then(() => editDoc(reg().docs.find(d => d.id === id) ?? blankDoc(id))); }}>+ Document</button>
     </>}>
       <Show when={me()}>{o => <>

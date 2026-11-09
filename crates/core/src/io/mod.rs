@@ -1,4 +1,5 @@
 //! File exchange: project XML, XER and PMXML, workbook (.xlsx), CSV, MPX, JSON, HTML and iCalendar.
+pub mod book;
 pub mod sheetbook;
 pub mod formats;
 pub mod mspdi;
@@ -148,6 +149,7 @@ pub fn export(p: &Project, path: &Path, fmt: &str, today: NaiveDate, cols: &[Str
         "xer" => write(xer::write(p, &s, today)),
         "csv" => table::write_csv(&calc(), cols, path),
         "xlsx" => table::write_xlsx(&calc(), cols, path),
+        "ods" => table::write_ods(&calc(), cols, path),
         "json" => write(formats::json(&calc(), cols)),
         "html" | "htm" => write(formats::html(&calc(), cols)),
         "ics" => write(formats::ics(&calc())),

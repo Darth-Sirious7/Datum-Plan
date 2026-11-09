@@ -99,7 +99,7 @@ export const ALL_CMDS: [string, () => void, string?][] = [
   ["Custom fields", () => D.customFields()], ["Activity codes", () => D.activityCodes()], ["Filter", () => D.filterEditor()], ["Group by", () => D.groupEditor()],
   ["Sort", () => D.sortEditor()], ["Insert column", () => D.insertColumn()], ["Tables", () => D.tablesDialog()], ["Compare projects", () => D.compare()],
   ["Store period performance (snapshot)", () => D.snapshot()], ["Options", C.options], ["Check for updates", () => C.file("about")], ["Keyboard shortcuts", () => D.shortcuts()],
-  ["Export to Workbook", () => C.exportAs("xlsx")], ["Export to Project XML", () => C.exportAs("xml")], ["Export to XER", () => C.exportAs("xer")],
+  ["Export to Workbook", () => C.exportAs("xlsx")], ["Export to OpenDocument Spreadsheet", () => C.exportAs("ods")], ["Copy Picture of the Gantt", () => import("./gantt").then(g => { const cv = g.ganttPicture(); if (cv) import("./picture").then(p => p.copyCanvas(cv, "The Gantt chart")); })], ["Export to Project XML", () => C.exportAs("xml")], ["Export to XER", () => C.exportAs("xer")],
   ["Export to PMXML", () => C.exportAs("pmxml")], ["Export to CSV", () => C.exportAs("csv")], ["Export to HTML", () => C.exportAs("html")], ["Export to iCalendar", () => C.exportAs("ics")],
   ["Export to MPX", () => C.exportAs("mpx")], ["Recurring task", () => C.recurring()], ["Global change", () => C.globalChange()],
   ["Update progress", () => C.view("update")], ["Report builder", () => C.view("builder")], ["Relationship diagram", () => C.view("relations")],

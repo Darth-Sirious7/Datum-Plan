@@ -202,7 +202,7 @@ export const ChartBox = (p: ChartProps) => {
   };
   return (
     <div class="chartbox" data-marker={p.marker ?? ""} classList={{ tall: p.size === "tall", short: p.size === "short", grow: p.size === "fill", bare: p.bare }}>
-      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
+      <Show when={!p.bare}><header><h3>{p.title}</h3>{p.extra}<button onClick={() => ch && import("./picture").then(m => m.copyCanvas(ch!.canvas, p.title))} title="Copy the chart as a picture, to paste into a document, slides or a workbook">Copy</button><button onClick={save} title="Save as PNG">PNG</button><button onClick={toPlot} title="Open a copy of these values in Datum Plot, to style the graph there. The plan does not change.">Datum Plot</button></header></Show>
       <div class="cv" classList={{ blank: empty() }}><canvas ref={cv} /></div>
       <Show when={empty()}><p class="nodata">{p.fmt === "money" ? "No costs in this plan yet." : p.fmt === "hours" ? "No hours assigned yet." : "No data yet."}</p></Show>
     </div>

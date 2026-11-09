@@ -601,11 +601,15 @@ With the link to the Document Register on, an order lists the vendor documents i
 
 To share resources between plans, keep one plan whose Resource Sheet lists them with their rates, units and calendars, and choose it as the **Pool plan**. Its units and availability set the capacity. In any other plan, **Take resources from the pool** gives its resources with the same names the pool's rates, units, availability and calendars; **…and add the others** adds the rest of the pool's resources.
 
+### Copy a picture
+
+**Report › Copy Picture** copies the task sheet and the Gantt chart as you see them (scroll and zoom first) as a picture; paste it into a document, slides or a workbook. Every chart has a **Copy** button beside **PNG** for the same. For whole pages with a header and footer, use **File › Print**.
+
 ## Files: save, import and export
 
 - **Save** ([[Ctrl+S]]) keeps the plan as a `.dplan` file on your computer. Saving is safe: the file is replaced only when the new one is complete.
 - **Import** opens plans from other scheduling programs (Project XML and XER files) and tables from workbook (.xlsx) or CSV files (you choose which column is which). After an import, a short **import report** lists anything Datum Plan changed or left out, and whether every task got the same dates as in the file.
-- **Export** writes workbooks (.xlsx, with formulas and formatting), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
+- **Export** writes workbooks (.xlsx, with formulas and formatting), OpenDocument spreadsheets (.ods, values), CSV, Project XML, XER, PMXML, MPX, HTML, iCalendar and JSON.
 - **Recovery.** Datum Plan keeps a recovery copy as you work (**File › Options** sets how often). If it ever closes before you save, it offers to recover your work the next time it starts.
 
 ## Command line and AI assistants

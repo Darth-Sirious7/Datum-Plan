@@ -99,7 +99,14 @@ const zoomMenu = (): Item[] => [
   ...([["Days", 40], ["Weeks", 14], ["Months", 4], ["Quarters", 1.6], ["Years", 0.5]] as [string, number][]).map(([l, z]) => ({ label: l, run: () => setZoom(z) })),
   "-", { label: "Zoom In", run: C.zoomIn }, { label: "Zoom Out", run: C.zoomOut }, { label: "Entire Project", run: C.fit },
 ];
-const exportMenu = (): Item[] => [["Workbook (.xlsx)", "xlsx"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
+/** Report › Copy Picture: the task sheet and Gantt as shown. */
+const copyGantt = async () => {
+  if (!["gantt", "tracking"].includes(view())) return toast("Copy Picture copies the Gantt chart: open the Gantt (or the Tracking Gantt) first. Each chart has its own Copy button.");
+  const { ganttPicture } = await import("./gantt"), { copyCanvas } = await import("./picture");
+  const cv = ganttPicture();
+  if (cv) copyCanvas(cv, "The Gantt chart");
+};
+const exportMenu = (): Item[] => [["Workbook (.xlsx)", "xlsx"], ["OpenDocument spreadsheet (.ods)", "ods"], ["Project XML (.xml)", "xml"], ["XER (.xer)", "xer"], ["PMXML (.xml)", "pmxml"], ["MPX (.mpx)", "mpx"], ["CSV (.csv)", "csv"], ["Web page (.html)", "html"], ["iCalendar (.ics)", "ics"], ["JSON (.json)", "json"]].map(([l, k]) => ({ label: l, run: () => C.exportAs(k) }));
 const baselineMenu = (): Item[] => Array.from({ length: 11 }, (_, k) => ({ label: k ? `Baseline ${k}` : "Baseline", run: () => { setBaseline(k); setShowBase(true); }, on: baseline() === k && showBase() }));
 
 /** Tell Me / command search (Ctrl+K, Alt+Q). */
@@ -295,7 +302,7 @@ export const Ribbon = () => (
       <G l="View Reports" h="reports"><B big i="dash" l="Dashboard" run={() => C.view("dashboard")} /><B big i="track" l="Progress Report" run={() => C.view("progress")} /><B big i="ev" l="S-Curves" run={() => C.view("scurve")} /><B big i="builder" l="Report Builder" run={() => C.view("builder")} /><B big i="report" l="Reports" run={() => C.view("reports")} /></G>
       <G l="Health" h="health"><B big i="check" l="Check Schedule" run={() => C.view("checks")} /><B big i="risk" l="Risks" run={() => C.view("risks")} /><B big i="ev" l="Schedule Risk" run={() => C.view("simrisk")} /></G>
       <G l="Portfolio" h="portfolio"><B big i="folder" l="Portfolio" run={() => C.view("portfolio")} /><B big i="copy" l="Compare Projects" run={() => D.compare()} /></G>
-      <G l="Export" h="export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /></G>
+      <G l="Export" h="export"><B big i="print" l="Print / PDF" run={C.print} /><B big i="pagesetup" l="Page Setup" run={C.pageSetup} /><B big i="export" l="Export" dd={e => openMenu(e, exportMenu())} /><B big i="copy" l="Copy Picture" title="Copy the task sheet and the Gantt chart as shown (the rows and dates in view), to paste into a document, slides or a workbook" run={copyGantt} /></G>
     </Show>
     <Show when={tab() === "project"}>
       <G l="Properties" h="project"><B big i="proj" l="Project Information" run={() => D.projectInfo()} /><S><B i="fields" l="Custom Fields" run={() => D.customFields()} /><B i="group" l="Activity Codes" run={() => D.activityCodes()} /><B i="calendar2" l="Change Working Time" run={() => D.calendars()} /></S><S><B i="image" l="Pictures" title="The plan's pictures: logos of the client, your company, vendors and sub-vendors" run={() => import("./pictures").then(m => m.pictureLibrary())} /></S>

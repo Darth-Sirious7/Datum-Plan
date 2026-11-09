@@ -107,7 +107,7 @@ const UpdateCard = () => {
 const Export = () => (
   <div><h1>Export</h1>
     <div class="tiles">
-      <For each={[["xlsx", "Workbook (.xlsx)", "The current table's columns, with outline indent."], ["xml", "Project XML", "For scheduling programs that read project XML files."], ["xer", "XER", "For scheduling programs that read XER files."],
+      <For each={[["xlsx", "Workbook (.xlsx)", "The current table's columns, with outline indent."], ["ods", "OpenDocument spreadsheet (.ods)", "The current table's columns as typed values (dates, days, numbers), for office suites that use OpenDocument."], ["xml", "Project XML", "For scheduling programs that read project XML files."], ["xer", "XER", "For scheduling programs that read XER files."],
         ["pmxml", "PMXML", "XML with WBS, activities, relationships and resources."], ["mpx", "MPX", "The classic exchange format."], ["csv", "CSV", "Plain text, the current table's columns."],
         ["html", "Web page", "A branded report of the current table."], ["ics", "iCalendar", "Tasks and milestones as calendar events."], ["json", "JSON", "For scripts and other tools."]]}>{([k, n, d]) =>
         <button class="tile" onClick={() => C.exportAs(k)}><div class="pic"><svg class="ic"><use href="#i-export" /></svg><small>.{k}</small></div><b>{n}</b><span>{d}</span></button>}</For>

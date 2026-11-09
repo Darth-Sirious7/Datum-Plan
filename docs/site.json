@@ -42,7 +42,8 @@
     "Projects made of plans: a master plan and its subplans in a hierarchy, grouped tabs, the whole project in the master's Gantt, and links between the plans kept up to date, with a four-plan example; the master gives its details, logos, print header, calendars and codes to its subplans in one step.",
     "Modules a plan takes on only when it needs them: Contract Dates & Payments (contract dates against the forecast, delay damages, payments and cash in), a Document Register (review cycles in working days on the plan's or their own calendars, return codes, client delay, weighted progress) and a Procurement Register (orders from enquiry to delivery, the vendor's promise against the date the plan needs it, expediting, optional links to vendor documents).",
     "A portfolio of every plan in a folder, with a timeline, the modules' figures and a shared resource pool: each resource's work across all plans against its capacity, and plans that take their rates and units from the pool.",
-    "Colour-blind safe colours for charts and statuses, as an option; every status also says what it means in words."
+    "Colour-blind safe colours for charts and statuses, as an option; every status also says what it means in words.",
+    "Copy Picture of the Gantt as shown and of every chart, to paste into documents and slides; exports to workbooks (.xlsx) and OpenDocument spreadsheets (.ods)."
   ],
   "screenshots": [
     "docs/images/gantt.png",

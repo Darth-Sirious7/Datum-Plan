@@ -163,7 +163,7 @@ export const ProcurementView = () => {
   return (
     <Page title="Procurement Register" help="procurement" tools={<>
       <button class="btn" onClick={procSettings}>Settings…</button><button class="btn" onClick={procImport}>Import…</button>
-      <button class="btn" onClick={async () => { const f = await call<string | null>("proc_export"); if (f) toast(`Saved ${f}`, true); }}>Export to Workbook</button>
+      <button class="btn" onClick={async () => { const f = await call<string | null>("proc_export"); if (f) toast(`Saved ${f}`, true); }} title="A workbook (.xlsx) or an OpenDocument spreadsheet (.ods): choose the type in the Save window">Export…</button>
       <button class="btn pri" onClick={() => { const id = next(preg().items); save({ items: [...preg().items, blank(id)] }).then(() => editItem(preg().items.find(x => x.id === id) ?? blank(id))); }}>+ Order</button>
     </>}>
       <Show when={me()}>{o => <>

@@ -581,6 +581,21 @@ const check = (name, ok, info = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${
   const dh = await p.evaluate(() => { const d = document.querySelector(".dsplit")?.nextElementSibling; return d ? d.getBoundingClientRect().height : 0; });
   check("on a short window the details pane leaves room for the task rows", dh <= 589 * 0.34 + 1, String(dh));
   await p.setViewportSize({ width: 1440, height: 900 }); await p.waitForTimeout(400);
+  // 0.7.4: Copy Picture (Gantt and charts) and OpenDocument spreadsheet export.
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(300);
+  await p.click(".tabs > button:text-is('Report')"); await p.waitForTimeout(150);
+  await p.click(".ribbon button:has-text('Copy Picture')"); await p.waitForTimeout(600);
+  const cp = await p.evaluate(() => { const c = window.__calls.filter(x => x[0] === "copy_picture").pop()?.[1]; if (!c) return null; const d = atob(c.dib.slice(0, 64)); const v = new DataView(Uint8Array.from(atob(c.dib), ch => ch.charCodeAt(0)).buffer); return { png: c.png.startsWith("data:image/png"), hdr: v.getUint32(0, true), w: v.getInt32(4, true), h: v.getInt32(8, true), bits: v.getUint16(14, true), len: atob(c.dib).length, d: d.length }; });
+  check("Report › Copy Picture copies the task sheet and Gantt as a PNG and a bitmap (DIB)", !!cp && cp.png && cp.hdr === 40 && cp.bits === 32 && cp.w > 800 && cp.h > 200 && cp.len === 40 + cp.w * cp.h * 4 && (await p.textContent("#toast")).includes("copied"), JSON.stringify(cp));
+  await p.click(".ribbon button:has-text('Export')"); await p.waitForTimeout(200);
+  check("Export offers an OpenDocument spreadsheet (.ods)", (await p.textContent(".menu")).includes("OpenDocument spreadsheet (.ods)"));
+  await p.click(".menu button:has-text('OpenDocument spreadsheet')"); await p.waitForTimeout(300);
+  check("…and exports the task table to it", JSON.stringify(await p.evaluate(() => window.__calls.filter(c => c[0] === "export").pop()?.[1]?.kind)) === '"ods"');
+  await p.click('.side button[title="Dashboard"]'); await p.waitForTimeout(600);
+  await p.evaluate(() => { window.__calls.length = 0; });
+  await p.click(".chartbox header button:has-text('Copy') >> nth=0"); await p.waitForTimeout(400);
+  check("every chart has Copy, to paste it as a picture", (await p.evaluate(() => window.__calls.filter(c => c[0] === "copy_picture").length)) === 1);
+  await p.click('.side button[title="Gantt"]'); await p.waitForTimeout(200);
   // 0.7.0: Portfolio: plans with their modules, a timeline, and the shared resource pool.
   await p.click('.side button[title="Portfolio"]'); await p.waitForTimeout(400);
   const pk = await p.textContent(".kpis");

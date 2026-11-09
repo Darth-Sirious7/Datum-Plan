@@ -229,39 +229,35 @@ pub fn clean(r: &mut DocRegister) {
     }
 }
 
-/// The register and the transmittal log as a workbook (.xlsx).
-pub fn write_xlsx(p: &Project, o: &RegOut, path: &std::path::Path) -> Result<(), String> {
-    use rust_xlsxwriter::{Format, Workbook};
+/// The register and the transmittal log as a workbook (.xlsx) or an OpenDocument spreadsheet (.ods), by the file's extension.
+pub fn write_book(p: &Project, o: &RegOut, path: &std::path::Path) -> Result<(), String> {
+    use crate::io::book::{Cell, Sheet};
     let r = &p.documents;
-    let mut wb = Workbook::new();
-    let head = Format::new().set_bold().set_background_color(0xEAF0F8);
-    let dt = |d: Option<NaiveDate>| d.map(|x| x.format("%d-%b-%y").to_string()).unwrap_or_default();
-    let e = |x: rust_xlsxwriter::XlsxError| x.to_string();
-    let ws = wb.add_worksheet().set_name("Register").map_err(e)?;
-    let mut cols: Vec<String> = ["No.", "Document No.", "Title", "Vendor", "Package", "Discipline", "Type", "Class", "Key", "Flags", "Weight", "In progress"].map(String::from).to_vec();
-    cols.extend(STEPS.iter().map(|s| format!("Planned: {s}")));
-    cols.extend(STEPS.iter().map(|s| format!("Actual: {s}")));
-    cols.extend(["Submissions", "Latest rev", "Latest purpose", "Latest sent", "Review due", "Returned", "Code", "Status", "1st issue late (d)", "Client late (d)", "Earned %", "Planned %", "Forecast final issue", "Remarks"].map(String::from));
-    for (j, h) in cols.iter().enumerate() { ws.write_with_format(0, j as u16, h, &head).map_err(e)?; }
+    let num = |v: f64| Cell::Num((v * 10.0).round() / 10.0);
+    let yes = |b: bool| Cell::from(if b { "Yes" } else { "" });
+    let mut head: Vec<String> = ["No.", "Document No.", "Title", "Vendor", "Package", "Discipline", "Type", "Class", "Key", "Flags", "Weight", "In progress"].map(String::from).to_vec();
+    head.extend(STEPS.iter().map(|s| format!("Planned: {s}")));
+    head.extend(STEPS.iter().map(|s| format!("Actual: {s}")));
+    head.extend(["Submissions", "Latest rev", "Latest purpose", "Latest sent", "Review due", "Returned", "Code", "Status", "1st issue late (d)", "Client late (d)", "Earned %", "Planned %", "Forecast final issue", "Remarks"].map(String::from));
+    let mut rows = vec![head.into_iter().map(Cell::from).collect::<Vec<_>>()];
     for (i, (d, x)) in r.docs.iter().zip(&o.docs).enumerate() {
-        let mut v: Vec<String> = vec![(i + 1).to_string(), d.number.clone(), d.title.clone(), d.vendor.clone(), d.package.clone(), d.disc.clone(), d.kind.clone(), d.class.to_string(), if d.key { "Yes".into() } else { String::new() }, d.flags.join(", "), d.weight.to_string(), if d.progress && !d.recurring { "Yes".into() } else { "No".into() }];
-        v.extend(x.planned.iter().map(|&q| dt(q)));
-        v.extend(x.actual.iter().map(|&q| dt(q)));
-        v.extend([x.subs.to_string(), x.rev.clone(), x.purpose.clone(), dt(x.sent), dt(x.due), dt(x.returned), x.code.clone(), x.status.clone(), x.late1.to_string(), x.client_late.to_string(), format!("{:.1}", x.earned), format!("{:.1}", x.planned_pct), dt(x.forecast[5]), d.remarks.clone()]);
-        for (j, c) in v.iter().enumerate() { ws.write((i + 1) as u32, j as u16, c).map_err(e)?; }
+        let mut v: Vec<Cell> = vec![Cell::Num((i + 1) as f64), d.number.clone().into(), d.title.clone().into(), d.vendor.clone().into(), d.package.clone().into(), d.disc.clone().into(), d.kind.clone().into(), Cell::Num(d.class as f64), yes(d.key), d.flags.join(", ").into(), Cell::Num(d.weight), Cell::from(if d.progress && !d.recurring { "Yes" } else { "No" })];
+        v.extend(x.planned.iter().map(|&q| Cell::from(q)));
+        v.extend(x.actual.iter().map(|&q| Cell::from(q)));
+        v.extend([Cell::Num(x.subs as f64), x.rev.clone().into(), x.purpose.clone().into(), x.sent.into(), x.due.into(), x.returned.into(), x.code.clone().into(), x.status.clone().into(), Cell::Num(x.late1 as f64), Cell::Num(x.client_late as f64), num(x.earned), num(x.planned_pct), x.actual[5].or(x.forecast[5]).into(), d.remarks.clone().into()]);
+        rows.push(v);
     }
-    ws.set_freeze_panes(1, 3).map_err(e)?;
-    let ws = wb.add_worksheet().set_name("Transmittal Log").map_err(e)?;
-    let cols = ["Document No.", "Title", "Revision", "Purpose", "Transmittal", "Sent", "Review due", "Return transmittal", "Returned", "Code", "Comments ref.", "Accepted", "Days with client", "Days late", "State"];
-    for (j, h) in cols.iter().enumerate() { ws.write_with_format(0, j as u16, *h, &head).map_err(e)?; }
+    let mut widths = vec![12.0; rows[0].len()];
+    (widths[1], widths[2]) = (28.0, 40.0);
+    let mut log = vec![["Document No.", "Title", "Revision", "Purpose", "Transmittal", "Sent", "Review due", "Return transmittal", "Returned", "Code", "Comments ref.", "Accepted", "Days with client", "Days late", "State"].map(Cell::from).to_vec()];
     let byid: HashMap<u32, &VDoc> = r.docs.iter().map(|d| (d.id, d)).collect();
-    for (i, (s, x)) in r.log.iter().zip(&o.subs).enumerate() {
+    for (s, x) in r.log.iter().zip(&o.subs) {
         let d = byid.get(&s.doc);
-        let v = [d.map(|d| d.number.clone()).unwrap_or_default(), d.map(|d| d.title.clone()).unwrap_or_default(), s.rev.clone(), s.purpose.clone(), s.transmittal.clone(), dt(s.sent), dt(x.due), s.ret_transmittal.clone(), dt(s.returned), s.code.clone(), s.crs.clone(), if x.accepted { "Yes".into() } else { String::new() }, x.days.to_string(), x.late.to_string(), x.state.clone()];
-        for (j, c) in v.iter().enumerate() { ws.write((i + 1) as u32, j as u16, c).map_err(e)?; }
+        log.push(vec![d.map(|d| d.number.clone()).unwrap_or_default().into(), d.map(|d| d.title.clone()).unwrap_or_default().into(), s.rev.clone().into(), s.purpose.clone().into(), s.transmittal.clone().into(), s.sent.into(), x.due.into(), s.ret_transmittal.clone().into(), s.returned.into(), s.code.clone().into(), s.crs.clone().into(), yes(x.accepted), Cell::Num(x.days as f64), Cell::Num(x.late as f64), x.state.clone().into()]);
     }
-    ws.set_freeze_panes(1, 1).map_err(e)?;
-    wb.save(path).map_err(e)
+    let mut lw = vec![12.0; 15];
+    (lw[0], lw[1]) = (28.0, 40.0);
+    crate::io::book::write(path, &[Sheet { name: "Register".into(), widths, rows }, Sheet { name: "Transmittal Log".into(), widths: lw, rows: log }])
 }
 
 #[cfg(test)]

@@ -370,6 +370,27 @@ fn task_style(t: &crate::model::Task, key: &str) -> String {
 }
 
 pub fn write_xlsx(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> { write_book(c, cols, path, false) }
+
+/// The task table as an OpenDocument spreadsheet (.ods): typed cells (dates, durations in days,
+/// numbers), the outline as indented names. Formulas and formatting are kept by the workbook only.
+pub fn write_ods(c: &Calc, cols: &[String], path: &Path) -> Result<(), String> {
+    use super::book::{Cell, Sheet};
+    let keys: Vec<String> = cols.iter().filter_map(|k| c.key_of(k)).collect();
+    let mut rows = vec![keys.iter().map(|k| Cell::from(c.name(k))).collect::<Vec<_>>()];
+    let base = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap_or_default();
+    for i in 0..c.p.tasks.len() {
+        rows.push(keys.iter().map(|key| match (c.val(i, key), c.kind(key)) {
+            (F::Null, _) => Cell::Empty,
+            (F::Date(_), _) => crate::sheet::cell_value(c, i, key).as_f64().and_then(|n| base.checked_add_days(chrono::Days::new(n.max(0.0) as u64))).map_or(Cell::Empty, Cell::Date),
+            (F::Num(n), Kind::Dur) => Cell::Num(n / c.p.day_min as f64),
+            (F::Num(n), _) => Cell::Num(n),
+            _ if key == "name" => Cell::Text(format!("{}{}", "    ".repeat(c.p.tasks[i].level as usize), c.text(i, key))),
+            _ => Cell::from(c.text(i, key)),
+        }).collect());
+    }
+    let widths = keys.iter().map(|k| if k == "name" { 44.0 } else if k == "res" { 28.0 } else { 13.0 }).collect();
+    super::book::write(path, &[Sheet { name: "Tasks".into(), widths, rows }])
+}
 /// The plan's sheets only, as a workbook to share: the sheet tabs, with the plan data their formulas
 /// read on hidden sheets.
 pub fn write_sheets_xlsx(c: &Calc, path: &Path) -> Result<(), String> { write_book(c, &[], path, true) }

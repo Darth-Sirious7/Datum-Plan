@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4 — 2026-11-09
+
+Copy Picture, and OpenDocument spreadsheets.
+
+- **Report › Copy Picture** copies the task sheet and the Gantt chart as shown (the rows and dates in view) as a picture. Paste it into a document, slides or a workbook. Scroll and zoom first to choose what it shows; File › Print still makes whole pages.
+- **Every chart has Copy** beside PNG: S-curves, dashboards, reports, manpower, the resource pool's hours by plan.
+- The picture goes on the clipboard twice, as a bitmap every program pastes and as PNG for the programs that prefer it (Windows).
+- **OpenDocument spreadsheets (.ods):** File › Export › **OpenDocument spreadsheet** writes the task table with real dates, durations in days and numbers. The Document and Procurement Registers' **Export…** writes .xlsx or .ods: choose the type in the Save window. Formulas and formatting stay with the workbook (.xlsx).
+
 ## 0.7.3 — 2026-11-09
 
 File types by name, and colours for colour-blind readers.
